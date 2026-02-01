@@ -1,0 +1,7 @@
+// Public defaults (safe to commit)
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+PROVISIONING_PROFILE_SPECIFIER =
+
+// Optional local override (file may not exist)
+#include? "Signing.local.xcconfig"
