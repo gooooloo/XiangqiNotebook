@@ -964,15 +964,13 @@ extension Session {
   }
   
   func playNextVariant() {
-    let moves = currentGameVariantMoves
-    if moves.isEmpty { return }
-    
-    let nextIndex = GameOperations.nextVariantIndex(
-      currentFenId: currentFenId,
-      variantMoves: currentGameVariantMoves
-    )
-    
-    playVariantIndex(nextIndex)
+    let sortedVariants = currentGameVariantList.sorted { $0.moveString < $1.moveString }
+    guard sortedVariants.count >= 2 else { return }
+
+    let currentIndex = sortedVariants.firstIndex(where: { $0.move.targetFenId == currentFenId })
+    let nextIndex = (currentIndex.map { ($0 + 1) % sortedVariants.count }) ?? 0
+
+    playVariantMove(sortedVariants[nextIndex].move)
   }
   
   func playVariantIndex(_ index: Int) {
