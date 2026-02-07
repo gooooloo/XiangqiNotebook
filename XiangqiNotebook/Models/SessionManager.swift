@@ -91,6 +91,7 @@ class SessionManager: ObservableObject {
         newSessionData.canNavigateBeforeLockedStep = mainSession.sessionData.canNavigateBeforeLockedStep
         newSessionData.currentMode = mainSession.sessionData.currentMode
         newSessionData.showPath = mainSession.sessionData.showPath
+        newSessionData.showAllNextMoves = true  // 切换筛选时默认打开"显示所有下一步"
         newSessionData.autoExtendGameWhenPlayingBoardFen = mainSession.sessionData.autoExtendGameWhenPlayingBoardFen
         newSessionData.isCommentEditing = mainSession.sessionData.isCommentEditing
         newSessionData.focusedPracticeGamePath = focusedPath
