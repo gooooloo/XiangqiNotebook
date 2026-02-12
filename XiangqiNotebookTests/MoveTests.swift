@@ -78,7 +78,7 @@ struct MoveTests {
         move.comment = "#错误的走法"
         #expect(move.isBad(getScore) == true)
         
-        move.comment = "中刀了"
+        move.comment = "#中刀了"
         #expect(move.isBad(getScore) == true)
     }
     
