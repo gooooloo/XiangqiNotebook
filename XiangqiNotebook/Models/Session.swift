@@ -747,6 +747,8 @@ extension Session {
             sessionData.autoExtendGameWhenPlayingBoardFen = false
             // 练习模式下，不显示路径
             sessionData.showPath = false
+            // 练习模式下，不显示所有下一步
+            sessionData.showAllNextMoves = false
             // 切断当前游戏到锁定步骤（如果有锁定），否则到当前步骤
             cutGameUntilStep(sessionData.lockedStep ?? sessionData.currentGameStep)
 
