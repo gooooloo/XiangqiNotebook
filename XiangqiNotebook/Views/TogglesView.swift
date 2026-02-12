@@ -81,8 +81,8 @@ struct MyToggle: View {
             text += ": \(bookName)"
         }
 
-        if let shortcut = toggleActionInfo.shortcut {
-            return "\(text) (\(shortcut.getDisplayText()))"
+        if let displayText = toggleActionInfo.shortcutsDisplayText {
+            return "\(text) (\(displayText))"
         }
         return text
     }

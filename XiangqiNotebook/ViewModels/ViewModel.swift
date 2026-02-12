@@ -164,52 +164,59 @@ class ViewModel: ObservableObject {
     
     /// 注册所有操作和快捷键
     private func registerActions() {
-        actionDefinitions.registerAction(.toStart, text: "开局", shortcut: .single("^"), supportedModes: ActionDefinitions.allModes) { self.toStart() }
-        actionDefinitions.registerAction(.stepBack, text: "后退", shortcut: .single("h"), supportedModes: ActionDefinitions.allModes) { self.stepBackward() }
-        actionDefinitions.registerAction(.stepForward, text: "前进", shortcut: .single("l"), supportedModes: ActionDefinitions.allModes) { self.stepForward() }
-        actionDefinitions.registerAction(.toEnd, text: "终局", shortcut: .single("$"), supportedModes: ActionDefinitions.allModes) { self.toEnd() }
-        actionDefinitions.registerAction(.nextVariant, text: "下一变", textIPhone: "下变", shortcut: .single(" "), supportedModes: [.normal, .review]) { self.playNextVariant() }
+        actionDefinitions.registerAction(.toStart, text: "开局", shortcuts: [.single("^")], supportedModes: ActionDefinitions.allModes) { self.toStart() }
 
-        actionDefinitions.registerAction(.previousPath, text: "复习上局", textIPhone: "上局", shortcut: .single("p"), supportedModes: [.review]) { self.goToPreviousPath() }
-        actionDefinitions.registerAction(.nextPath, text: "复习下局", textIPhone: "下局", shortcut: .single("n"), supportedModes: [.review]) { self.goToNextPath() }
-        actionDefinitions.registerAction(.random, text: "随机一局", shortcut: .sequence(",g"), supportedModes: [.review]) { self.makeRandomGame() }
-        actionDefinitions.registerAction(.reviewThisGame, text: "回顾本局", textIPhone: "回顾", shortcut: .single("R"), supportedModes: [.practice]) { self.reviewThisGame() }
-        actionDefinitions.registerAction(.searchCurrentMove, text: "搜索此步", shortcut: .sequence(",/"), supportedModes: [.normal, .review]) { self.showSearchResultsWindow() }
-        actionDefinitions.registerAction(.referenceBoard, text: "参考棋谱", shortcut: .modified([.command], "x"), supportedModes: [.normal, .review]) { self.showReferenceBoard() }
+        #if os(macOS)
+        actionDefinitions.registerAction(.stepBack, text: "后退", shortcuts: [.single("h"), .single(KeyEquivalent.leftArrow.character)], supportedModes: ActionDefinitions.allModes) { self.stepBackward() }
+        actionDefinitions.registerAction(.stepForward, text: "前进", shortcuts: [.single("l"), .single(KeyEquivalent.rightArrow.character)], supportedModes: ActionDefinitions.allModes) { self.stepForward() }
+        #else
+        actionDefinitions.registerAction(.stepBack, text: "后退", shortcuts: [.single("h")], supportedModes: ActionDefinitions.allModes) { self.stepBackward() }
+        actionDefinitions.registerAction(.stepForward, text: "前进", shortcuts: [.single("l")], supportedModes: ActionDefinitions.allModes) { self.stepForward() }
+        #endif
 
-        actionDefinitions.registerAction(.practiceNewGame, text: "练习新局", textIPhone: "练习", shortcut: .single("P"), supportedModes: ActionDefinitions.allModes) { self.practiceNewGame() }
-        actionDefinitions.registerAction(.focusedPractice, text: "练习本局", textIPhone: "专练", shortcut: .single("Z"), supportedModes: ActionDefinitions.allModes) { self.startFocusedPractice() }
-        actionDefinitions.registerAction(.playRandomNextMove, text: "随机走子", textIPhone: "随机", shortcut: .sequence(",r"), supportedModes: [.practice]) { self.playRandomNextMove() }
-        actionDefinitions.registerAction(.hintNextMove, text: "提示", textIPhone: "提示", shortcut: nil, supportedModes: [.practice]) { self.playRandomNextMove() }
+        actionDefinitions.registerAction(.toEnd, text: "终局", shortcuts: [.single("$")], supportedModes: ActionDefinitions.allModes) { self.toEnd() }
+        actionDefinitions.registerAction(.nextVariant, text: "下一变", textIPhone: "下变", shortcuts: [.single(" ")], supportedModes: [.normal, .review]) { self.playNextVariant() }
 
-        actionDefinitions.registerAction(.queryScore, text: "查分", shortcut: .single("s"), supportedModes: [.normal, .review]) { Task { await self.queryFenScore() } }
-        actionDefinitions.registerAction(.deleteScore, text: "删分", shortcut: .sequence(",D"), supportedModes: [.normal, .review]) { self.updateFenScore(self.currentFenId, score: nil) }
-        actionDefinitions.registerAction(.openYunku, text: "云库", shortcut: .single("y"), supportedModes: [.normal, .review]) { self.openYunku() }
-        actionDefinitions.registerAction(.deleteMove, text: "删招", shortcut: .sequence(",d"), supportedModes: [.normal, .review]) { self.removeCurrentStep() }
-        actionDefinitions.registerAction(.removeMoveFromGame, text: "从局中删除此招", shortcut: nil, supportedModes: [.normal, .review]) { self.removeMoveFromGame() }
-        actionDefinitions.registerAction(.markPath, text: "标记路径", shortcut: .single("a"), supportedModes: [.normal, .review]) { self.showMarkPathView = true }
+        actionDefinitions.registerAction(.previousPath, text: "复习上局", textIPhone: "上局", shortcuts: [.single("p")], supportedModes: [.review]) { self.goToPreviousPath() }
+        actionDefinitions.registerAction(.nextPath, text: "复习下局", textIPhone: "下局", shortcuts: [.single("n")], supportedModes: [.review]) { self.goToNextPath() }
+        actionDefinitions.registerAction(.random, text: "随机一局", shortcuts: [.sequence(",g")], supportedModes: [.review]) { self.makeRandomGame() }
+        actionDefinitions.registerAction(.reviewThisGame, text: "回顾本局", textIPhone: "回顾", shortcuts: [.single("R")], supportedModes: [.practice]) { self.reviewThisGame() }
+        actionDefinitions.registerAction(.searchCurrentMove, text: "搜索此步", shortcuts: [.sequence(",/")], supportedModes: [.normal, .review]) { self.showSearchResultsWindow() }
+        actionDefinitions.registerAction(.referenceBoard, text: "参考棋谱", shortcuts: [.modified([.command], "x")], supportedModes: [.normal, .review]) { self.showReferenceBoard() }
 
-        actionDefinitions.registerAction(.save, text: "保存", shortcut: .single("w"), supportedModes: ActionDefinitions.allModes) { self.saveToDefault() }
-        actionDefinitions.registerAction(.checkDataVersion, text: "更新数据", textIPhone: "更新", shortcut: .sequence(",u"), supportedModes: ActionDefinitions.allModes) { self.checkDataVersion() }
-        actionDefinitions.registerAction(.backup, text: "备份", shortcut: .sequence(",b"), supportedModes: [.normal]) { self.backup() }
-        actionDefinitions.registerAction(.restore, text: "恢复", shortcut: .sequence(",R"), supportedModes: [.normal]) { Task { await self.recoverFromUserChoice() } }
+        actionDefinitions.registerAction(.practiceNewGame, text: "练习新局", textIPhone: "练习", shortcuts: [.single("P")], supportedModes: ActionDefinitions.allModes) { self.practiceNewGame() }
+        actionDefinitions.registerAction(.focusedPractice, text: "练习本局", textIPhone: "专练", shortcuts: [.single("Z")], supportedModes: ActionDefinitions.allModes) { self.startFocusedPractice() }
+        actionDefinitions.registerAction(.playRandomNextMove, text: "随机走子", textIPhone: "随机", shortcuts: [.sequence(",r")], supportedModes: [.practice]) { self.playRandomNextMove() }
+        actionDefinitions.registerAction(.hintNextMove, text: "提示", textIPhone: "提示", supportedModes: [.practice]) { self.playRandomNextMove() }
 
-        actionDefinitions.registerAction(.stepLimitation, text: "步数限制", shortcut: .sequence(",l"), supportedModes: [.normal]) { self.showingStepLimitationDialog = true }
-        actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcut: .sequence(",i"), supportedModes: [.normal]) { self.showingGameInputView = true }
-        actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcut: .sequence(",fff"), supportedModes: [.normal]) { self.showingGameBrowserView = true }
+        actionDefinitions.registerAction(.queryScore, text: "查分", shortcuts: [.single("s")], supportedModes: [.normal, .review]) { Task { await self.queryFenScore() } }
+        actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal, .review]) { self.updateFenScore(self.currentFenId, score: nil) }
+        actionDefinitions.registerAction(.openYunku, text: "云库", shortcuts: [.single("y")], supportedModes: [.normal, .review]) { self.openYunku() }
+        actionDefinitions.registerAction(.deleteMove, text: "删招", shortcuts: [.sequence(",d")], supportedModes: [.normal, .review]) { self.removeCurrentStep() }
+        actionDefinitions.registerAction(.removeMoveFromGame, text: "从局中删除此招", supportedModes: [.normal, .review]) { self.removeMoveFromGame() }
+        actionDefinitions.registerAction(.markPath, text: "标记路径", shortcuts: [.single("a")], supportedModes: [.normal, .review]) { self.showMarkPathView = true }
 
-        actionDefinitions.registerAction(.fix, text: "修复", shortcut: .sequence(",fix"), supportedModes: [.normal]) { /* TODO */ }
-        actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", shortcut: nil, supportedModes: [.normal]) { self.performAutoAddToOpening() }
-        actionDefinitions.registerAction(.jumpToNextOpeningGap, text: "跳转开局缺口", shortcut: .sequence(",o"), supportedModes: [.normal]) { self.jumpToNextOpeningGap() }
+        actionDefinitions.registerAction(.save, text: "保存", shortcuts: [.single("w")], supportedModes: ActionDefinitions.allModes) { self.saveToDefault() }
+        actionDefinitions.registerAction(.checkDataVersion, text: "更新数据", textIPhone: "更新", shortcuts: [.sequence(",u")], supportedModes: ActionDefinitions.allModes) { self.checkDataVersion() }
+        actionDefinitions.registerAction(.backup, text: "备份", shortcuts: [.sequence(",b")], supportedModes: [.normal]) { self.backup() }
+        actionDefinitions.registerAction(.restore, text: "恢复", shortcuts: [.sequence(",R")], supportedModes: [.normal]) { Task { await self.recoverFromUserChoice() } }
 
-        actionDefinitions.registerAction(.showEditCommentIOS, text: "编辑评论", shortcut: .sequence(",e"), supportedModes: [.normal, .review]) { self.showEditCommentIOS = true }
-        actionDefinitions.registerAction(.showBookmarkListIOS, text: "书签", shortcut: .sequence(",m")) { self.showIOSBookMarkListView = true }
-        actionDefinitions.registerAction(.showMoreActionsIOS, text: "更多", shortcut: .sequence(",a")) { self.showIOSMoreActionsView = true }
+        actionDefinitions.registerAction(.stepLimitation, text: "步数限制", shortcuts: [.sequence(",l")], supportedModes: [.normal]) { self.showingStepLimitationDialog = true }
+        actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcuts: [.sequence(",i")], supportedModes: [.normal]) { self.showingGameInputView = true }
+        actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",fff")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
+
+        actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { /* TODO */ }
+        actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", supportedModes: [.normal]) { self.performAutoAddToOpening() }
+        actionDefinitions.registerAction(.jumpToNextOpeningGap, text: "跳转开局缺口", shortcuts: [.sequence(",o")], supportedModes: [.normal]) { self.jumpToNextOpeningGap() }
+
+        actionDefinitions.registerAction(.showEditCommentIOS, text: "编辑评论", shortcuts: [.sequence(",e")], supportedModes: [.normal, .review]) { self.showEditCommentIOS = true }
+        actionDefinitions.registerAction(.showBookmarkListIOS, text: "书签", shortcuts: [.sequence(",m")]) { self.showIOSBookMarkListView = true }
+        actionDefinitions.registerAction(.showMoreActionsIOS, text: "更多", shortcuts: [.sequence(",a")]) { self.showIOSMoreActionsView = true }
       
         actionDefinitions.registerToggleAction(
           .setFilterNone,
           text: "不筛选",
-          shortcut: .single("0"),
+          shortcuts: [.single("0")],
           isEnabled: { true },
           isOn:  {
             return self.session.currentFilters.isEmpty
@@ -220,7 +227,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleFilterRedOpeningOnly,
           text: "只筛选红方开局",
-          shortcut: .single("1"),
+          shortcuts: [.single("1")],
           isEnabled: { true },
           isOn: { self.currentFilters.contains(Session.filterRedOpeningOnly) },
           action: { _ in self.toggleFilterRedOpeningOnly() }
@@ -229,7 +236,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleFilterBlackOpeningOnly,
           text: "只筛选黑方开局",
-          shortcut: .single("2"),
+          shortcuts: [.single("2")],
           isEnabled: { true },
           isOn: { self.currentFilters.contains(Session.filterBlackOpeningOnly) },
           action: { _ in self.toggleFilterBlackOpeningOnly() }
@@ -238,7 +245,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleFilterRedRealGameOnly,
           text: "只筛选红方实战",
-          shortcut: .single("3"),
+          shortcuts: [.single("3")],
           isEnabled: { true },
           isOn: { self.currentFilters.contains(Session.filterRedRealGameOnly) },
           action: { _ in self.toggleFilterRedRealGameOnly() }
@@ -247,7 +254,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleFilterBlackRealGameOnly,
           text: "只筛选黑方实战",
-          shortcut: .single("4"),
+          shortcuts: [.single("4")],
           isEnabled: { true },
           isOn: { self.currentFilters.contains(Session.filterBlackRealGameOnly) },
           action: { _ in self.toggleFilterBlackRealGameOnly()
@@ -281,7 +288,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .inRedOpening,
           text: "列入红方开局库",
-          shortcut: .single("r"),
+          shortcuts: [.single("r")],
           isEnabled: { self.currentFenCanChangeInRedOpening },
           isOn: { self.currentFenIsInRedOpening },
           action: { newValue in
@@ -294,7 +301,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .inBlackOpening,
           text: "列入黑方开局库",
-          shortcut: .single("b"),
+          shortcuts: [.single("b")],
           isEnabled: { self.currentFenCanChangeInBlackOpening },
           isOn: { self.currentFenIsInBlackOpening },
           action: { newValue in
@@ -307,7 +314,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleLock,
           text: "锁定",
-          shortcut: .single("L"),
+          shortcuts: [.single("L")],
           isEnabled: { true },
           isOn: { self.isAnyMoveLocked },
           action: { newValue in
@@ -318,7 +325,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleCanNavigateBeforeLockedStep,
           text: "锁定区域可以前进后退",
-          shortcut: .sequence(",n"),
+          shortcuts: [.sequence(",n")],
           isEnabled: { self.isAnyMoveLocked },
           isOn: { self.canNavigateBeforeLockedStep },
           action: { newValue in
@@ -330,7 +337,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .flip,
           text: "黑方视角",
-          shortcut: .single("f"),
+          shortcuts: [.single("f")],
           supportedModes: [.practice, .review, .normal],
           isEnabled: { self.session.sessionData.currentMode != .practice },
           isOn: { self.isCurrentBlackOrientation },
@@ -342,7 +349,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .flipHorizontal,
           text: "左右翻转",
-          shortcut: .single("z"),
+          shortcuts: [.single("z")],
           supportedModes: [.practice, .review, .normal],
           isEnabled: { self.session.sessionData.currentMode != .practice },
           isOn: { self.isCurrentHorizontalFlipped },
@@ -354,7 +361,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleAutoExtendGameWhenPlayingBoardFen,
           text: "棋盘走子时自动往后拓展",
-          shortcut: .sequence(",x"),
+          shortcuts: [.sequence(",x")],
           isEnabled: { self.session.sessionData.currentMode != .practice },
           isOn: { self.autoExtendGameWhenPlayingBoardFen },
           action: { newValue in
@@ -366,7 +373,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .togglePracticeMode,
           text: "练习模式",
-          shortcut: .sequence(",p"),
+          shortcuts: [.sequence(",p")],
           supportedModes: [.practice, .review, .normal],
           isEnabled: { true },
           isOn: { self.session.sessionData.currentMode == .practice },
@@ -379,7 +386,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleShowPath,
           text: "显示路径",
-          shortcut: .sequence(",s"),
+          shortcuts: [.sequence(",s")],
           supportedModes: [.review, .normal],
           isEnabled: { self.session.sessionData.currentMode != .practice },
           isOn: { self.showPath },
@@ -392,7 +399,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleShowAllNextMoves,
           text: "显示所有下一步",
-          shortcut: .sequence(",n"),
+          shortcuts: [.sequence(",n")],
           supportedModes: [.review, .normal],
           isEnabled: { self.session.sessionData.currentMode != .practice },
           isOn: { self.showAllNextMoves },
@@ -405,7 +412,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleBookmark,
           text: "加入书签",
-          shortcut: .single("m"),
+          shortcuts: [.single("m")],
           supportedModes: [.review, .normal],
           isEnabled: { true },
           isOn: { self.isBookmarked },
@@ -422,7 +429,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleIsCommentEditing,
           text: "编辑评论区",
-          shortcut: .single("c"),
+          shortcuts: [.single("c")],
           supportedModes: [.review, .normal],
           isEnabled: { true },
           isOn: { self.isCommentEditing },

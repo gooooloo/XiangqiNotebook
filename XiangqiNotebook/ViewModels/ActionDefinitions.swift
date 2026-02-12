@@ -86,12 +86,27 @@ class ActionDefinitions {
         func getDisplayText() -> String {
             switch self {
             case .single(let char):
-                return String(char)
+                return Self.arrowDisplayText(char) ?? String(char)
             case .modified(let modifiers, let char):
                 return formatModifiedKey(modifiers: modifiers, key: char)
             case .sequence(let sequence):
                 return sequence
             }
+        }
+
+        /// 箭头键等特殊字符的显示映射
+        private static func arrowDisplayText(_ char: Character) -> String? {
+            #if os(macOS)
+            switch char {
+            case KeyEquivalent.leftArrow.character: return "←"
+            case KeyEquivalent.rightArrow.character: return "→"
+            case KeyEquivalent.upArrow.character: return "↑"
+            case KeyEquivalent.downArrow.character: return "↓"
+            default: return nil
+            }
+            #else
+            return nil
+            #endif
         }
         
         /// 格式化修饰键组合
@@ -149,23 +164,29 @@ class ActionDefinitions {
     struct ActionInfo {
         let text: String
         let textIPhone: String?
-        let shortcut: ShortcutType?
+        let shortcuts: [ShortcutType]
         let supportedModes: Set<AppMode>
         let action: () -> Void
 
-        init(text: String, textIPhone: String? = nil, shortcut: ShortcutType? = nil, supportedModes: Set<AppMode> = ActionDefinitions.allModes, action: @escaping () -> Void) {
+        init(text: String, textIPhone: String? = nil, shortcuts: [ShortcutType] = [], supportedModes: Set<AppMode> = ActionDefinitions.allModes, action: @escaping () -> Void) {
             self.text = text
             self.textIPhone = textIPhone
-            self.shortcut = shortcut
+            self.shortcuts = shortcuts
             self.supportedModes = supportedModes
             self.action = action
+        }
+
+        /// 所有快捷键的显示文本，用 `/` 分隔，无快捷键返回 nil
+        var shortcutsDisplayText: String? {
+            guard !shortcuts.isEmpty else { return nil }
+            return shortcuts.map { $0.getDisplayText() }.joined(separator: "/")
         }
     }
     
     /// 定义切换按钮操作的结构体
     struct ToggleActionInfo {
         let text: String
-        let shortcut: ShortcutType?
+        let shortcuts: [ShortcutType]
         let supportedModes: Set<AppMode>
         let isEnabled: () -> Bool
         let isOn: () -> Bool
@@ -173,18 +194,24 @@ class ActionDefinitions {
 
         init(
             text: String,
-            shortcut: ShortcutType? = nil,
+            shortcuts: [ShortcutType] = [],
             supportedModes: Set<AppMode> = ActionDefinitions.allModes,
             isEnabled: @escaping () -> Bool,
             isOn: @escaping () -> Bool,
             action: @escaping (Bool) -> Void
         ) {
             self.text = text
-            self.shortcut = shortcut
+            self.shortcuts = shortcuts
             self.supportedModes = supportedModes
             self.isEnabled = isEnabled
             self.isOn = isOn
             self.action = action
+        }
+
+        /// 所有快捷键的显示文本，用 `/` 分隔，无快捷键返回 nil
+        var shortcutsDisplayText: String? {
+            guard !shortcuts.isEmpty else { return nil }
+            return shortcuts.map { $0.getDisplayText() }.joined(separator: "/")
         }
     }
     
@@ -208,58 +235,43 @@ class ActionDefinitions {
     }
 
     
-    /// 获取指定操作的快捷键（仅返回单字符快捷键以保持向后兼容）
+    /// 获取指定操作的快捷键（仅返回第一个单字符快捷键以保持向后兼容）
     func getShortcut(_ key: ActionKey) -> Character? {
-        if let actionInfo = actionMap[key], let shortcut = actionInfo.shortcut {
+        if let actionInfo = actionMap[key], let shortcut = actionInfo.shortcuts.first {
             if case .single(let char) = shortcut {
                 return char
             }
         }
-        
-        if let toggleInfo = toggleActionMap[key], let shortcut = toggleInfo.shortcut {
+
+        if let toggleInfo = toggleActionMap[key], let shortcut = toggleInfo.shortcuts.first {
             if case .single(let char) = shortcut {
                 return char
             }
         }
-        
+
         return nil
     }
     
-    /// 获取快捷键描述（支持所有快捷键类型）
+    /// 获取快捷键描述（支持所有快捷键类型，多个用 `/` 分隔）
     func getShortcutDescription(_ key: ActionKey) -> String? {
-        if let actionInfo = actionMap[key], let shortcut = actionInfo.shortcut {
-            switch shortcut {
-            case .single(let char):
-                return String(char)
-            case .modified(let modifiers, let char):
-                return formatModifiedKey(modifiers: modifiers, key: char)
-            case .sequence(let sequence):
-                return sequence
-            }
+        if let actionInfo = actionMap[key] {
+            return actionInfo.shortcutsDisplayText
         }
-        
-        // 检查toggle actions的快捷键
-        if let toggleInfo = toggleActionMap[key], let shortcut = toggleInfo.shortcut {
-            switch shortcut {
-            case .single(let char):
-                return String(char)
-            case .modified(let modifiers, let char):
-                return formatModifiedKey(modifiers: modifiers, key: char)
-            case .sequence(let sequence):
-                return sequence
-            }
+
+        if let toggleInfo = toggleActionMap[key] {
+            return toggleInfo.shortcutsDisplayText
         }
-        
+
         return nil
     }
     
     /// 注册操作 - 统一方法支持所有快捷键类型
-    func registerAction(_ key: ActionKey, text: String, textIPhone: String? = nil, shortcut: ShortcutType? = nil, supportedModes: Set<AppMode> = ActionDefinitions.allModes, action: @escaping () -> Void) {
-        let actionInfo = ActionInfo(text: text, textIPhone: textIPhone, shortcut: shortcut, supportedModes: supportedModes, action: action)
+    func registerAction(_ key: ActionKey, text: String, textIPhone: String? = nil, shortcuts: [ShortcutType] = [], supportedModes: Set<AppMode> = ActionDefinitions.allModes, action: @escaping () -> Void) {
+        let actionInfo = ActionInfo(text: text, textIPhone: textIPhone, shortcuts: shortcuts, supportedModes: supportedModes, action: action)
         actionMap[key] = actionInfo
-        
-        // 只有真正的快捷键才注册到查找表
-        if let shortcut = shortcut {
+
+        // 将每个快捷键都注册到查找表
+        for shortcut in shortcuts {
             let shortcutKey: ShortcutKey
             switch shortcut {
             case .single(let char):
@@ -275,18 +287,18 @@ class ActionDefinitions {
     
   
     /// 注册切换操作
-    func registerToggleAction(_ key: ActionKey, text: String, shortcut: ShortcutType? = nil, supportedModes: Set<AppMode> = ActionDefinitions.allModes, isEnabled: @escaping () -> Bool, isOn: @escaping () -> Bool, action: @escaping (Bool) -> Void) {
+    func registerToggleAction(_ key: ActionKey, text: String, shortcuts: [ShortcutType] = [], supportedModes: Set<AppMode> = ActionDefinitions.allModes, isEnabled: @escaping () -> Bool, isOn: @escaping () -> Bool, action: @escaping (Bool) -> Void) {
         toggleActionMap[key] = ToggleActionInfo(
             text: text,
-            shortcut: shortcut,
+            shortcuts: shortcuts,
             supportedModes: supportedModes,
             isEnabled: isEnabled,
             isOn: isOn,
             action: action
         )
-        
-        // 如果有快捷键，注册到统一快捷键查找表
-        if let shortcut = shortcut {
+
+        // 将每个快捷键都注册到统一快捷键查找表
+        for shortcut in shortcuts {
             let shortcutKey: ShortcutKey
             switch shortcut {
             case .single(let char):

@@ -49,8 +49,8 @@ struct LargeButton: View {
                 Text(finalActionInfo?.text ?? "")
                     .font(.system(size: 14))
 
-                if let shortcut = finalActionInfo?.shortcut {
-                    Text("[\(shortcut.getDisplayText())]")
+                if let displayText = finalActionInfo?.shortcutsDisplayText {
+                    Text("[\(displayText)]")
                         .font(.system(size: 12))
                         .foregroundColor(.gray)
                 }
