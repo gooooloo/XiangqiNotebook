@@ -93,21 +93,21 @@ struct FenObjectTests {
     @Test func testFenObjectEncoding() throws {
         let fen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 0 1"
         let fenObject = FenObject(fen: fen, fenId: 1)
-        
+
         fenObject.score = 100
         fenObject.comment = "测试局面"
         fenObject.lastMoveFenId = 2
         fenObject.setInRedOpening(true)
         fenObject.setInBlackOpening(false)
-        
+
         // 编码
         let encoder = JSONEncoder()
         let data = try encoder.encode(fenObject)
-        
+
         // 解码
         let decoder = JSONDecoder()
         let decodedObject = try decoder.decode(FenObject.self, from: data)
-        
+
         // 验证基本属性
         #expect(decodedObject.fen == fen)
         #expect(decodedObject.score == 100)
@@ -115,9 +115,30 @@ struct FenObjectTests {
         #expect(decodedObject.lastMoveFenId == 2)
         #expect(decodedObject.inRedOpening == true)
         #expect(decodedObject.inBlackOpening == false)
-        
+
+        // 验证 engineScore 不再在 FenObject 中（已独立到 EngineScoreData）
+
         // 验证moves数组为空（不在JSON中编码）
         #expect(decodedObject.moves.isEmpty)
+    }
+
+    @Test func testFenObjectEncodingBackwardCompatibility() throws {
+        // 验证旧格式的 JSON（包含 engine_score/engine_version）仍然可以正常解码
+        let json = """
+        {
+            "fen": "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 0 1",
+            "score": 50,
+            "engine_score": 42,
+            "engine_version": "pikafish-2024.12"
+        }
+        """
+        let data = json.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        let decodedObject = try decoder.decode(FenObject.self, from: data)
+
+        // 旧字段被忽略（不会报错），基本属性正常
+        #expect(decodedObject.score == 50)
+        #expect(decodedObject.fen.contains("rnbakabnr"))
     }
     
 } 

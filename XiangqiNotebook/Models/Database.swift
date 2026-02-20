@@ -14,6 +14,14 @@ internal class Database: ObservableObject {
     @Published private(set) var databaseData: DatabaseData
     @Published private(set) var isDirty: Bool = false
 
+    // MARK: - Engine Score Properties
+    /// 引擎分数数据，key 为 engineKey（如 "Pikafish_2024-12-28_d34"）
+    private(set) var engineScores: [String: EngineScoreData] = [:]
+    /// 需要保存的 engineKey 集合
+    private(set) var dirtyEngineKeys: Set<String> = []
+    /// 当前活跃的引擎 key（PikafishService 启动时设置）
+    var activeEngineKey: String?
+
     // MARK: - Initialization
     private init() {
         // 尝试加载数据库
@@ -25,6 +33,9 @@ internal class Database: ObservableObject {
             self.databaseData = DatabaseStorage.createEmptyDatabase()
             print("⚠️ Database: 创建新数据库")
         }
+
+        // 加载所有引擎分数文件
+        loadAllEngineScores()
     }
 
     #if DEBUG
@@ -87,6 +98,64 @@ internal class Database: ObservableObject {
             print("✅ Database: 数据已重新加载")
         }
     }
+
+    // MARK: - Engine Score Operations
+
+    /// 加载所有引擎分数文件
+    private func loadAllEngineScores() {
+        let keys = EngineScoreStorage.listEngineKeys()
+        for key in keys {
+            if let data = EngineScoreStorage.loadEngineScore(engineKey: key) {
+                engineScores[key] = data
+            }
+        }
+        print("✅ Database: 加载了 \(engineScores.count) 个引擎分数文件")
+    }
+
+    /// 获取指定 fenId 和 engineKey 的引擎分数
+    func getEngineScore(fenId: Int, engineKey: String) -> Int? {
+        return engineScores[engineKey]?.scores[fenId]
+    }
+
+    /// 使用 activeEngineKey 获取引擎分数（便捷方法）
+    func getActiveEngineScore(fenId: Int) -> Int? {
+        guard let key = activeEngineKey else { return nil }
+        return getEngineScore(fenId: fenId, engineKey: key)
+    }
+
+    /// 写入引擎分数到内存并标记脏
+    func setEngineScore(fenId: Int, engineKey: String, score: Int) {
+        if engineScores[engineKey] == nil {
+            engineScores[engineKey] = EngineScoreData()
+        }
+        engineScores[engineKey]?.scores[fenId] = score
+        engineScores[engineKey]?.dataVersion += 1
+        dirtyEngineKeys.insert(engineKey)
+    }
+
+    /// 保存所有脏的引擎分数文件
+    func saveEngineScores() throws {
+        for key in dirtyEngineKeys {
+            guard let data = engineScores[key] else { continue }
+            try EngineScoreStorage.saveEngineScore(data, engineKey: key)
+        }
+        if !dirtyEngineKeys.isEmpty {
+            print("✅ Database: 保存了 \(dirtyEngineKeys.count) 个引擎分数文件")
+        }
+        dirtyEngineKeys.removeAll()
+    }
+
+    /// 清除引擎分数脏标记
+    func markEngineScoreClean() {
+        dirtyEngineKeys.removeAll()
+    }
+
+    /// 引擎分数是否有未保存的修改
+    var isEngineScoreDirty: Bool {
+        !dirtyEngineKeys.isEmpty
+    }
+
+    // MARK: - Backup/Restore
 
     /// 从备份恢复数据库（用于用户手动恢复备份）
     /// - Parameter database: 要恢复的数据库数据

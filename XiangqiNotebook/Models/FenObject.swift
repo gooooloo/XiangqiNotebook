@@ -13,7 +13,7 @@ class FenObject: Codable {
     var inRedOpening: Bool?
     var pathGroups: [PathGroup]?
     var _practiceCount: Int?
-    
+
     // MARK: - Coding Keys
     enum CodingKeys: String, CodingKey {
         // case fenId is not encoded

@@ -13,6 +13,7 @@ class Session: ObservableObject {
     internal var sessionData: SessionData
 
     var sessionDataDirty: Bool = false
+    var engineScoreDirty: Bool = false
 
     // databaseDirty 现在通过 databaseView.isDirty 访问
     var databaseDirty: Bool {
@@ -249,7 +250,7 @@ class Session: ObservableObject {
     }
 
     var currentDataDirty: Bool {
-        databaseDirty || sessionDataDirty
+        databaseDirty || sessionDataDirty || engineScoreDirty
     }
 
     var currentGameStepDisplay: Int {
@@ -271,6 +272,16 @@ class Session: ObservableObject {
     func getScoreByFenId(_ fenId: Int) -> Int? {
         return databaseView.getScoreByFenId(fenId)
     }
+
+    func getEngineScoreByFenId(_ fenId: Int) -> Int? {
+        return databaseView.getEngineScoreByFenId(fenId)
+    }
+
+    // TODO: 后续统一分数 API
+    var currentEngineScore: Int? {
+        return databaseView.getEngineScoreByFenId(currentFenId)
+    }
+
 
     var bookmarkList: [(game: [Int], name: String)] {
         return databaseView.bookmarkList
@@ -323,14 +334,20 @@ class Session: ObservableObject {
     }
 
     var displayScore: String {
-        guard let score = currentFenScore else {
-            return ""
-        }
-        
         let nextIsRed = currentFen.split(separator: " ")[1] == "r"
-        let adjustedScore = adjustScore(score, nextIsRed: nextIsRed)
-        
-        return String(adjustedScore)
+        var parts: [String] = []
+
+        if let score = currentFenScore {
+            let adjusted = adjustScore(score, nextIsRed: nextIsRed)
+            parts.append("云库\(adjusted)")
+        }
+
+        if let engineScore = currentEngineScore {
+            let adjusted = adjustScore(engineScore, nextIsRed: nextIsRed)
+            parts.append("皮卡鱼\(adjusted)")
+        }
+
+        return parts.joined(separator: " ")
     }
 
     func getDisplayScoreForMove(_ move: Move) -> String {
@@ -380,9 +397,11 @@ class Session: ObservableObject {
     }
     
     func isBadMove(_ move: Move) -> Bool {
-        move.isBad { fenId in
+        move.isBad({ fenId in
             self.getScoreByFenId(fenId)
-        }
+        }, engineScore: { fenId in
+            self.getEngineScoreByFenId(fenId)
+        })
     }
     
     // MARK: - Auto Add to Opening
@@ -686,6 +705,18 @@ extension Session {
         notifyDataChanged(markDatabaseDirty: true)
     }
 
+    func updateEngineScore(_ fenId: Int, score: Int?, engineKey: String) {
+        guard databaseView.containsFenId(fenId) else { return }
+        let existingScore = databaseView.getEngineScore(fenId: fenId, engineKey: engineKey)
+        guard existingScore != score else { return }
+
+        if let score = score {
+            Database.shared.setEngineScore(fenId: fenId, engineKey: engineKey, score: score)
+        }
+
+        notifyDataChanged(markDatabaseDirty: false, markEngineScoreDirty: true)
+    }
+
     func updateCurrentMoveComment(_ comment: String?) {
         guard let currentMove = currentMove else { return }
         guard currentMove.comment != comment else { return }
@@ -706,7 +737,9 @@ extension Session {
     
     func setDataClean() {
         databaseView.markClean()
+        databaseView.markEngineScoreClean()
         sessionDataDirty = false
+        engineScoreDirty = false
         notifyDataChanged(markDatabaseDirty: false, markSessionDirty: false)
     }
 }
@@ -1609,7 +1642,7 @@ extension Array {
 
 // MARK: - 通知数据变更
 extension Session {
-    private func notifyDataChanged(markDatabaseDirty: Bool = true, markSessionDirty: Bool = false) {
+    private func notifyDataChanged(markDatabaseDirty: Bool = true, markSessionDirty: Bool = false, markEngineScoreDirty: Bool = false) {
         DispatchQueue.main.async {
             if markDatabaseDirty {
                 // 通过 DatabaseView 标记为脏，这会自动增加版本号
@@ -1617,6 +1650,9 @@ extension Session {
             }
             if markSessionDirty {
                 self.sessionDataDirty = true
+            }
+            if markEngineScoreDirty {
+                self.engineScoreDirty = true
             }
             // 不管哪个dirty，都要更新界面
             self.dataChanged.toggle()

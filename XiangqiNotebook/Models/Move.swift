@@ -71,41 +71,50 @@ class Move: Codable, Hashable {
         targetFenId = nil
     }
   
-    func isBad(_ getScoreByFenId: (Int) -> Int?) -> Bool {
+    func isBad(_ getScoreByFenId: (Int) -> Int?, engineScore getEngineScoreByFenId: ((Int) -> Int?)? = nil) -> Bool {
         if hasAnyTagInComment(["#不好", "#错", "#中刀"]) {
             return true
         }
-        
-        let sourceFenId = self.sourceFenId
-        if let targetFenId = self.targetFenId,
-           let sourceScore = getScoreByFenId(sourceFenId),
-           let targetScore = getScoreByFenId(targetFenId) {
-            // 注意：这个移动是由 source_fen 中的玩家执行的，而不是 target_fen
-            // source_fen 的分数是这个玩家的分数
-            // target_fen 的分数是下一个玩家的分数
-            let scoreBefore = sourceScore
-            let scoreAfter = -1 * targetScore
-            let scoreBeforeAbs = abs(scoreBefore)
-            
-            if scoreBeforeAbs >= 700 {
-                // 大优大劣，减少 300 分算差
-                if scoreAfter <= scoreBefore - 300 {
-                    return true
-                }
-            } else if scoreBeforeAbs >= 200 {
-                // 中等优劣，减少 150 分算差
-                if scoreAfter <= scoreBefore - 150 {
-                    return true
-                }
-            } else {
-                // 均势，减少 100 分影响很大了
-                if scoreAfter <= scoreBefore - 100 {
-                    return true
-                }
-            }
+
+        guard let targetFenId = self.targetFenId else { return false }
+
+        // 云库分数判断
+        if isScoreDeltaBad(sourceFenId: sourceFenId, targetFenId: targetFenId, getScore: getScoreByFenId) {
+            return true
         }
-        
+
+        // 皮卡鱼分数判断
+        if let getEngineScore = getEngineScoreByFenId,
+           isScoreDeltaBad(sourceFenId: sourceFenId, targetFenId: targetFenId, getScore: getEngineScore) {
+            return true
+        }
+
         return false
+    }
+
+    /// 判断分数差值是否表示坏棋
+    private func isScoreDeltaBad(sourceFenId: Int, targetFenId: Int, getScore: (Int) -> Int?) -> Bool {
+        guard let sourceScore = getScore(sourceFenId),
+              let targetScore = getScore(targetFenId) else {
+            return false
+        }
+        // 注意：这个移动是由 source_fen 中的玩家执行的，而不是 target_fen
+        // source_fen 的分数是这个玩家的分数
+        // target_fen 的分数是下一个玩家的分数
+        let scoreBefore = sourceScore
+        let scoreAfter = -1 * targetScore
+        let scoreBeforeAbs = abs(scoreBefore)
+
+        if scoreBeforeAbs >= 700 {
+            // 大优大劣，减少 300 分算差
+            return scoreAfter <= scoreBefore - 300
+        } else if scoreBeforeAbs >= 200 {
+            // 中等优劣，减少 150 分算差
+            return scoreAfter <= scoreBefore - 150
+        } else {
+            // 均势，减少 100 分影响很大了
+            return scoreAfter <= scoreBefore - 100
+        }
     }
     
     private func hasAnyTagInComment(_ tagList: [String]) -> Bool {

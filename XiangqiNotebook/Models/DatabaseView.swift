@@ -234,8 +234,16 @@ final class DatabaseView {
         database.isDirty
     }
 
+    var isEngineScoreDirty: Bool {
+        database.isEngineScoreDirty
+    }
+
     func markClean() {
         database.markClean()
+    }
+
+    func markEngineScoreClean() {
+        database.markEngineScoreClean()
     }
 
     // MARK: - Persistence Operations
@@ -244,6 +252,11 @@ final class DatabaseView {
     /// - Note: 这是对底层 Database 的委托调用，不受 scope 过滤影响
     func save() throws {
         try database.save()
+    }
+
+    /// 保存所有脏的引擎分数文件
+    func saveEngineScores() throws {
+        try database.saveEngineScores()
     }
 
     /// 从默认位置重新加载数据库
@@ -269,6 +282,14 @@ final class DatabaseView {
 
     func getScoreByFenId(_ fenId: Int) -> Int? {
         return getFenObject(fenId)?.score
+    }
+
+    func getEngineScoreByFenId(_ fenId: Int) -> Int? {
+        return database.getActiveEngineScore(fenId: fenId)
+    }
+
+    func getEngineScore(fenId: Int, engineKey: String) -> Int? {
+        return database.getEngineScore(fenId: fenId, engineKey: engineKey)
     }
 
     var bookmarkList: [(game: [Int], name: String)] {

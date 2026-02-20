@@ -48,7 +48,9 @@ class ActionDefinitions {
         case searchCurrentMove
         case autoAddToOpening  // 新增：自动完善开局库
         case jumpToNextOpeningGap  // 新增：跳转到下一个开局缺口
-      
+        case queryEngineScore  // 手动触发引擎评估
+        case queryAllEngineScores  // 搜索本对局每一步的引擎分数
+
         // toggles
         case setFilterNone
         case toggleFilterRedOpeningOnly

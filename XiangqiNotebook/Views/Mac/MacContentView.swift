@@ -73,6 +73,17 @@ struct MacContentView: View {
             }
             .focused($isViewFocused)
         }
+        .overlay {
+            if let progress = viewModel.batchEvalProgress {
+                Color.black.opacity(0.15)
+                    .ignoresSafeArea()
+                BatchEvalProgressView(progress: progress, onCancel: {
+                    viewModel.cancelBatchEval()
+                }, onDismiss: {
+                    viewModel.dismissBatchEvalProgress()
+                })
+            }
+        }
         .sheet(isPresented: $viewModel.showingBookmarkAlert) {
             BookmarkDialog(
                 isPresented: $viewModel.showingBookmarkAlert,

@@ -25,6 +25,8 @@ struct MacActionButtonsView: View {
     /// 第二行按钮定义
     private let row2Keys: [ActionDefinitions.ActionKey?] = [
         .queryScore,
+        .queryEngineScore,
+        .queryAllEngineScores,
         .openYunku,
         .fix,
         .markPath,
