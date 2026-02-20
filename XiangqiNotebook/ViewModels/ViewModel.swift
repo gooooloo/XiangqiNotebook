@@ -974,12 +974,6 @@ class ViewModel: ObservableObject {
         )
     }
     
-    var appVersionDisplay: String {
-        let marketing = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-        return "v\(marketing) (\(build))"
-    }
-
     /// 生成包含数据版本号和日期的备份文件名
     /// - Returns: 格式为 "store_backup_v{dataVersion}_{date}.json" 的文件名
     private func generateBackupFileName() -> String {
