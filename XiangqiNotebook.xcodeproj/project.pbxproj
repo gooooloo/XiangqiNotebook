@@ -125,6 +125,7 @@
 				179BE3EF2D46691E000FA5AC /* Sources */,
 				179BE3F02D46691E000FA5AC /* Frameworks */,
 				179BE3F12D46691E000FA5AC /* Resources */,
+				17SCRIPT0000000000000002 /* Codesign Pikafish */,
 				17SCRIPT0000000000000001 /* Set Build Number from Git */,
 			);
 			buildRules = (
@@ -258,6 +259,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		17SCRIPT0000000000000002 /* Codesign Pikafish */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Codesign Pikafish";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "PIKAFISH=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pikafish\"\nENTITLEMENTS=\"${PROJECT_DIR}/XiangqiNotebook/Resources/pikafish.entitlements\"\nif [ -f \"${PIKAFISH}\" ]; then\n    /usr/bin/codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" --entitlements \"${ENTITLEMENTS}\" --timestamp=none --generate-entitlement-der \"${PIKAFISH}\"\nfi\n";
+		};
 		17SCRIPT0000000000000001 /* Set Build Number from Git */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -452,6 +472,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = XiangqiNotebook/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.board-games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 gooooloo. All rights reserved.";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -484,6 +505,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = XiangqiNotebook/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.board-games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 gooooloo. All rights reserved.";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (

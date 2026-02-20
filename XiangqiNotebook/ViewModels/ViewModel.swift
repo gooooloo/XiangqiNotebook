@@ -223,7 +223,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.hintNextMove, text: "提示", textIPhone: "提示", supportedModes: [.practice]) { self.playRandomNextMove() }
 
         actionDefinitions.registerAction(.queryScore, text: "查分", shortcuts: [.single("s")], supportedModes: [.normal, .review]) { Task { await self.queryFenScore() } }
-        #if os(macOS)
+        #if os(macOS) && arch(arm64)
         actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼查分", supportedModes: [.normal, .review]) { Task { await self.queryEngineScore() } }
         actionDefinitions.registerAction(.queryAllEngineScores, text: "本局查皮卡鱼", supportedModes: [.normal, .review]) { Task { await self.queryAllEngineScores() } }
         #endif
@@ -1129,10 +1129,14 @@ class ViewModel: ObservableObject {
     #if os(macOS)
     /// 确保 PikafishService 已创建
     private func ensurePikafishService() -> PikafishService? {
+        #if arch(arm64)
         if pikafishService == nil {
             pikafishService = PikafishService()
         }
         return pikafishService
+        #else
+        return nil
+        #endif
     }
 
     func queryEngineScore() async {
