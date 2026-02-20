@@ -335,19 +335,14 @@ class Session: ObservableObject {
 
     var displayScore: String {
         let nextIsRed = currentFen.split(separator: " ")[1] == "r"
-        var parts: [String] = []
+        guard let score = currentFenScore else { return "" }
+        return "\(adjustScore(score, nextIsRed: nextIsRed))"
+    }
 
-        if let score = currentFenScore {
-            let adjusted = adjustScore(score, nextIsRed: nextIsRed)
-            parts.append("云库\(adjusted)")
-        }
-
-        if let engineScore = currentEngineScore {
-            let adjusted = adjustScore(engineScore, nextIsRed: nextIsRed)
-            parts.append("皮卡鱼\(adjusted)")
-        }
-
-        return parts.joined(separator: " ")
+    var displayEngineScore: String {
+        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        guard let score = currentEngineScore else { return "" }
+        return "\(adjustScore(score, nextIsRed: nextIsRed))"
     }
 
     func getDisplayScoreForMove(_ move: Move) -> String {

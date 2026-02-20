@@ -1380,6 +1380,7 @@ class ViewModel: ObservableObject {
     // 从 Session 转发的计算属性
     var currentFenId: Int { session.currentFenId }
     var displayScore: String { session.displayScore }
+    var displayEngineScore: String { session.displayEngineScore }
     var currentGameStepDisplay: Int { session.currentGameStepDisplay }
     var maxGameStepDisplay: Int { session.maxGameStepDisplay }
     var currentFenComment: String? { session.currentFenComment }
