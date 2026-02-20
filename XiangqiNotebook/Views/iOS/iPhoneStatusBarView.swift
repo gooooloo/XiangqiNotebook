@@ -45,7 +45,7 @@ struct iPhoneStatusBarView: View {
                         .font(fontStyle)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Text("数据版本: \(viewModel.currentDataVersion)\(viewModel.currentDatabaseDirty ? "*" : " ")")
+                Text("\(viewModel.appVersionDisplay) 数据: \(viewModel.currentDataVersion)\(viewModel.currentDatabaseDirty ? "*" : " ")")
                     .font(fontStyle)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

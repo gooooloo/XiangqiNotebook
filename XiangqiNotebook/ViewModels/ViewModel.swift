@@ -974,13 +974,10 @@ class ViewModel: ObservableObject {
         )
     }
     
-    /// 获取应用版本号
-    /// - Returns: 应用的版本号字符串，如果无法获取则返回 "unknown"
-    private func getAppVersion() -> String {
-        guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
-            return "unknown"
-        }
-        return version
+    var appVersionDisplay: String {
+        let marketing = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "v\(marketing) (\(build))"
     }
 
     /// 生成包含数据版本号和日期的备份文件名
