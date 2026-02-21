@@ -14,7 +14,7 @@ struct MacActionButtonsView: View {
             .stepForward,
             .toEnd,
             .nextVariant,
-            (viewModel.session.sessionData.currentMode == .practice && viewModel.isMyTurn) ? .hintNextMove : .playRandomNextMove,
+            (viewModel.currentAppMode == .practice && viewModel.isMyTurn) ? .hintNextMove : .playRandomNextMove,
             .practiceNewGame,
             .reviewThisGame,
             .focusedPractice,

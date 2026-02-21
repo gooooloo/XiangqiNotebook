@@ -21,7 +21,7 @@ struct iPhoneMoreOptionsView: View {
                             iPhoneButton(viewModel: viewModel, actionKey: .showBookmarkListIOS)
                             iPhoneButton(viewModel: viewModel, actionKey: .queryScore)
                             iPhoneButton(viewModel: viewModel, actionKey: .openYunku)
-                            iPhoneButton(viewModel: viewModel, actionKey: viewModel.session.sessionData.currentMode == .practice ? .nextVariant : .playRandomNextMove)
+                            iPhoneButton(viewModel: viewModel, actionKey: viewModel.currentAppMode == .practice ? .nextVariant : .playRandomNextMove)
                         }
                         .frame(maxWidth: .infinity)
 

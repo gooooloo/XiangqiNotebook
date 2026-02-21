@@ -40,7 +40,7 @@ struct MoveListView: View {
                             Group {
                                 if viewModel.currentGameStepDisplay == index {
                                     Color.blue.opacity(0.2)
-                                } else if viewModel.session.isMoveLocked(index) {
+                                } else if viewModel.isMoveLocked(index) {
                                     Color.gray.opacity(0.2)
                                 } else {
                                     Color.clear
@@ -48,9 +48,9 @@ struct MoveListView: View {
                             }
                         )
                         .foregroundColor(item.move.map { move in
-                            if viewModel.session.isBadMove(move) {
+                            if viewModel.isBadMove(move) {
                                 return .red
-                            } else if viewModel.session.isRecommendedMove(move) {
+                            } else if viewModel.isRecommendedMove(move) {
                                 return .green
                             }
                             return .primary

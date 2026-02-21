@@ -1,35 +1,35 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件为 Claude Code (claude.ai/code) 在本仓库中工作时提供指导。
 
-## Project Philosophy
+## 项目理念
 
 这个项目不追求酷炫的界面交互。相反的，我们追求清晰简明、符合直觉的界面和操作逻辑；追求代码的简明和最少化、易读性和长期可维护性、可扩展性，追求架构的稳定性；追求极客的快捷操作感受。总的定位是：这是一个很高效的学习象棋的工具软件。
 
-## Project Overview
+## 项目概述
 
-XiangqiNotebook (象棋笔记本) is a cross-platform Chinese chess learning and note-taking application built with SwiftUI, supporting iPhone, iPad, and macOS. It features path marking, position scoring, bookmarks, annotations, and practice modes for chess study and review.
+象棋笔记本 (XiangqiNotebook) 是一个使用 SwiftUI 构建的跨平台中国象棋学习与笔记应用，支持 iPhone、iPad 和 macOS。功能包括路径标记、局面评分、书签、注释，以及练习模式，用于棋谱学习和复习。
 
-## Build and Test Commands
+## 构建与测试命令
 
-This is an Xcode project. Common development tasks:
+这是一个 Xcode 项目。常用开发操作：
 
-- **Build**: `xcodebuild -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook build`
-- **Run Tests**: `xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS'`
-- **Run Single Test**: `xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName/testMethodName`
-- **Run Tests on iOS**: Use `-destination 'platform=iOS Simulator,name=iPhone 15'` or similar
+- **构建**: `xcodebuild -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook build`
+- **运行测试**: `xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS'`
+- **运行单个测试**: `xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName/testMethodName`
+- **在 iOS 上运行测试**: 使用 `-destination 'platform=iOS Simulator,name=iPhone 15'` 或类似参数
 
-**Note on ARM64**: If running tests on Apple Silicon Mac, wrap the command with `arch -arm64 /bin/bash -c '...'` to ensure proper architecture.
+**ARM64 注意事项**: 在 Apple Silicon Mac 上运行测试时，需用 `arch -arm64 /bin/bash -c '...'` 包裹命令以确保正确的架构。
 
-## Architecture Overview
+## 架构概述
 
-### MVVM Pattern with Strict Layer Separation
-- **Views**: Only access ViewModels, never Models directly
-- **ViewModels**: Coordinate between Views, Models, and Services
-- **Models**: Independent data layer using ObservableObject
-- **Services**: Platform abstraction through protocols
+### MVVM 模式与严格分层
+- **Views**: 只访问 ViewModels，不直接访问 Models
+- **ViewModels**: 协调 Views、Models 和 Services 之间的交互
+- **Models**: 独立的数据层，使用 ObservableObject
+- **Services**: 通过协议实现平台抽象
 
-### Core Data Flow
+### 核心数据流
 ```
 Views ↔ ViewModels ↔ Session ↔ DatabaseView ↔ Database
            ↕                         ↕
@@ -40,219 +40,96 @@ Views ↔ ViewModels ↔ Session ↔ DatabaseView ↔ Database
     iCloudFileCoordinator (singleton)
 ```
 
-### Key Components
+### 核心组件
 
-**DatabaseData and SessionData**:
-- `DatabaseData`: Core game data (positions, moves, games, books, bookmarks, statistics)
-  - Managed by `Database` for business logic
-  - Persisted by `DatabaseStorage` for file I/O
-- `SessionData`: UI state and session information (current game, UI settings, navigation state)
-  - Managed by `SessionManager` for business logic
-  - Persisted by `SessionStorage` for file I/O
-- Core data structures in DatabaseData:
-  - `fenObjects2`: Dictionary mapping fenId → FenObject (game positions)
-  - `moveObjects`: Dictionary mapping moveId → Move (game moves)
-  - `gameObjects`: Dictionary for complete games
-  - `bookObjects`: Dictionary for chess book organization
-- Data change notification via `@Published dataChanged: Bool`
+**DatabaseData 与 SessionData**:
+- `DatabaseData`: 核心棋谱数据（局面、着法、棋局、棋书、书签、统计）
+  - 由 `Database` 管理业务逻辑
+  - 由 `DatabaseStorage` 负责文件读写持久化
+- `SessionData`: UI 状态与会话信息（当前棋局、UI 设置、导航状态）
+  - 由 `SessionManager` 管理业务逻辑
+  - 由 `SessionStorage` 负责文件读写持久化
+- DatabaseData 中的核心数据结构：
+  - `fenObjects2`: 字典，fenId → FenObject（棋局局面）
+  - `moveObjects`: 字典，moveId → Move（着法）
+  - `gameObjects`: 字典，完整棋局
+  - `bookObjects`: 字典，棋书组织结构
+- 数据变更通知通过 `@Published dataChanged: Bool`
 
 **ViewModel.swift**:
-- Main business logic coordinator
-- Holds `@Published private(set) var sessionManager: SessionManager`
-- Accesses current session via `sessionManager.currentSession`
-- Manages UI state and user interactions
-- All data operations go through SessionManager and Session
+- 主要的业务逻辑协调器
+- 持有 `@Published private(set) var sessionManager: SessionManager`
+- 通过 `sessionManager.currentSession` 访问当前会话
+- 管理 UI 状态和用户交互
+- 所有数据操作都通过 SessionManager 和 Session 进行
 
 **SessionManager**:
-- Manages multiple Session instances (main session and practice session)
-- Handles filter scope switching by creating new Session with appropriate DatabaseView
-- Coordinates between different views (full database, red opening, black opening, etc.)
-- Factory method: `.create(from:database:)` creates SessionManager from SessionData
-- Ensures data consistency when switching between sessions
+- 管理多个 Session 实例（主会话和练习会话）
+- 通过创建带有对应 DatabaseView 的新 Session 来处理筛选范围切换
+- 协调不同视图之间的切换（全库、先手开局、后手开局等）
+- 工厂方法：`.create(from:database:)` 从 SessionData 创建 SessionManager
+- 确保会话切换时的数据一致性
 
-**DatabaseView** (Data filtering layer):
-- Provides filtered view of Database based on scope (red/black opening, real games, focused practice, etc.)
-- Encapsulates all fenId-based filtering logic internally
-- Core methods enforce strict filtering semantics (source AND target must be in scope):
-  - `getFenObject(_:)`: Returns FenObject if fenId is in scope
-  - `containsFenId(_:)`: Checks if fenId belongs to current scope
-  - `moves(from:)`: Returns moves where both source and target are in scope
-  - `move(from:to:)`: Finds move if both endpoints are in scope
-- Provides direct passthrough for non-filtered data (fenToId, moveObjects, bookObjects, etc.)
-- Constructed via factory methods (`.full()`, `.redOpening()`, `.blackOpening()`, etc.)
-- Session holds and manages the current DatabaseView instance
+**DatabaseView**（数据筛选层）:
+- 根据范围（先手/后手开局、实战棋局、专项练习等）提供 Database 的筛选视图
+- 内部封装所有基于 fenId 的筛选逻辑
+- 核心方法强制执行严格的筛选语义（起点和终点都必须在范围内）：
+  - `getFenObject(_:)`: 如果 fenId 在范围内则返回 FenObject
+  - `containsFenId(_:)`: 检查 fenId 是否属于当前范围
+  - `moves(from:)`: 返回起点和终点都在范围内的着法
+  - `move(from:to:)`: 查找两个端点都在范围内的着法
+- 对不需要筛选的数据提供直接透传（fenToId、moveObjects、bookObjects 等）
+- 通过工厂方法构造（`.full()`、`.redOpening()`、`.blackOpening()` 等）
+- Session 持有并管理当前的 DatabaseView 实例
 
-**Storage Layer**:
-- `DatabaseStorage`: Static methods for database file I/O, handles iCloud coordination for database files
-- `SessionStorage`: Static methods for session file I/O, handles iCloud coordination for session files
-- `iCloudFileCoordinator`: Singleton managing file coordination for iCloud synchronization
-  - Provides `coordinatedRead()` and `coordinatedWrite()` for safe concurrent access
-  - Tracks save operations to prevent self-triggered file change notifications
-  - Used by both DatabaseStorage and SessionStorage for iCloud URLs
+**存储层**:
+- `DatabaseStorage`: 数据库文件读写的静态方法，处理数据库文件的 iCloud 协调
+- `SessionStorage`: 会话文件读写的静态方法，处理会话文件的 iCloud 协调
+- `iCloudFileCoordinator`: 管理 iCloud 同步的文件协调单例
+  - 提供 `coordinatedRead()` 和 `coordinatedWrite()` 实现安全的并发访问
+  - 跟踪保存操作以防止自触发的文件变更通知
+  - 被 DatabaseStorage 和 SessionStorage 共同使用
 
-**Platform Services**:
-- `iOSPlatformService.swift` and `MacOSPlatformService.swift`
-- Abstract platform-specific functionality (alerts, file operations, etc.)
+**平台服务**:
+- `iOSPlatformService.swift` 和 `MacOSPlatformService.swift`
+- 抽象平台特定功能（弹窗、文件操作等）
 
-### File Organization
-- `Models/`: Core data models and storage layer
-  - Data models: `FenObject`, `Move`, `GameObject`, `DatabaseData`, `SessionData`
-  - Business logic: `MoveRules`, `GameOperations`, `Database`, `SessionManager`
-  - Data view layer: `DatabaseView` (filtering and scoped access to Database)
-  - Storage: `DatabaseStorage`, `SessionStorage`, `iCloudFileCoordinator`
-- `Views/`: UI components split by platform (iOS/, Mac/, board/)
-- `ViewModels/`: Business logic and view state management
-- `Services/`: Platform abstraction layer
-- `Resources/`: Game assets (board and piece images in PNG/SVG)
+### 文件组织
+- `Models/`: 核心数据模型与存储层
+  - 数据模型: `FenObject`、`Move`、`GameObject`、`DatabaseData`、`SessionData`
+  - 业务逻辑: `MoveRules`、`GameOperations`、`Database`、`SessionManager`
+  - 数据视图层: `DatabaseView`（筛选与范围化访问 Database）
+  - 存储: `DatabaseStorage`、`SessionStorage`、`iCloudFileCoordinator`
+- `Views/`: UI 组件，按平台拆分（iOS/、Mac/、board/）
+- `ViewModels/`: 业务逻辑与视图状态管理
+- `Services/`: 平台抽象层
+- `Resources/`: 棋谱资源（棋盘和棋子图片，PNG/SVG 格式）
 
-### Key System Features
-- **Practice Mode**: Automatic practice count tracking, limited game extension, hidden path display
-- **Filter System**: Red/Black opening filters with dynamic board orientation
-- **Lock Mechanism**: Step locking to prevent misoperations, supports history navigation
-- **Path Management**: Auto-generates all possible paths with DFS algorithm, path counting statistics
-- **Bookmark System**: Save important positions for quick navigation and categorized management
-- **Data Persistence**: Complete Codable implementation for data serialization/deserialization
-- **iCloud Sync**: Automatic file coordination using NSFileCoordinator for safe concurrent access
+### 主要系统功能
+- **练习模式**: 自动跟踪练习次数、限步扩展棋局、隐藏路径显示
+- **筛选系统**: 先手/后手开局筛选，动态棋盘方向
+- **锁定机制**: 步骤锁定防止误操作，支持历史导航
+- **路径管理**: 使用 DFS 算法自动生成所有可能路径，路径计数统计
+- **书签系统**: 保存重要局面以便快速导航和分类管理
+- **数据持久化**: 完整的 Codable 实现用于数据序列化/反序列化
+- **iCloud 同步**: 使用 NSFileCoordinator 实现自动文件协调和安全并发访问
 
-## Development Guidelines
+### 测试覆盖
+测试位于 `XiangqiNotebookTests/`，覆盖以下内容：
+- 核心棋局逻辑（MoveRules、GameOperations）
+- 数据模型（FenObject、DatabaseData、SessionData）
+- 着法验证与棋盘状态管理
+- DatabaseView 筛选与范围逻辑
+- 存储层操作
 
-### Using DatabaseView for Data Access
-
-**Core Principles:**
-- Always access fenId-based data through `DatabaseView`, never directly through `DatabaseData`
-- Use `containsFenId(_:)` for entry validation before accessing fenId-based data
-- All move-related methods enforce strict filtering: both source AND target must be in scope
-
-**Common Patterns:**
-
-1. **Check if a position is in scope:**
-```swift
-if databaseView.containsFenId(fenId) {
-    // Position is accessible in current view
-}
-```
-
-2. **Get a FenObject:**
-```swift
-if let fenObject = databaseView.getFenObject(fenId) {
-    // Work with the fenObject
-}
-```
-
-3. **Get moves from a position:**
-```swift
-// Always validate source first
-guard databaseView.containsFenId(sourceFenId) else { return [] }
-let moves = databaseView.moves(from: sourceFenId)
-// All returned moves have targets also in scope
-```
-
-4. **Find a specific move:**
-```swift
-if let move = databaseView.move(from: sourceFenId, to: targetFenId) {
-    // Move exists and both endpoints are in scope
-}
-```
-
-**Direct Access (Non-filtered):**
-- Use DatabaseView's passthrough properties for data that doesn't need filtering:
-  - `fenToId`, `moveObjects`, `moveToId`, `bookObjects`, `gameObjects`
-- These provide direct access to underlying DatabaseData without filtering
-
-### Test-Driven Development Workflow
-
-**CRITICAL: Every code change MUST be validated with unit tests before completion.**
-
-When making any code changes:
-
-1. **After Every Code Modification:**
-   - Run the full test suite: `xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS'`
-   - At minimum, run tests related to the modified components
-   - Never mark a task as complete without running tests
-
-2. **Test Execution Requirements:**
-   - All tests MUST pass before considering the change complete
-   - If any test fails:
-     - Analyze the failure and identify the root cause
-     - Fix the code (or test if it's a test issue)
-     - Re-run tests until all pass
-     - Do NOT proceed with other tasks until tests pass
-
-3. **When to Run Tests:**
-   - After modifying any Model layer code (DatabaseData, SessionData, FenObject, Move, etc.)
-   - After modifying any business logic (Database, SessionManager, GameOperations, MoveRules)
-   - After refactoring any core functionality
-   - Before committing any changes
-   - When user explicitly requests testing
-
-4. **Test Scope Guidelines:**
-   - **Preferred**: Run the complete test suite to catch integration issues
-   - **Minimum**: Run tests for the specific classes/components modified
-   - **Example**: If modifying DatabaseView, run tests that exercise DatabaseView functionality
-
-5. **Reporting Test Results:**
-   - Always inform the user about test execution and results
-   - If tests fail, explain what failed and what you're doing to fix it
-   - If tests pass, confirm that code changes are validated
-
-### Platform-Specific Development
-- Use conditional compilation for platform differences: `#if os(macOS)`, `#if os(iOS)`
-- iPhone: Touch-optimized, simplified UI
-- iPad: Enhanced interface with more controls
-- Mac: Full desktop experience with multiple windows and keyboard shortcuts
-
-### iCloud File Coordination
-When working with iCloud files:
-- Always use `iCloudFileCoordinator.shared` for file coordination
-- Check if URL is iCloud using `DatabaseStorage.isICloudURL()` or `SessionStorage.isICloudURL()`
-- Use `coordinatedRead()` for reading files
-- Use `coordinatedWrite()` for writing files
-- The coordinator handles semaphore-based synchronization automatically
-
-### Testing
-
-**Test Coverage:**
-Tests are located in `XiangqiNotebookTests/` covering:
-- Core game logic (MoveRules, GameOperations)
-- Data models (FenObject, DatabaseData, SessionData)
-- Move validation and board state management
-- DatabaseView filtering and scoping logic
-- Storage layer operations
-
-**Test Commands Quick Reference:**
+### 测试命令速查
 ```bash
-# Run all tests (REQUIRED after code changes)
+# 运行全部测试（代码修改后必须执行）
 xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS'
 
-# Run specific test class
+# 运行指定测试类
 xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName
 
-# Run single test method
+# 运行单个测试方法
 xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName/testMethodName
 ```
-
-**Test Execution Policy:**
-- Tests MUST be run after every code change
-- All tests MUST pass before code changes are considered complete
-- Test failures must be fixed immediately before proceeding
-
-## Code Conventions
-
-- **ALWAYS run and pass unit tests after code changes** - Never consider a change complete without validated tests
-- Follow existing Swift/SwiftUI patterns in the codebase
-- Use `@Published` for observable properties in ViewModels
-- Maintain strict layer separation: Views → ViewModels → Models → Storage
-- Platform services should use protocol-based abstraction
-- Game logic should be platform-agnostic in Models layer
-- Storage layer uses static methods for file I/O operations
-- All iCloud file operations must go through `iCloudFileCoordinator.shared`
-- Always use DatabaseView for fenId-based data access, never access DatabaseData directly
-- Validate fenId scope with `containsFenId(_:)` before performing operations
-
-## Common Pitfalls to Avoid
-
-1. **Don't skip testing after code changes** - NEVER mark a task complete without running and passing all relevant tests
-2. **Don't access Models directly from Views** - Always go through ViewModels
-3. **Don't bypass DatabaseView** - Never access `DatabaseData.fenObjects2` directly; always use `DatabaseView.getFenObject(_:)`
-4. **Don't forget scope validation** - Always check `databaseView.containsFenId(_:)` before accessing fenId-based data
-5. **Don't bypass iCloudFileCoordinator** - All iCloud file operations must use the coordinator

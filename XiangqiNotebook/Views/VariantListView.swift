@@ -17,9 +17,9 @@ struct VariantListView: View {
                             text: viewModel.getMoveString(move: item.move),
                             score: viewModel.getDisplayScoreForMove(item.move),
                             isSelected: item.move.targetFenId == viewModel.currentFenId,
-                            isBadMove: viewModel.session.isBadMove(item.move),
-                            isRecommendedMove: viewModel.session.isRecommendedMove(item.move),
-                            isLocked: viewModel.session.isMoveLocked(viewModel.currentGameStepDisplay),
+                            isBadMove: viewModel.isBadMove(item.move),
+                            isRecommendedMove: viewModel.isRecommendedMove(item.move),
+                            isLocked: viewModel.isMoveLocked(viewModel.currentGameStepDisplay),
                             onTap: {
                                 viewModel.playVariantMove(item.move)
                             }

@@ -30,9 +30,9 @@ struct StepLimitationDialog: View {
                 Button("确定") {
                     if let number = Int(stepLimit.trimmingCharacters(in: .whitespacesAndNewlines)),
                        number > 0 {
-                        viewModel.session.setGameStepLimitation(number)
+                        viewModel.setGameStepLimitation(number)
                     } else {
-                        viewModel.session.setGameStepLimitation(nil)
+                        viewModel.setGameStepLimitation(nil)
                     }
                     stepLimit = ""
                     isPresented = false
@@ -42,7 +42,7 @@ struct StepLimitationDialog: View {
         .padding()
         .frame(width: 300, height: 150)
         .onAppear {
-            if let currentLimit = viewModel.session.gameStepLimitation {
+            if let currentLimit = viewModel.gameStepLimitation {
                 stepLimit = String(currentLimit)
             }
         }

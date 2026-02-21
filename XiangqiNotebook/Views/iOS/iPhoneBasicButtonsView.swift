@@ -11,7 +11,7 @@ struct iPhoneBasicButtonsView: View {
                 iPhoneButton(viewModel: viewModel, actionKey: .toStart)
                 iPhoneButton(viewModel: viewModel, actionKey: .stepBack)
                 iPhoneButton(viewModel: viewModel, actionKey: .stepForward)
-                iPhoneButton(viewModel: viewModel, actionKey: viewModel.session.sessionData.currentMode == .practice ?
+                iPhoneButton(viewModel: viewModel, actionKey: viewModel.currentAppMode == .practice ?
                     (viewModel.isMyTurn ? .hintNextMove : .playRandomNextMove) :
                     .nextVariant)
             }

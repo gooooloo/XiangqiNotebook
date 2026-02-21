@@ -18,7 +18,7 @@ struct iPhoneCommentView: View {
     }
     
     private var commentText: String {
-        if viewModel.session.sessionData.currentMode == .practice {
+        if viewModel.currentAppMode == .practice {
             return ""
         }
 

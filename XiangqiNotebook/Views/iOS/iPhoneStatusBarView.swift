@@ -36,7 +36,7 @@ struct iPhoneStatusBarView: View {
                 Text("本变: \(viewModel.currentVariationIndex + 1) / \(viewModel.totalVariationsCount)")
                     .font(fontStyle)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if viewModel.session.sessionData.currentMode == .practice {
+                if viewModel.currentAppMode == .practice {
                     Text("局数: \(viewModel.totalPathsCountFromCurrentFen.map { String($0) } ?? "?")")
                         .font(fontStyle)
                         .frame(maxWidth: .infinity, alignment: .leading)
