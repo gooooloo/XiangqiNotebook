@@ -463,7 +463,8 @@ struct BookTreeNodeView: View {
                     Image(systemName: subBooks.isEmpty ? "circle" : (isExpanded ? "chevron.down" : "chevron.right"))
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
-                        .frame(width: 16, height: 16)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(subBooks.isEmpty)
