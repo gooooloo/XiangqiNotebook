@@ -708,9 +708,12 @@ struct GameListItemView: View {
             HStack {
                 // 日期
                 if let date = game.gameDate {
-                    Text(date, style: .date)
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 4) {
+                        Text(date, style: .date)
+                        Text(date, style: .time)
+                    }
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
                 }
                 
                 Spacer()
@@ -906,6 +909,7 @@ struct GameInfoSection: View {
                         .foregroundColor(.secondary)
                     if let date = game.gameDate {
                         Text(date, style: .date)
+                        Text(date, style: .time)
                     } else {
                         Text("未设置")
                             .foregroundColor(.secondary)
