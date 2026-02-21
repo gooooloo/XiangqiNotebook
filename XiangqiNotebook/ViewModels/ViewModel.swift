@@ -45,6 +45,7 @@ class ViewModel: ObservableObject {
     @Published var showingStepLimitationDialog = false
     @Published var showingGameInputView = false
     @Published var showingGameBrowserView = false
+    @Published var showingPGNImportSheet = false
     @Published var showMarkPathView = false
     @Published var showIOSBookMarkListView = false
     @Published var showIOSMoreActionsView = false
@@ -56,6 +57,7 @@ class ViewModel: ObservableObject {
                showingStepLimitationDialog ||
                showingGameInputView ||
                showingGameBrowserView ||
+               showingPGNImportSheet ||
                showMarkPathView
     }
 
@@ -241,6 +243,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.stepLimitation, text: "步数限制", shortcuts: [.sequence(",l")], supportedModes: [.normal]) { self.showingStepLimitationDialog = true }
         actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcuts: [.sequence(",i")], supportedModes: [.normal]) { self.showingGameInputView = true }
         actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",fff")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
+        actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",p")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
 
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { /* TODO */ }
         actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", supportedModes: [.normal]) { self.performAutoAddToOpening() }

@@ -11,13 +11,15 @@ enum PGNImportService {
         for game in games {
             let importResult = importSingleGame(game, username: username, databaseView: databaseView)
             switch importResult {
-            case .imported(let isRed):
+            case .importedMyRed:
                 result.imported += 1
-                if isRed {
-                    result.redGameCount += 1
-                } else {
-                    result.blackGameCount += 1
-                }
+                result.redGameCount += 1
+            case .importedMyBlack:
+                result.imported += 1
+                result.blackGameCount += 1
+            case .importedOthers:
+                result.imported += 1
+                result.othersGameCount += 1
             case .duplicate:
                 result.skippedDuplicate += 1
             case .error(let message):
@@ -30,7 +32,9 @@ enum PGNImportService {
     }
 
     private enum SingleImportResult {
-        case imported(isRed: Bool)
+        case importedMyRed
+        case importedMyBlack
+        case importedOthers
         case duplicate
         case error(String)
     }
@@ -54,14 +58,18 @@ enum PGNImportService {
         // Determine if user played red or black
         let redPlayer = game.headers["Red"] ?? ""
         let blackPlayer = game.headers["Black"] ?? ""
-        let iAmRed = redPlayer.caseInsensitiveCompare(username) == .orderedSame
-        let iAmBlack = blackPlayer.caseInsensitiveCompare(username) == .orderedSame
+        let trimmedUsername = username.trimmingCharacters(in: .whitespaces)
+        let iAmRed = !trimmedUsername.isEmpty && redPlayer.caseInsensitiveCompare(trimmedUsername) == .orderedSame
+        let iAmBlack = !trimmedUsername.isEmpty && blackPlayer.caseInsensitiveCompare(trimmedUsername) == .orderedSame
 
-        guard iAmRed || iAmBlack else {
-            return .error("\(redPlayer) vs \(blackPlayer): 用户名不匹配")
+        let targetBookId: UUID
+        if iAmRed {
+            targetBookId = Session.myRealRedGameBookId
+        } else if iAmBlack {
+            targetBookId = Session.myRealBlackGameBookId
+        } else {
+            targetBookId = Session.othersRealGameBookId
         }
-
-        let targetBookId = iAmRed ? Session.myRealRedGameBookId : Session.myRealBlackGameBookId
 
         // Check for duplicate
         if isDuplicate(fenSequence: normalizedFens, bookId: targetBookId, databaseView: databaseView) {
@@ -113,12 +121,20 @@ enum PGNImportService {
             databaseView.updateGameObject(gameId, gameObject: gameObject)
         }
 
-        // Update statistics for each FEN position
-        for fenId in fenIds {
-            updateGameStatistics(fenId: fenId, iAmRed: iAmRed, gameResult: gameResult, databaseView: databaseView)
+        // Update statistics for each FEN position (only for my games)
+        if iAmRed || iAmBlack {
+            for fenId in fenIds {
+                updateGameStatistics(fenId: fenId, iAmRed: iAmRed, gameResult: gameResult, databaseView: databaseView)
+            }
         }
 
-        return .imported(isRed: iAmRed)
+        if iAmRed {
+            return .importedMyRed
+        } else if iAmBlack {
+            return .importedMyBlack
+        } else {
+            return .importedOthers
+        }
     }
 
     /// Check if a game with identical FEN sequence already exists in the target book

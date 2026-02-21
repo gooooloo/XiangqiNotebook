@@ -98,6 +98,9 @@ struct MacContentView: View {
         .sheet(isPresented: $viewModel.showingGameBrowserView) {
             GameBrowserView(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showingPGNImportSheet) {
+            PGNImportView(viewModel: viewModel)
+        }
         .sheet(isPresented: $viewModel.showingStepLimitationDialog) {
             StepLimitationDialog(isPresented: $viewModel.showingStepLimitationDialog, viewModel: viewModel)
         }

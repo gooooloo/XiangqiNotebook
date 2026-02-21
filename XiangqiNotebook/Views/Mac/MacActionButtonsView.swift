@@ -36,6 +36,7 @@ struct MacActionButtonsView: View {
         .random,
         .stepLimitation,
         .jumpToNextOpeningGap,
+        .autoAddToOpening,
     ]
 
     /// 第三行按钮定义
@@ -48,8 +49,8 @@ struct MacActionButtonsView: View {
         .deleteScore,
         .inputGame,
         .browseGames,
+        .importPGN,
         .searchCurrentMove,
-        .autoAddToOpening,
     ]
 
     /// 检查按钮是否可见

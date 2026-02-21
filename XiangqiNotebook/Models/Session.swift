@@ -31,6 +31,7 @@ class Session: ObservableObject {
     static let myRealGameBookId = UUID(uuidString: "7B8E9F0A-1C2D-3E4F-5A6B-7C8D9E0F1A2B")!
     static let myRealRedGameBookId = UUID(uuidString: "2C3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F")!
     static let myRealBlackGameBookId = UUID(uuidString: "9D0E1F2A-3B4C-5D6E-7F8A-9B0C1D2E3F4A")!
+    static let othersRealGameBookId = UUID(uuidString: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")!
 
     @Published public var dataChanged: Bool = false
 
@@ -1442,6 +1443,10 @@ extension Session {
            !myRealGameBook.subBookIds.contains(Session.myRealBlackGameBookId) {
             myRealGameBook.subBookIds.append(Session.myRealBlackGameBookId)
             databaseView.updateBookObject(Session.myRealGameBookId, bookObject: myRealGameBook)
+        }
+
+        if databaseView.getBookObjectUnfiltered(Session.othersRealGameBookId) == nil {
+            databaseView.updateBookObject(Session.othersRealGameBookId, bookObject: BookObject(id: Session.othersRealGameBookId, name: "他人实战"))
         }
     }
 

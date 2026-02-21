@@ -15,6 +15,7 @@ struct PGNImportResult {
     var skippedError: Int = 0
     var redGameCount: Int = 0
     var blackGameCount: Int = 0
+    var othersGameCount: Int = 0
     var errors: [String] = []
 }
 

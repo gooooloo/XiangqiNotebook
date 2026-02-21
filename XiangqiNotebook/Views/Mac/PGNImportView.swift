@@ -15,18 +15,23 @@ struct PGNImportView: View {
             Text("导入PGN棋局")
                 .font(.headline)
 
-            HStack {
-                Text("用户名:")
-                TextField("输入你的对弈用户名", text: $username)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 200)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("我的棋手名:")
+                    TextField("留空表示导入他人对局", text: $username)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 200)
+                }
+                Text("若棋手名与对局中红方或黑方一致，则该局作为我的执红/执黑实战导入；否则作为他人对局导入。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             HStack {
                 Button("选择PGN文件") {
                     selectAndImportFile()
                 }
-                .disabled(username.trimmingCharacters(in: .whitespaces).isEmpty || isImporting)
+                .disabled(isImporting)
 
                 if isImporting {
                     ProgressView()
@@ -60,7 +65,14 @@ struct PGNImportView: View {
                 .bold()
 
             Text("解析棋局: \(result.totalParsed)")
-            Text("成功导入: \(result.imported) (执红 \(result.redGameCount), 执黑 \(result.blackGameCount))")
+            if result.redGameCount > 0 || result.blackGameCount > 0 || result.othersGameCount > 0 {
+                let parts = [
+                    result.redGameCount > 0 ? "执红\(result.redGameCount)" : nil,
+                    result.blackGameCount > 0 ? "执黑\(result.blackGameCount)" : nil,
+                    result.othersGameCount > 0 ? "他人\(result.othersGameCount)" : nil,
+                ].compactMap { $0 }.joined(separator: ", ")
+                Text("成功导入: \(result.imported) (\(parts))")
+            }
             if result.skippedDuplicate > 0 {
                 Text("跳过重复: \(result.skippedDuplicate)")
                     .foregroundColor(.secondary)
