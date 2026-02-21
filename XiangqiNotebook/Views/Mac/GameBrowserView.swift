@@ -17,6 +17,7 @@ struct GameBrowserView: View {
     @State private var selectedGameId: UUID?
     @State private var showingAddBookSheet = false
     @State private var showingAddGameSheet = false
+    @State private var showingPGNImportSheet = false
     
 
     
@@ -25,7 +26,8 @@ struct GameBrowserView: View {
             // 左栏：BookObject树形选择器
             BookTreeSidebarView(
                 viewModel: viewModel,
-                selectedBookId: $selectedBookId
+                selectedBookId: $selectedBookId,
+                showingPGNImportSheet: $showingPGNImportSheet
             )
             .frame(minWidth: 250, maxWidth: 300)
             
@@ -52,23 +54,11 @@ struct GameBrowserView: View {
             .frame(minWidth: 350)
         }
         .frame(minWidth: 1000, idealWidth: 1200, maxWidth: .infinity, minHeight: 600, idealHeight: 700, maxHeight: .infinity)
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button(action: { showingAddBookSheet = true }) {
-                    Label("添加棋谱", systemImage: "folder.badge.plus")
-                }
-            }
-
-            if selectedBookId != nil {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showingAddGameSheet = true }) {
-                        Label("添加棋局", systemImage: "plus")
-                    }
-                }
-            }
-        }
         .sheet(isPresented: $showingAddBookSheet) {
             AddBookView(viewModel: viewModel, isPresented: $showingAddBookSheet)
+        }
+        .sheet(isPresented: $showingPGNImportSheet) {
+            PGNImportView(viewModel: viewModel)
         }
         .sheet(isPresented: $showingAddGameSheet) {
             if let selectedBookId = selectedBookId {
@@ -362,6 +352,7 @@ struct EditGameView: View {
 struct BookTreeSidebarView: View {
     @ObservedObject var viewModel: ViewModel
     @Binding var selectedBookId: UUID?
+    @Binding var showingPGNImportSheet: Bool
     @State private var showingAddBookSheet = false
 
     var body: some View {
@@ -373,6 +364,13 @@ struct BookTreeSidebarView: View {
                     .padding(.horizontal)
                     .padding(.top)
                 Spacer()
+                Button(action: { showingPGNImportSheet = true }) {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 16))
+                }
+                .buttonStyle(.plain)
+                .padding(.top)
+                .help("导入PGN")
                 Button(action: { showingAddBookSheet = true }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 20))

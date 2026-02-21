@@ -1566,6 +1566,18 @@ class ViewModel: ObservableObject {
         session.deleteGame(gameId)
     }
 
+    func importPGNFile(content: String, username: String) -> PGNImportResult {
+        session.setupDefaultBooksIfNeeded()
+        let databaseView = DatabaseView.full(database: Database.shared)
+        let result = PGNImportService.importPGN(content: content, username: username, databaseView: databaseView)
+        if result.imported > 0 {
+            // Database is already marked dirty by PGNImportService operations.
+            // Toggle dataChanged to trigger UI updates.
+            session.dataChanged.toggle()
+        }
+        return result
+    }
+
     func getGameObjectUnfiltered(_ gameId: UUID) -> GameObject? {
         return session.getGameObjectUnfiltered(gameId)
     }
