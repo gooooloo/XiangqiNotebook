@@ -576,7 +576,17 @@ struct GameListView: View {
 
     private var games: [GameObject] {
         guard let bookId = selectedBookId else { return [] }
-        return viewModel.getGamesInBook(bookId)
+        let allGames = viewModel.getGamesInBook(bookId)
+        // 实战棋局按时间降序排列，棋书棋局保持原顺序
+        let hasRealGames = allGames.contains { $0.iAmRed || $0.iAmBlack }
+        if hasRealGames {
+            return allGames.sorted { g1, g2 in
+                let d1 = g1.gameDate ?? g1.creationDate ?? .distantPast
+                let d2 = g2.gameDate ?? g2.creationDate ?? .distantPast
+                return d1 > d2
+            }
+        }
+        return allGames
     }
 
     var body: some View {
