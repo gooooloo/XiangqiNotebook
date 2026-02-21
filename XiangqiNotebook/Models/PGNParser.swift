@@ -279,10 +279,16 @@ enum PGNParser {
         }
     }
 
-    /// Parse PGN date string "2026.02.21" to Date
-    static func parseDate(_ dateString: String?) -> Date {
+    /// Parse PGN date string "2026.02.21" and optional time string "22:32:50" to Date
+    static func parseDate(_ dateString: String?, time timeString: String? = nil) -> Date {
         guard let dateString = dateString else { return Date() }
         let formatter = DateFormatter()
+        if let timeString = timeString {
+            formatter.dateFormat = "yyyy.MM.dd HH:mm:ss"
+            if let date = formatter.date(from: "\(dateString) \(timeString)") {
+                return date
+            }
+        }
         formatter.dateFormat = "yyyy.MM.dd"
         return formatter.date(from: dateString) ?? Date()
     }

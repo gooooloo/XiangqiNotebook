@@ -1566,6 +1566,11 @@ class ViewModel: ObservableObject {
     }
 
     func deleteGame(_ gameId: UUID) {
+        // 如果当前正在查看被删除的棋局，先切换到全库视图，避免 DatabaseView 筛选失效导致崩溃
+        if currentFilters.contains(Session.filterSpecificGame),
+           session.sessionData.specificGameId == gameId {
+            sessionManager.setFilters([], specificGameId: nil)
+        }
         session.deleteGame(gameId)
     }
 

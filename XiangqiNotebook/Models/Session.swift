@@ -1549,7 +1549,26 @@ extension Session {
             databaseView.updateBlackGameStatistics(for: fenId, statistics: gameStatistics)
         }
     }
-    
+
+    private func subtractGameStatistics(fenId: Int, iAmRed: Bool, gameResult: GameResult, databaseView: DatabaseView) {
+        let dictionary = iAmRed ? databaseView.myRealRedGameStatisticsByFenId : databaseView.myRealBlackGameStatisticsByFenId
+        guard let gameStatistics = dictionary[fenId] else { return }
+
+        switch gameResult {
+        case .redWin:    gameStatistics.redWin = max(0, gameStatistics.redWin - 1)
+        case .blackWin:  gameStatistics.blackWin = max(0, gameStatistics.blackWin - 1)
+        case .draw:      gameStatistics.draw = max(0, gameStatistics.draw - 1)
+        case .notFinished: gameStatistics.notFinished = max(0, gameStatistics.notFinished - 1)
+        case .unknown:   gameStatistics.unknown = max(0, gameStatistics.unknown - 1)
+        }
+
+        if iAmRed {
+            databaseView.updateRedGameStatistics(for: fenId, statistics: gameStatistics)
+        } else {
+            databaseView.updateBlackGameStatistics(for: fenId, statistics: gameStatistics)
+        }
+    }
+
     func addGame(to bookId: UUID, name: String?, redPlayerName: String, blackPlayerName: String, gameDate: Date, gameResult: GameResult, iAmRed: Bool, iAmBlack: Bool, startingFenId: Int?, isFullyRecorded: Bool) -> UUID {
         let id = databaseView.addGame(to: bookId, name: name, redPlayerName: redPlayerName, blackPlayerName: blackPlayerName, gameDate: gameDate, gameResult: gameResult, iAmRed: iAmRed, iAmBlack: iAmBlack, startingFenId: startingFenId, isFullyRecorded: isFullyRecorded)
         notifyDataChanged(markDatabaseDirty: false) // Database.addGame 已经调用了 markDirty
@@ -1557,6 +1576,29 @@ extension Session {
     }
 
     func deleteGame(_ gameId: UUID) {
+        // 删除前先扣减实战统计（使用未过滤的视图获取棋局信息）
+        let fullView = DatabaseView.full(database: Database.shared)
+        if let game = fullView.getGameObjectUnfiltered(gameId),
+           (game.iAmRed || game.iAmBlack) {
+            // 收集棋局涉及的所有 fenId
+            var fenIds = Set<Int>()
+            if let startFenId = game.startingFenId {
+                fenIds.insert(startFenId)
+            }
+            for moveId in game.moveIds {
+                if let move = fullView.move(id: moveId) {
+                    fenIds.insert(move.sourceFenId)
+                    if let targetFenId = move.targetFenId {
+                        fenIds.insert(targetFenId)
+                    }
+                }
+            }
+            // 反向扣减统计
+            for fenId in fenIds {
+                subtractGameStatistics(fenId: fenId, iAmRed: game.iAmRed, gameResult: game.gameResult, databaseView: fullView)
+            }
+        }
+
         databaseView.deleteGame(gameId)
         notifyDataChanged(markDatabaseDirty: false) // Database.deleteGame 已经调用了 markDirty
     }

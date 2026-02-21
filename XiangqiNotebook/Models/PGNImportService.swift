@@ -96,7 +96,7 @@ enum PGNImportService {
 
         // Create the game object
         let gameResult = PGNParser.parseResult(game.headers["Result"])
-        let gameDate = PGNParser.parseDate(game.headers["Date"])
+        let gameDate = PGNParser.parseDate(game.headers["Date"], time: game.headers["Time"])
 
         let gameId = databaseView.addGame(
             to: targetBookId,
