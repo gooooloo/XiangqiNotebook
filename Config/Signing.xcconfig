@@ -3,5 +3,8 @@ CODE_SIGN_STYLE = Automatic
 DEVELOPMENT_TEAM =
 PROVISIONING_PROFILE_SPECIFIER =
 
+// Version settings
+#include "Version.xcconfig"
+
 // Optional local override (file may not exist)
 #include? "Signing.local.xcconfig"
