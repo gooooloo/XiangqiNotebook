@@ -1,6 +1,6 @@
 ---
 name: release
-description: Update version, CHANGELOG, commit, tag, and push for Xcode Cloud
+description: Update version, CHANGELOG, commit, tag, and push
 disable-model-invocation: true
 ---
 
@@ -47,4 +47,4 @@ Create a new release for 象棋笔记本.
 ### 8. Report
 - Confirm the tag has been pushed
 - Note the build number (from `git rev-list --count HEAD`) that will be used
-- Remind the user that Xcode Cloud should pick up the new tag
+- Remind the user to archive and upload via Xcode, then submit for review in App Store Connect
