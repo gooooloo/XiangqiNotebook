@@ -1,6 +1,6 @@
 ---
 name: release
-description: Update CHANGELOG, commit, tag, and push a release branch for Xcode Cloud
+description: Update CHANGELOG, commit, tag, and push for Xcode Cloud
 disable-model-invocation: true
 ---
 
@@ -44,12 +44,9 @@ Create a new release for 象棋笔记本.
 ### 7. Create git tag
 - `git tag v<version>`
 
-### 8. Create release branch and push
-- `git checkout -b release/<version>`
-- `git push -u origin release/<version> --tags`
-- Switch back to main: `git checkout main`
-- Push main: `git push origin main`
+### 8. Push tag and main
+- `git push origin main --tags`
 
 ### 9. Report
-- Confirm the release branch and tag have been pushed
-- Remind the user that Xcode Cloud should pick up the release branch
+- Confirm the tag has been pushed
+- Remind the user that Xcode Cloud should pick up the new tag
