@@ -10,8 +10,8 @@ Create a new release for 象棋笔记本.
 
 ### 1. Determine version number
 - Read the current version from `Config/Version.xcconfig` (the `MARKETING_VERSION` value)
-- Suggest incrementing the patch version (e.g. `1.0.1` → `1.0.2`)
-- Ask the user to confirm or specify a different version number
+- Automatically increment the patch version (e.g. `1.0.1` → `1.0.2`)
+- Do NOT ask the user to confirm — just proceed with the incremented patch version
 
 ### 2. Gather and draft changelog entries
 - Find the most recent version tag (e.g. `git describe --tags --abbrev=0`)
