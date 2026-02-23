@@ -1,6 +1,6 @@
 ---
 name: release
-description: Update CHANGELOG, commit, tag, and push for Xcode Cloud
+description: Update version, CHANGELOG, commit, tag, and push for Xcode Cloud
 disable-model-invocation: true
 ---
 
@@ -9,9 +9,9 @@ Create a new release for 象棋笔记本.
 ## Steps
 
 ### 1. Determine version number
-- Run `git rev-list --count HEAD` to get the current commit count
-- The new version will be `1.0.<count + 1>` (the +1 accounts for the changelog commit about to be made)
-- Tell the user the determined version number
+- Read the current version from `Config/Version.xcconfig` (the `MARKETING_VERSION` value)
+- Suggest incrementing the patch version (e.g. `1.0.1` → `1.0.2`)
+- Ask the user to confirm or specify a different version number
 
 ### 2. Gather and draft changelog entries
 - Find the most recent version tag (e.g. `git describe --tags --abbrev=0`)
@@ -21,32 +21,30 @@ Create a new release for 象棋笔记本.
 - **Exclude**: refactoring, code cleanup, test changes, build config changes, documentation updates, and anything purely internal that users would not experience
 - **Do NOT copy-paste git commit messages.** Summarize changes in your own words, written in Chinese from the end user's perspective. Group related commits into single entries when appropriate. (e.g. "新增XX功能", "修复XX问题", "改进XX体验")
 
-### 3. Draft CHANGELOG.md update
-- Add a new section above the previous release entry with the determined version number
+### 3. Update version and draft CHANGELOG.md
+- Update `MARKETING_VERSION` in `Config/Version.xcconfig` to the new version
+- Add a new section above the previous release entry in `CHANGELOG.md` with the new version number
 - Include the filtered changelog entries as a bulleted list
 - Keep the `---` separator between versions
 - Do NOT include commit hashes in version headings
 
 ### 4. Review checkpoint (MUST STOP HERE)
-- Show the user the full updated CHANGELOG.md content
+- Show the user the changes to `Config/Version.xcconfig` and the full updated `CHANGELOG.md` content
 - Ask the user to review and confirm, or request changes
 - Do NOT proceed until the user explicitly approves
 - If the user requests changes, apply them and ask for review again
 
 ### 5. Commit
-- Only after user approval, stage only `CHANGELOG.md`
+- Only after user approval, stage `CHANGELOG.md` and `Config/Version.xcconfig`
 - Commit message: `Update CHANGELOG.md with <version> release notes`
 
-### 6. Verify commit count
-- Run `git rev-list --count HEAD` and confirm it matches the expected version number
-- If it doesn't match, warn the user and stop
-
-### 7. Create git tag
+### 6. Create git tag
 - `git tag v<version>`
 
-### 8. Push tag and main
+### 7. Push tag and main
 - `git push origin main --tags`
 
-### 9. Report
+### 8. Report
 - Confirm the tag has been pushed
+- Note the build number (from `git rev-list --count HEAD`) that will be used
 - Remind the user that Xcode Cloud should pick up the new tag
