@@ -69,9 +69,9 @@ class DatabaseData: Codable {
 
         // 4. 重建 FenObject 中的 moves 关联
         for (_, move) in moveObjects {
-            if let targetFenId = move.targetFenId,
+            if move.targetFenId != nil,
                let sourceFenObject = fenObjects2[move.sourceFenId] {
-                sourceFenObject.addMoveIfNeeded(move: move)
+                _ = sourceFenObject.addMoveIfNeeded(move: move)
             }
         }
 

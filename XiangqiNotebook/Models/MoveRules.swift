@@ -306,7 +306,7 @@ struct MoveRules {
                 
                 for r in (startRow + 1)..<endRow {
                     let middleSquare = coordinateToSquare(col: newCol, row: r)
-                    if let piece = piecesBySquare[middleSquare], 
+                    if piecesBySquare[middleSquare] != nil,
                        middleSquare != fromSquare { // 跳过己方将帅原位置
                         hasObstacle = true
                         break

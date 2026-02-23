@@ -1,6 +1,7 @@
 #if os(macOS)
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 class MacOSPlatformService: PlatformService {
     private var currentAlertWorkItem: DispatchWorkItem?
@@ -64,7 +65,7 @@ class MacOSPlatformService: PlatformService {
             let panel = NSSavePanel()
             panel.title = "选择备份保存位置"
             panel.nameFieldStringValue = defaultName
-            panel.allowedFileTypes = ["json"]
+            panel.allowedContentTypes = [UTType.json]
             panel.canCreateDirectories = true
             panel.isExtensionHidden = false  // 显示文件扩展名
             
@@ -82,7 +83,7 @@ class MacOSPlatformService: PlatformService {
         DispatchQueue.main.async {
             let panel = NSOpenPanel()
             panel.title = "选择备份文件"
-            panel.allowedFileTypes = ["json"]
+            panel.allowedContentTypes = [UTType.json]
             panel.allowsMultipleSelection = false
             panel.canChooseDirectories = false
             panel.isExtensionHidden = false  // 显示文件扩展名
@@ -102,7 +103,7 @@ class MacOSPlatformService: PlatformService {
             let panel = NSSavePanel()
             panel.title = "选择备份保存位置"
             panel.nameFieldStringValue = defaultName
-            panel.allowedFileTypes = ["json"]
+            panel.allowedContentTypes = [UTType.json]
             panel.canCreateDirectories = true
             panel.isExtensionHidden = false  // 显示文件扩展名
             
@@ -126,7 +127,7 @@ class MacOSPlatformService: PlatformService {
         DispatchQueue.main.async {
             let panel = NSOpenPanel()
             panel.title = "选择备份文件"
-            panel.allowedFileTypes = ["json"]
+            panel.allowedContentTypes = [UTType.json]
             panel.allowsMultipleSelection = false
             panel.canChooseDirectories = false
             panel.isExtensionHidden = false  // 显示文件扩展名

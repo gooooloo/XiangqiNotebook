@@ -1488,6 +1488,18 @@ extension Session {
         }
     }
 
+    /// 数据库恢复后重置游戏状态
+    /// 清空 currentGame2 并重新设置到起始局面，然后自动扩展
+    func resetGameStateForDatabaseRestore() {
+        sessionData.currentGame2 = []
+        sessionData.currentGameStep = 0
+        sessionData.lockedStep = nil
+        sessionData.gameHistory = nil
+        clearAllGamePaths()
+        setupDefaultCurrentGameIfNeeded()
+        autoExtendCurrentGame()
+    }
+
     func addBook(name: String, parentBookId: UUID? = nil) -> UUID {
         let bookId = databaseView.addBook(name: name, parentBookId: parentBookId)
         notifyDataChanged(markDatabaseDirty: false) // Database.addBook 已经调用了 markDirty

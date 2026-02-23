@@ -222,7 +222,7 @@ class BoardViewModel: Equatable {
         
         // 9-10. 重置未显示的已用视图，这是原来在棋盘上且现在不在的棋子
         for pieceView in usedPV {
-          var resetPieceView = reusePieceViewId(
+          let resetPieceView = reusePieceViewId(
               pieceView: pieceView,
               square: ""
             )

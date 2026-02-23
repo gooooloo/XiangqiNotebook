@@ -173,9 +173,12 @@ class ViewModel: ObservableObject {
         currentSessionSubscription = session.objectWillChange
             .sink { [weak self] _ in
                 guard let self = self else { return }
-                // 防御性检查：如果 currentFenId 不在 DatabaseView 范围内，跳过更新
-                // 这可能发生在过滤器切换的过渡期间
-                guard self.session.databaseView.containsFenId(self.session.currentFenId) else {
+                // 防御性检查：
+                // 1. currentGame2 可能在数据库恢复等场景下变得不一致
+                // 2. currentFenId 对应的 FenObject 可能不存在（数据库已替换）
+                let fenId = self.session.currentFenId
+                guard self.session.databaseView.containsFenId(fenId),
+                      self.session.databaseView.getFenObject(fenId) != nil else {
                     return
                 }
                 self.updateBoardView()
@@ -214,7 +217,7 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.previousPath, text: "复习上局", textIPhone: "上局", shortcuts: [.single("p")], supportedModes: [.review]) { self.goToPreviousPath() }
         actionDefinitions.registerAction(.nextPath, text: "复习下局", textIPhone: "下局", shortcuts: [.single("n")], supportedModes: [.review]) { self.goToNextPath() }
-        actionDefinitions.registerAction(.random, text: "随机一局", shortcuts: [.sequence(",g")], supportedModes: [.review]) { self.makeRandomGame() }
+        actionDefinitions.registerAction(.random, text: "随机一局", shortcuts: [.sequence(",g")], supportedModes: [.review]) { _ = self.makeRandomGame() }
         actionDefinitions.registerAction(.reviewThisGame, text: "回顾本局", textIPhone: "回顾", shortcuts: [.single("R")], supportedModes: [.practice]) { self.reviewThisGame() }
         actionDefinitions.registerAction(.searchCurrentMove, text: "搜索此步", shortcuts: [.sequence(",/")], supportedModes: [.normal, .review]) { self.showSearchResultsWindow() }
         actionDefinitions.registerAction(.referenceBoard, text: "参考棋谱", shortcuts: [.modified([.command], "x")], supportedModes: [.normal, .review]) { self.showReferenceBoard() }
@@ -460,7 +463,7 @@ class ViewModel: ObservableObject {
             if newValue {
               self.showingBookmarkAlert = true
             } else {
-              self.removeBookmark()
+              _ = self.removeBookmark()
             }
           }
         )
@@ -1036,8 +1039,10 @@ class ViewModel: ObservableObject {
         }
 
         if success {
-            // 手动触发 Session 的更新通知，确保 UI 刷新
-            DispatchQueue.main.async {
+            // 恢复备份后，currentGame2 中的 fenId 可能在新数据库中不存在
+            // 强制清空游戏状态并重置到起始局面
+            await MainActor.run {
+                self.session.resetGameStateForDatabaseRestore()
                 self.session.objectWillChange.send()
             }
 
@@ -1234,8 +1239,10 @@ class ViewModel: ObservableObject {
             // 跳过已有引擎分数的局面
             if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) != nil {
                 let elapsed = Date().timeIntervalSince(startTime)
+                let count = evaluatedCount
+                let detail = lastDetail
                 await MainActor.run {
-                    self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: evaluatedCount, lastDetail: lastDetail, elapsedSeconds: elapsed, isCompleted: false)
+                    self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: count, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: false)
                 }
                 continue
             }
@@ -1243,8 +1250,10 @@ class ViewModel: ObservableObject {
             guard let fen = session.getFenForId(fenId) else { continue }
 
             let elapsed = Date().timeIntervalSince(startTime)
+            let countBefore = evaluatedCount
+            let detailBefore = lastDetail
             await MainActor.run {
-                self.batchEvalProgress = BatchEvalProgress(current: i, total: totalSteps, evaluatedCount: evaluatedCount, lastDetail: lastDetail, elapsedSeconds: elapsed, isCompleted: false)
+                self.batchEvalProgress = BatchEvalProgress(current: i, total: totalSteps, evaluatedCount: countBefore, lastDetail: detailBefore, elapsedSeconds: elapsed, isCompleted: false)
             }
 
             do {
@@ -1271,15 +1280,19 @@ class ViewModel: ObservableObject {
             }
 
             let elapsedAfter = Date().timeIntervalSince(startTime)
+            let countAfter = evaluatedCount
+            let detailAfter = lastDetail
             await MainActor.run {
-                self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: evaluatedCount, lastDetail: lastDetail, elapsedSeconds: elapsedAfter, isCompleted: false)
+                self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: countAfter, lastDetail: detailAfter, elapsedSeconds: elapsedAfter, isCompleted: false)
             }
         }
 
         // 完成后显示最终结果
         let finalElapsed = Date().timeIntervalSince(startTime)
+        let finalCount = evaluatedCount
+        let finalDetail = lastDetail
         await MainActor.run {
-            self.batchEvalProgress = BatchEvalProgress(current: totalSteps, total: totalSteps, evaluatedCount: evaluatedCount, lastDetail: lastDetail, elapsedSeconds: finalElapsed, isCompleted: true)
+            self.batchEvalProgress = BatchEvalProgress(current: totalSteps, total: totalSteps, evaluatedCount: finalCount, lastDetail: finalDetail, elapsedSeconds: finalElapsed, isCompleted: true)
         }
     }
 

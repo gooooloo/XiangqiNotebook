@@ -270,7 +270,7 @@ struct PathView: View {
                     }
                 }
             }
-            .onChange(of: pathGroups) { _ in
+            .onChange(of: pathGroups) {
                 // 当路径组发生变化时，重置动画
                 opacity = 0
                 DispatchQueue.main.asyncAfter(deadline: .now() + animationDuration - pathAnimationDuration) {

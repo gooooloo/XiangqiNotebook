@@ -219,8 +219,8 @@ struct AddGameView: View {
             // 初始化起始局面为当前棋盘位置
             startingFenId = viewModel.currentFenId
         }
-        .onChange(of: useCurrentPositionAsStart) { newValue in
-            if newValue {
+        .onChange(of: useCurrentPositionAsStart) {
+            if useCurrentPositionAsStart {
                 startingFenId = viewModel.currentFenId
             } else {
                 startingFenId = nil
@@ -674,9 +674,9 @@ struct GameListView: View {
                             }
                         }
                     }
-                    .onChange(of: selectedGameId) { newGameId in
+                    .onChange(of: selectedGameId) {
                         // 当选中的棋局改变时，滚动到新选中的棋局
-                        if let gameId = newGameId {
+                        if let gameId = selectedGameId {
                             withAnimation {
                                 proxy.scrollTo(gameId, anchor: .center)
                             }

@@ -3,7 +3,7 @@ import Foundation
 
 /// Pikafish 引擎通信服务
 /// 通过 Process + Pipe 以 UCI 协议与 Pikafish 引擎通信
-class PikafishService {
+class PikafishService: @unchecked Sendable {
 
     // MARK: - Properties
 
@@ -162,10 +162,20 @@ class PikafishService {
     /// 评估指定局面
     /// - Parameter fen: App 内部 FEN 格式
     /// - Returns: 评估结果（含分数、深度、耗时等），nil 表示评估失败
+    /// 尝试获取评估锁，成功返回 true
+    private nonisolated func tryAcquireEvaluationLock() -> Bool {
+        evaluationLock.try()
+    }
+
+    /// 释放评估锁
+    private nonisolated func releaseEvaluationLock() {
+        evaluationLock.unlock()
+    }
+
     func evaluatePosition(fen: String) async throws -> EvaluationResult? {
         // 如果已有评估在进行中，直接返回 nil（不阻塞等待）
-        guard evaluationLock.try() else { return nil }
-        defer { evaluationLock.unlock() }
+        guard tryAcquireEvaluationLock() else { return nil }
+        defer { releaseEvaluationLock() }
 
         // Start engine if needed
         if process == nil || !(process?.isRunning ?? false) {

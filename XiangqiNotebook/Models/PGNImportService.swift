@@ -90,7 +90,7 @@ enum PGNImportService {
             moveIds.append(moveId)
             // Wire up the move to the source FenObject
             if let fenObject = databaseView.getFenObject(fenIds[i - 1]) {
-                fenObject.addMoveIfNeeded(move: move)
+                _ = fenObject.addMoveIfNeeded(move: move)
             }
         }
 
@@ -158,7 +158,6 @@ enum PGNImportService {
         }
 
         var fenSequence = [startFenObj.fen]
-        var currentFenId = startFenId
 
         for moveId in game.moveIds {
             guard let move = databaseView.move(id: moveId),
@@ -167,7 +166,6 @@ enum PGNImportService {
                 break
             }
             fenSequence.append(targetFenObj.fen)
-            currentFenId = targetFenId
         }
 
         return fenSequence
