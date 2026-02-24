@@ -21,16 +21,16 @@ struct iPhoneStatusBarView: View {
     }
     
     private func gameStatRow(_ label: String, total: Int, wins: Int, draws: Int, losses: Int) -> some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 4) {
             Text(label)
             Text("总")
-            Text("\(total)").frame(minWidth: 14, alignment: .leading)
+            Text("\(total)").frame(minWidth: 20, alignment: .leading)
             Text("胜")
-            Text("\(wins)").frame(minWidth: 14, alignment: .leading)
+            Text("\(wins)").frame(minWidth: 20, alignment: .leading)
             Text("和")
-            Text("\(draws)").frame(minWidth: 14, alignment: .leading)
+            Text("\(draws)").frame(minWidth: 20, alignment: .leading)
             Text("负")
-            Text("\(losses)").frame(minWidth: 14, alignment: .leading)
+            Text("\(losses)").frame(minWidth: 20, alignment: .leading)
         }
         .font(fontStyle)
     }
