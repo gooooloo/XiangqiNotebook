@@ -790,7 +790,7 @@ extension Session {
             // 切断当前游戏到锁定步骤（如果有锁定），否则到当前步骤
             cutGameUntilStep(sessionData.lockedStep ?? sessionData.currentGameStep)
 
-        case .review, .normal:
+        case .normal:
             // 非练习模式下，自动拓展
             sessionData.autoExtendGameWhenPlayingBoardFen = true
             // 非练习模式下，显示路径
