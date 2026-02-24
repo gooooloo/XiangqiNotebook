@@ -66,6 +66,10 @@ class ViewModel: ObservableObject {
     @Published var globalAlertTitle = ""
     @Published var globalAlertMessage = ""
 
+    #if os(macOS)
+    private var referenceBoardWindowController: ReferenceBoardWindowController?
+    #endif
+
     // 用于存储订阅
     private var cancellables = Set<AnyCancellable>()
 
@@ -1344,16 +1348,24 @@ class ViewModel: ObservableObject {
     
     func showReferenceBoard() {
         #if os(macOS)
-        let windowController = ReferenceBoardWindowController(
+        let item = ReferenceBoardItem(
             fen: session.currentFen,
             orientation: session.isCurrentBlackOrientation ? "black" : "red",
             isHorizontalFlipped: session.isCurrentHorizontalFlipped,
             showPath: showPath,
             currentFenPathGroups: session.getCurrentFenPathGroups(),
             score: displayScore,
+            scoreDelta: "",
             comments: session.currentCombinedComment ?? ""
         )
-        windowController.showWindow(nil)
+
+        if let controller = referenceBoardWindowController, controller.window?.isVisible == true {
+            controller.update(item)
+        } else {
+            let controller = ReferenceBoardWindowController(item: item)
+            referenceBoardWindowController = controller
+            controller.showWindow(nil)
+        }
         #endif
     }
     
