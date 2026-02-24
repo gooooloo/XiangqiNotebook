@@ -69,7 +69,13 @@ class SessionData: Codable {
         focusedPracticeGamePath = try container.decodeIfPresent([Int].self, forKey: .focusedPracticeGamePath)
         specificGameId = try container.decodeIfPresent(UUID.self, forKey: .specificGameId)
         specificBookId = try container.decodeIfPresent(UUID.self, forKey: .specificBookId)
-        currentMode = try container.decode(AppMode.self, forKey: .currentMode)
+        // 兼容已持久化的 "review" 值：回退为 .normal
+        let modeString = try container.decode(String.self, forKey: .currentMode)
+        if modeString == "review" {
+            currentMode = .normal
+        } else {
+            currentMode = AppMode(rawValue: modeString) ?? .normal
+        }
         allowAddingNewMoves = try container.decodeIfPresent(Bool.self, forKey: .allowAddingNewMoves) ?? true
     }
 
