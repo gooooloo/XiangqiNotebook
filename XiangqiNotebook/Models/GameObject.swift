@@ -110,9 +110,9 @@ class GameObject: Identifiable, Codable {
         if iAmRed || iAmBlack {
             switch gameResult {
             case .redWin:
-                separator = iAmRed ? "胜" : "负"
+                separator = "胜"
             case .blackWin:
-                separator = iAmBlack ? "胜" : "负"
+                separator = "负"
             case .draw:
                 separator = "和"
             case .notFinished, .unknown:
