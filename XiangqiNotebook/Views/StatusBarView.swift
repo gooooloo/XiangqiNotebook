@@ -28,6 +28,21 @@ struct StatusBarView: View {
         }
     }
     
+    private func gameStatRow(_ label: String, total: Int, wins: Int, draws: Int, losses: Int) -> some View {
+        HStack(spacing: 2) {
+            Text(label)
+            Text("总")
+            Text("\(total)").frame(minWidth: 16, alignment: .trailing)
+            Text("胜")
+            Text("\(wins)").frame(minWidth: 16, alignment: .trailing)
+            Text("和")
+            Text("\(draws)").frame(minWidth: 16, alignment: .trailing)
+            Text("负")
+            Text("\(losses)").frame(minWidth: 16, alignment: .trailing)
+        }
+        .font(fontStyle)
+    }
+
     var body: some View {
         VStack {
             HStack {
@@ -64,12 +79,10 @@ struct StatusBarView: View {
             .lineLimit(1)
             // .minimumScaleFactor(0.75)
 
-            HStack {
-                Text("执红实战: 总 \(viewModel.currentFenInRealRedGameTotalCount) / 胜 \(viewModel.currentFenInRealRedGameWinCount) / 和 \(viewModel.currentFenInRealRedGameDrawCount) / 负 \(viewModel.currentFenInRealRedGameLossCount)")
-                    .font(fontStyle)
+            HStack(spacing: 0) {
+                gameStatRow("执红实战:", total: viewModel.currentFenInRealRedGameTotalCount, wins: viewModel.currentFenInRealRedGameWinCount, draws: viewModel.currentFenInRealRedGameDrawCount, losses: viewModel.currentFenInRealRedGameLossCount)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("执黑实战: 总 \(viewModel.currentFenInRealBlackGameTotalCount) / 胜 \(viewModel.currentFenInRealBlackGameWinCount) / 和 \(viewModel.currentFenInRealBlackGameDrawCount) / 负 \(viewModel.currentFenInRealBlackGameLossCount)")
-                    .font(fontStyle)
+                gameStatRow("执黑实战:", total: viewModel.currentFenInRealBlackGameTotalCount, wins: viewModel.currentFenInRealBlackGameWinCount, draws: viewModel.currentFenInRealBlackGameDrawCount, losses: viewModel.currentFenInRealBlackGameLossCount)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("练习次数: \(viewModel.currentFenPracticeCount)")
                     .font(fontStyle)

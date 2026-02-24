@@ -20,6 +20,21 @@ struct iPhoneStatusBarView: View {
         }
     }
     
+    private func gameStatRow(_ label: String, total: Int, wins: Int, draws: Int, losses: Int) -> some View {
+        HStack(spacing: 2) {
+            Text(label)
+            Text("总")
+            Text("\(total)").frame(minWidth: 14, alignment: .trailing)
+            Text("胜")
+            Text("\(wins)").frame(minWidth: 14, alignment: .trailing)
+            Text("和")
+            Text("\(draws)").frame(minWidth: 14, alignment: .trailing)
+            Text("负")
+            Text("\(losses)").frame(minWidth: 14, alignment: .trailing)
+        }
+        .font(fontStyle)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -79,12 +94,10 @@ struct iPhoneStatusBarView: View {
             Divider()
             .background(Color.gray)
 
-            HStack {
-                Text("实战执红: 总 \(viewModel.currentFenInRealRedGameTotalCount) / 胜 \(viewModel.currentFenInRealRedGameWinCount) / 和 \(viewModel.currentFenInRealRedGameDrawCount) / 负 \(viewModel.currentFenInRealRedGameLossCount)")
-                    .font(fontStyle)
+            HStack(spacing: 0) {
+                gameStatRow("实战执红:", total: viewModel.currentFenInRealRedGameTotalCount, wins: viewModel.currentFenInRealRedGameWinCount, draws: viewModel.currentFenInRealRedGameDrawCount, losses: viewModel.currentFenInRealRedGameLossCount)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("执黑: 总 \(viewModel.currentFenInRealBlackGameTotalCount) / 胜 \(viewModel.currentFenInRealBlackGameWinCount) / 和 \(viewModel.currentFenInRealBlackGameDrawCount) / 负 \(viewModel.currentFenInRealBlackGameLossCount)")
-                    .font(fontStyle)
+                gameStatRow("执黑:", total: viewModel.currentFenInRealBlackGameTotalCount, wins: viewModel.currentFenInRealBlackGameWinCount, draws: viewModel.currentFenInRealBlackGameDrawCount, losses: viewModel.currentFenInRealBlackGameLossCount)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .lineLimit(1)
