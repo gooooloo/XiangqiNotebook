@@ -35,7 +35,6 @@ struct iPadActionButtonsView: View {
                     LargeButton(viewModel: viewModel, actionKey: .previousPath)
                     LargeButton(viewModel: viewModel, actionKey: .nextPath)
                     LargeButton(viewModel: viewModel, actionKey: .random)
-                    LargeButton(viewModel: viewModel, actionKey: .stepLimitation)
                 }
                 .frame(maxWidth: .infinity)
             }

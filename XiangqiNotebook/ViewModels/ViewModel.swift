@@ -250,7 +250,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.backup, text: "备份", shortcuts: [.sequence(",b")], supportedModes: [.normal]) { self.backup() }
         actionDefinitions.registerAction(.restore, text: "恢复", shortcuts: [.sequence(",R")], supportedModes: [.normal]) { Task { await self.recoverFromUserChoice() } }
 
-        actionDefinitions.registerAction(.stepLimitation, text: "步数限制", shortcuts: [.sequence(",l")], supportedModes: [.normal]) { self.showingStepLimitationDialog = true }
+        actionDefinitions.registerAction(.stepLimitation, text: "步数限制", supportedModes: [.normal]) { self.showingStepLimitationDialog = true }
         actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcuts: [.sequence(",i")], supportedModes: [.normal]) { self.showingGameInputView = true }
         actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",fff")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
         actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",p")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
@@ -333,6 +333,21 @@ class ViewModel: ObservableObject {
           isEnabled: { self.session.sessionData.specificBookId != nil },
           isOn: { self.currentFilters.contains(Session.filterSpecificBook) },
           action: { _ in self.toggleFilterSpecificBook() }
+        )
+
+        actionDefinitions.registerToggleAction(
+          .toggleStepLimitation,
+          text: "步数限制",
+          shortcuts: [.sequence(",l")],
+          isEnabled: { true },
+          isOn: { self.gameStepLimitation != nil },
+          action: { newValue in
+            if newValue {
+                self.showingStepLimitationDialog = true
+            } else {
+                self.setGameStepLimitation(nil)
+            }
+          }
         )
 
         actionDefinitions.registerToggleAction(

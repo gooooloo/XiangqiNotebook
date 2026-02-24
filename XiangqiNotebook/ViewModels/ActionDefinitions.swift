@@ -63,6 +63,7 @@ class ActionDefinitions {
         case setFilterFocusedPractice
         case toggleFilterSpecificGame
         case toggleFilterSpecificBook
+        case toggleStepLimitation  // 步数限制（放在棋局筛选组）
         case inRedOpening
         case inBlackOpening
         case toggleLock

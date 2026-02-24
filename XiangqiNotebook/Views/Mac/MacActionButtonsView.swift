@@ -36,7 +36,6 @@ struct MacActionButtonsView: View {
         .previousPath,
         .nextPath,
         .random,
-        .stepLimitation,
         .jumpToNextOpeningGap,
         .autoAddToOpening,
     ]

@@ -29,7 +29,6 @@ struct iPhoneMoreOptionsView: View {
                             iPhoneButton(viewModel: viewModel, actionKey: .toEnd)
                             iPhoneButton(viewModel: viewModel, actionKey: .checkDataVersion)
                             iPhoneButton(viewModel: viewModel, actionKey: .previousPath)
-                            iPhoneButton(viewModel: viewModel, actionKey: .stepLimitation)
                         }
                         .frame(maxWidth: .infinity)
 
