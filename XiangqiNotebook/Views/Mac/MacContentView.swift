@@ -206,6 +206,8 @@ struct MacMenuCommands: Commands {
             menuButton(.practiceNewGame)
             menuButton(.reviewThisGame)
             menuButton(.focusedPractice)
+            menuButton(.practiceRedOpening)
+            menuButton(.practiceBlackOpening)
             menuButton(.stepLimitation)
             Divider()
             menuButton(.autoAddToOpening)

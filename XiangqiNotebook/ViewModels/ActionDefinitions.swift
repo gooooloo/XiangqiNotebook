@@ -45,6 +45,8 @@ class ActionDefinitions {
         case reviewThisGame
         case practiceNewGame
         case focusedPractice
+        case practiceRedOpening
+        case practiceBlackOpening
         case searchCurrentMove
         case importPGN  // 新增：导入PGN按钮
         case autoAddToOpening  // 新增：自动完善开局库

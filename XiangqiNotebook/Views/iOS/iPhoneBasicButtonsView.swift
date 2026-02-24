@@ -27,8 +27,8 @@ struct iPhoneBasicButtonsView: View {
 
             HStack(spacing: 15) {
                 iPhoneButton(viewModel: viewModel, actionKey: .save)
-                iPhoneButton(viewModel: viewModel, actionKey: .showMoreActionsIOS)
-                iPhoneButton(viewModel: viewModel, actionKey: .showMoreActionsIOS)
+                iPhoneButton(viewModel: viewModel, actionKey: .practiceRedOpening)
+                iPhoneButton(viewModel: viewModel, actionKey: .practiceBlackOpening)
                 iPhoneButton(viewModel: viewModel, actionKey: .showMoreActionsIOS)
             }
             .padding(.horizontal)
