@@ -9,6 +9,8 @@ struct PGNImportView: View {
     @State private var username: String = UserDefaults.standard.string(forKey: "pgnImportUsername") ?? ""
     @State private var importResult: PGNImportResult?
     @State private var isImporting = false
+    @State private var isListening = false
+    @State private var httpServer: PGNHttpServer?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -31,6 +33,15 @@ struct PGNImportView: View {
                 Button("选择PGN文件") {
                     selectAndImportFile()
                 }
+                .disabled(isImporting || isListening)
+
+                Button(isListening ? "停止HTTP监听 (localhost:9213)" : "从HTTP端口获取") {
+                    if isListening {
+                        stopHTTPServer()
+                    } else {
+                        startHTTPServer()
+                    }
+                }
                 .disabled(isImporting)
 
                 if isImporting {
@@ -51,10 +62,14 @@ struct PGNImportView: View {
                 Button("关闭") {
                     dismiss()
                 }
+                .disabled(isListening)
             }
         }
         .padding()
         .frame(width: 420, height: 350)
+        .onDisappear {
+            stopHTTPServer()
+        }
     }
 
     @ViewBuilder
@@ -94,6 +109,36 @@ struct PGNImportView: View {
                 .frame(maxHeight: 80)
             }
         }
+    }
+
+    private func startHTTPServer() {
+        let server = PGNHttpServer()
+        let trimmedUsername = username.trimmingCharacters(in: .whitespaces)
+        UserDefaults.standard.set(trimmedUsername, forKey: "pgnImportUsername")
+
+        server.onPGNReceived = { pgnContent in
+            let result = viewModel.importPGNFile(content: pgnContent, username: trimmedUsername)
+            DispatchQueue.main.async {
+                self.importResult = result
+            }
+            return result
+        }
+
+        do {
+            try server.start()
+            httpServer = server
+            isListening = true
+        } catch {
+            var result = PGNImportResult()
+            result.errors.append("HTTP服务器启动失败: \(error.localizedDescription)")
+            importResult = result
+        }
+    }
+
+    private func stopHTTPServer() {
+        httpServer?.stop()
+        httpServer = nil
+        isListening = false
     }
 
     private func selectAndImportFile() {
