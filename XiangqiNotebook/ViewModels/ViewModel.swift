@@ -1458,7 +1458,7 @@ class ViewModel: ObservableObject {
               let game = getGameObjectUnfiltered(gameId) else {
             return nil
         }
-        return game.name
+        return game.displayTitle
     }
 
     /// 获取上一次选择的特定棋书名称
