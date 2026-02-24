@@ -32,13 +32,13 @@ struct StatusBarView: View {
         HStack(spacing: 2) {
             Text(label)
             Text("总")
-            Text("\(total)").frame(minWidth: 16, alignment: .trailing)
+            Text("\(total)").frame(minWidth: 16, alignment: .leading)
             Text("胜")
-            Text("\(wins)").frame(minWidth: 16, alignment: .trailing)
+            Text("\(wins)").frame(minWidth: 16, alignment: .leading)
             Text("和")
-            Text("\(draws)").frame(minWidth: 16, alignment: .trailing)
+            Text("\(draws)").frame(minWidth: 16, alignment: .leading)
             Text("负")
-            Text("\(losses)").frame(minWidth: 16, alignment: .trailing)
+            Text("\(losses)").frame(minWidth: 16, alignment: .leading)
         }
         .font(fontStyle)
     }
