@@ -700,15 +700,6 @@ struct GameListItemView: View {
     @Binding var selectedGameId: UUID?
     @State private var showingDeleteAlert = false
     
-    private var displayTitle: String {
-        if let name = game.name, !name.isEmpty {
-            return name
-        }
-        let redName = game.iAmRed ? "我" : (game.redPlayerName.isEmpty ? "红方" : game.redPlayerName)
-        let blackName = game.iAmBlack ? "我" : (game.blackPlayerName.isEmpty ? "黑方" : game.blackPlayerName)
-        return "\(redName) vs \(blackName)"
-    }
-    
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             // 对局双方
@@ -716,7 +707,7 @@ struct GameListItemView: View {
                 Image(systemName: "doc.text")
                     .foregroundColor(.orange)
                     .font(.system(size: 14))
-                Text(displayTitle)
+                Text(game.displayTitle)
                     .font(.system(size: 14, weight: selectedGameId == game.id ? .semibold : .regular))
                     .lineLimit(1)
             }
@@ -885,15 +876,6 @@ struct GameDetailView: View {
 struct GameInfoSection: View {
     let game: GameObject
 
-    private var displayTitle: String {
-        if let name = game.name, !name.isEmpty {
-            return name
-        }
-        let redName = game.iAmRed ? "我" : (game.redPlayerName.isEmpty ? "红方" : game.redPlayerName)
-        let blackName = game.iAmBlack ? "我" : (game.blackPlayerName.isEmpty ? "黑方" : game.blackPlayerName)
-        return "\(redName) vs \(blackName)"
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("对局信息", systemImage: "info.circle")
@@ -904,7 +886,7 @@ struct GameInfoSection: View {
                 HStack {
                     Text("棋局名称：")
                         .foregroundColor(.secondary)
-                    Text(displayTitle)
+                    Text(game.displayTitle)
                     Spacer()
                 }
 

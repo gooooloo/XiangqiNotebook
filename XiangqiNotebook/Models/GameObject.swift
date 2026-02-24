@@ -98,6 +98,32 @@ class GameObject: Identifiable, Codable {
         fenIdSet = nil
     }
 
+    /// 生成显示标题，用于棋局列表和窗口标题
+    /// 如果有自定义名称则使用名称，否则根据对局双方和结果生成
+    var displayTitle: String {
+        if let name = name, !name.isEmpty {
+            return name
+        }
+        let redName = iAmRed ? "我" : (redPlayerName.isEmpty ? "红方" : redPlayerName)
+        let blackName = iAmBlack ? "我" : (blackPlayerName.isEmpty ? "黑方" : blackPlayerName)
+        let separator: String
+        if iAmRed || iAmBlack {
+            switch gameResult {
+            case .redWin:
+                separator = iAmRed ? "胜" : "负"
+            case .blackWin:
+                separator = iAmBlack ? "胜" : "负"
+            case .draw:
+                separator = "和"
+            case .notFinished, .unknown:
+                separator = "vs"
+            }
+        } else {
+            separator = "vs"
+        }
+        return "\(redName) \(separator) \(blackName)"
+    }
+
     init(id: UUID) {
         self.id = id
     }

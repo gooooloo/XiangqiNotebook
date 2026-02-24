@@ -1708,14 +1708,7 @@ class ViewModel: ObservableObject {
            let gameId = session.sessionData.specificGameId,
            let gameObject = session.databaseView.getGameObject(gameId) {
             // GameObject filter 模式：显示棋局名称
-            if let gameName = gameObject.name, !gameName.isEmpty {
-                return "XiangqiNotebook - \(gameName)"
-            } else {
-                // 如果没有名称，显示对局双方
-                let redName = gameObject.redPlayerName.isEmpty ? "红方" : gameObject.redPlayerName
-                let blackName = gameObject.blackPlayerName.isEmpty ? "黑方" : gameObject.blackPlayerName
-                return "XiangqiNotebook - \(redName) vs \(blackName)"
-            }
+            return "XiangqiNotebook - \(gameObject.displayTitle)"
         } else if currentFilters.contains(Session.filterSpecificBook),
                   let bookId = session.sessionData.specificBookId,
                   let bookObject = session.databaseView.getBookObjectUnfiltered(bookId) {
