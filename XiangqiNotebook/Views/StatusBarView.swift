@@ -52,6 +52,7 @@ struct StatusBarView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("皮卡鱼: \(viewModel.displayEngineScore)")
                     .font(fontStyle)
+                    .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("步数: \(viewModel.currentGameStepDisplay) / \(viewModel.maxGameStepDisplay) / \(viewModel.gameStepLimitation?.description ?? "")")
                     .font(fontStyle)
