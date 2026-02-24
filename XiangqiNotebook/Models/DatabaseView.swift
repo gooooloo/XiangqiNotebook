@@ -678,6 +678,21 @@ final class DatabaseView {
         return (allFenIds, allMoveIds, allGameIds)
     }
 
+    /// 步数限制视图：在已有视图基础上叠加 reachable fenId 过滤
+    /// - Parameters:
+    ///   - base: 基础 DatabaseView（scope 过滤）
+    ///   - reachableFenIds: BFS 计算出的可达 fenId 集合
+    static func withStepLimit(_ base: DatabaseView, reachableFenIds: Set<Int>) -> DatabaseView {
+        return DatabaseView(
+            database: base.database,
+            fenIdFilter: { fenId in
+                base.fenIdFilter(fenId) && reachableFenIds.contains(fenId)
+            },
+            moveIdFilter: base.moveIdFilter,
+            gameIdFilter: base.gameIdFilter
+        )
+    }
+
     /// 组合筛选视图 - 支持多个 filter 的 AND 组合
     /// - Parameters:
     ///   - database: 数据库实例

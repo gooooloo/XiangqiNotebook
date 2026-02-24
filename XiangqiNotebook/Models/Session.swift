@@ -4,8 +4,13 @@ import Foundation
 class Session: ObservableObject {
     // MARK: - DatabaseView + SessionData
 
+    /// 基础数据库视图（仅 scope 过滤，不含步数限制）
+    /// 用于 BFS 计算可达 fenId 集合
+    private var baseDatabaseView: DatabaseView
+
     /// 数据库视图，封装过滤逻辑
     /// 根据当前 filter 提供对 Database 的过滤访问，所有 fenId 相关的数据访问都应通过此视图
+    /// 当 gameStepLimitation 生效时，叠加步数限制过滤
     /// internal 允许同一模块中的其他类型访问（如 ViewModel, Views）
     internal var databaseView: DatabaseView
 
@@ -42,8 +47,12 @@ class Session: ObservableObject {
     ///   - sessionData: 会话数据
     ///   - databaseView: 数据库视图（已经根据 filter 创建好的）
     init(sessionData: SessionData, databaseView: DatabaseView) throws {
+        self.baseDatabaseView = databaseView
         self.databaseView = databaseView
         self.sessionData = sessionData
+
+        // 根据 gameStepLimitation 构建步数限制视图
+        rebuildDatabaseView()
 
         // 设置默认棋书
         setupDefaultBooksIfNeeded()
@@ -859,6 +868,11 @@ extension Session {
             sessionData.lockedStep = nil
         }
 
+        // 锁定步骤变化时，步数限制的可达范围可能改变
+        if sessionData.gameStepLimitation != nil {
+            rebuildDatabaseView()
+        }
+
         clearAllGamePaths()
 
         notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
@@ -1136,7 +1150,6 @@ extension Session {
       game: sessionData.currentGame2,
       nextFenIds: nextFenIds,
       databaseView: databaseView,
-      gameStepLimitation: sessionData.gameStepLimitation,
       allowExtend: allowExtend
     )
     
@@ -1216,6 +1229,81 @@ extension Session {
     }
 }
 
+// MARK: - Step-Limited DatabaseView
+
+extension Session {
+    /// 根据 gameStepLimitation 重建 databaseView
+    /// 当 gameStepLimitation 生效时，叠加 BFS 计算的可达 fenId 过滤
+    private func rebuildDatabaseView() {
+        if let limit = sessionData.gameStepLimitation {
+            let reachable = computeReachableFenIds(limit: limit)
+            databaseView = DatabaseView.withStepLimit(baseDatabaseView, reachableFenIds: reachable)
+        } else {
+            databaseView = baseDatabaseView
+        }
+    }
+
+    /// BFS 计算从锁定位置出发，通过给定 DatabaseView 可达的所有 fenId（无深度限制）
+    /// - Parameter view: 用于探索的 DatabaseView
+    /// - Returns: 可达 fenId 集合
+    func computeReachableFenIds(from view: DatabaseView) -> Set<Int> {
+        let initialPath = Array(sessionData.currentGame2[0...(sessionData.lockedStep ?? 0)])
+        var reachable = Set(initialPath)
+
+        var queue: [Int] = []
+        if let lastFenId = initialPath.last {
+            queue.append(lastFenId)
+        }
+
+        var head = 0
+        while head < queue.count {
+            let fenId = queue[head]
+            head += 1
+
+            for move in view.moves(from: fenId) {
+                guard let targetFenId = move.targetFenId else { continue }
+                guard !reachable.contains(targetFenId) else { continue }
+                reachable.insert(targetFenId)
+                queue.append(targetFenId)
+            }
+        }
+
+        return reachable
+    }
+
+    /// BFS 计算从锁定位置出发，步数限制内可达的所有 fenId
+    /// - Parameter limit: 最大步骤索引（0-based），即 gameStepLimitation
+    /// - Returns: 可达 fenId 集合
+    func computeReachableFenIds(limit: Int) -> Set<Int> {
+        let initialPath = Array(sessionData.currentGame2[0...(sessionData.lockedStep ?? 0)])
+        var reachable = Set(initialPath)
+
+        // BFS from the last position in the locked path
+        var queue: [(fenId: Int, depth: Int)] = []
+        if let lastFenId = initialPath.last {
+            queue.append((lastFenId, initialPath.count - 1))
+        }
+
+        var head = 0
+        while head < queue.count {
+            let (fenId, depth) = queue[head]
+            head += 1
+
+            // 只在 depth < limit 时探索子节点（子节点深度为 depth+1 <= limit）
+            guard depth < limit else { continue }
+
+            for move in baseDatabaseView.moves(from: fenId) {
+                guard let targetFenId = move.targetFenId else { continue }
+                guard !reachable.contains(targetFenId) else { continue }
+                reachable.insert(targetFenId)
+                queue.append((targetFenId, depth + 1))
+            }
+        }
+
+        return reachable
+    }
+}
+
 // MARK: - Game Step Limitation
 extension Session {
 
@@ -1223,6 +1311,7 @@ extension Session {
         if (limit != sessionData.gameStepLimitation) {
             sessionData.gameStepLimitation = limit
 
+            rebuildDatabaseView()
             cutGameUntilStep(sessionData.gameStepLimitation ?? 0)
             autoExtendCurrentGame()
             clearAllGamePaths()
@@ -1348,35 +1437,23 @@ extension Session {
         guard let currentMove = currentMove else { return [] }
         guard let currentPieceMove = databaseView.parsePieceMove(currentMove, isHorizontalFlipped: sessionData.isHorizontalFlipped) else { return [] }
 
+        // BFS 计算从锁定位置出发的所有可达 fenId
+        // databaseView 已经包含 scope 过滤和步数限制过滤
+        let reachableFenIds = computeReachableFenIds(from: databaseView)
+
         var searchResults = Set<Move>()
 
-        func dfs(_ dfsPath: [Int]) {
-            let fensInGame = Set(dfsPath)
+        for fenId in reachableFenIds {
+            guard let fenObject = databaseView.getFenObject(fenId),
+                  fenObject.fen.contains(currentPieceMove.piece) else { continue }
 
-            guard let lastFenId = dfsPath.last,
-                  let lastFenObject = databaseView.getFenObject(lastFenId),
-                  lastFenObject.fen.contains(currentPieceMove.piece) else { return }
-
-            guard databaseView.containsFenId(lastFenId) else { return }
-            let moves = databaseView.moves(from: lastFenId)
-
-            for move in moves {
-                if move.targetFenId == nil { continue }
-                if fensInGame.contains(move.targetFenId!) { continue }
-                if sessionData.gameStepLimitation != nil && dfsPath.count > sessionData.gameStepLimitation! { continue }
-
+            for move in databaseView.moves(from: fenId) {
                 if let pieceMove = databaseView.parsePieceMove(move, isHorizontalFlipped: sessionData.isHorizontalFlipped),
                    pieceMove == currentPieceMove {
                     searchResults.insert(move)
-                    continue // no need to go deeper
                 }
-
-                dfs(dfsPath + [move.targetFenId!])
             }
         }
-
-        let initialPath = Array(sessionData.currentGame2[0...(sessionData.lockedStep ?? 0)])
-        dfs(initialPath)
 
         return Array(searchResults)
     }
