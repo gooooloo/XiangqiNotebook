@@ -1365,7 +1365,8 @@ extension Session {
                 if fensInGame.contains(move.targetFenId!) { continue }
                 if sessionData.gameStepLimitation != nil && dfsPath.count > sessionData.gameStepLimitation! { continue }
 
-                if databaseView.formatMove(move, isHorizontalFlipped: sessionData.isHorizontalFlipped) == databaseView.formatMove(currentMove, isHorizontalFlipped: sessionData.isHorizontalFlipped) {
+                if let pieceMove = databaseView.parsePieceMove(move, isHorizontalFlipped: sessionData.isHorizontalFlipped),
+                   pieceMove == currentPieceMove {
                     searchResults.insert(move)
                     continue // no need to go deeper
                 }
