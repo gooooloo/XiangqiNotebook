@@ -19,10 +19,11 @@ struct TogglesView: View {
                 MyToggle(viewModel: viewModel, actionKey: .toggleFilterSpecificGame)
                 MyToggle(viewModel: viewModel, actionKey: .toggleFilterSpecificBook)
                 MyToggle(viewModel: viewModel, actionKey: .toggleStepLimitation)
+                MyToggle(viewModel: viewModel, actionKey: .toggleLock)
             }
             .padding(8) // 添加内边距，让内容不贴边
             .border(Color.gray)
-            
+
             // 开局库设置区域
             VStack(alignment: .leading) {
                 MyToggle(viewModel: viewModel, actionKey: .inRedOpening)
@@ -31,10 +32,8 @@ struct TogglesView: View {
             }
             .padding(8) // 添加内边距，让内容不贴边
             .border(Color.gray)
-            
-            // 开局库设置区域
+
             VStack(alignment: .leading) {
-                MyToggle(viewModel: viewModel, actionKey: .toggleLock)
                 MyToggle(viewModel: viewModel, actionKey: .toggleCanNavigateBeforeLockedStep)
             }
             .padding(8) // 添加内边距，让内容不贴边
@@ -83,6 +82,9 @@ struct MyToggle: View {
         } else if actionKey == .toggleStepLimitation,
                   let limit = viewModel.gameStepLimitation {
             text += ": \(limit)"
+        } else if actionKey == .toggleLock,
+                  let lockedStep = viewModel.currentLockedStep {
+            text += ": \(lockedStep)"
         }
 
         if let displayText = toggleActionInfo.shortcutsDisplayText {

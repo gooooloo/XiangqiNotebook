@@ -1516,6 +1516,7 @@ class ViewModel: ObservableObject {
     var currentFenPracticeCount: Int { session.currentFenPracticeCount }
     var autoExtendGameWhenPlayingBoardFen: Bool { session.autoExtendGameWhenPlayingBoardFen }
     var gameStepLimitation: Int? { session.gameStepLimitation }
+    var currentLockedStep: Int? { session.sessionData.lockedStep }
     func setGameStepLimitation(_ limit: Int?) { session.setGameStepLimitation(limit) }
 
     func isBadMove(_ move: Move) -> Bool { session.isBadMove(move) }

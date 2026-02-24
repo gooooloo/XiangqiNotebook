@@ -868,11 +868,7 @@ extension Session {
             sessionData.lockedStep = nil
         }
 
-        // 锁定步骤变化时，步数限制的可达范围可能改变
-        if sessionData.gameStepLimitation != nil {
-            rebuildDatabaseView()
-        }
-
+        rebuildDatabaseView()
         clearAllGamePaths()
 
         notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
@@ -964,6 +960,7 @@ extension Session {
 
     // unlock the game if it's locked
     sessionData.lockedStep = nil
+    rebuildDatabaseView()
 
     clearAllGamePaths()
 
@@ -1236,8 +1233,13 @@ extension Session {
     /// 当 gameStepLimitation 生效时，叠加 BFS 计算的可达 fenId 过滤
     private func rebuildDatabaseView() {
         if let limit = sessionData.gameStepLimitation {
+            // Step limit active (BFS already starts from lockedStep ?? 0)
             let reachable = computeReachableFenIds(limit: limit)
             databaseView = DatabaseView.withStepLimit(baseDatabaseView, reachableFenIds: reachable)
+        } else if sessionData.lockedStep != nil {
+            // Lock active, no step limit — filter to reachable positions
+            let reachable = computeReachableFenIds(from: baseDatabaseView)
+            databaseView = DatabaseView.withLock(baseDatabaseView, reachableFenIds: reachable)
         } else {
             databaseView = baseDatabaseView
         }
@@ -1573,6 +1575,7 @@ extension Session {
         sessionData.currentGameStep = 0
         sessionData.lockedStep = nil
         sessionData.gameHistory = nil
+        rebuildDatabaseView()
         clearAllGamePaths()
         setupDefaultCurrentGameIfNeeded()
         autoExtendCurrentGame()
@@ -1714,6 +1717,7 @@ extension Session {
         // 清除当前游戏状态
         sessionData.gameHistory = nil
         sessionData.lockedStep = nil
+        rebuildDatabaseView()
         clearAllGamePaths()
 
         // 设置起始局面
@@ -1744,6 +1748,7 @@ extension Session {
         // 清除当前游戏状态
         sessionData.gameHistory = nil
         sessionData.lockedStep = nil
+        rebuildDatabaseView()
         clearAllGamePaths()
 
         // 设置起始局面（使用第一个棋局的起始位置）
