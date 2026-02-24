@@ -171,6 +171,7 @@ class ViewModel: ObservableObject {
 
         // 订阅当前活跃的 Session
         currentSessionSubscription = session.objectWillChange
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
                 // 防御性检查：
@@ -1009,8 +1010,9 @@ class ViewModel: ObservableObject {
     /// 通过用户选择文件方式恢复数据库
     /// - Note: 此方法会通过 DatabaseView 恢复数据库，影响所有窗口
     func recoverFromUserChoice() async {
+        let service = platformService
         let success = await withCheckedContinuation { continuation in
-            platformService.openFile { [weak self] url in
+            service.openFile { [weak self] url in
                 guard let self = self else {
                     continuation.resume(returning: false)
                     return
