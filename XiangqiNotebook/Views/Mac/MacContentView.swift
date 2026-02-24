@@ -178,7 +178,7 @@ struct MacMenuCommands: Commands {
     @FocusedObject private var viewModel: ViewModel?
 
     var body: some Commands {
-        CommandMenu("导航") {
+        CommandMenu("操作") {
             menuButton(.toStart)
             menuButton(.stepBack)
             menuButton(.stepForward)
@@ -187,50 +187,40 @@ struct MacMenuCommands: Commands {
             menuButton(.nextVariant)
             menuButton(.previousPath)
             menuButton(.nextPath)
-        }
-
-        CommandMenu("棋局") {
-            menuButton(.playRandomNextMove)
-            menuButton(.hintNextMove)
-            Divider()
-            menuButton(.practiceNewGame)
-            menuButton(.reviewThisGame)
-            menuButton(.focusedPractice)
             Divider()
             menuButton(.deleteMove)
             menuButton(.removeMoveFromGame)
             menuButton(.deleteScore)
-        }
-
-        CommandMenu("查询") {
+            Divider()
             menuButton(.queryScore)
             menuButton(.queryEngineScore)
             menuButton(.queryAllEngineScores)
             Divider()
+            menuButton(.markPath)
+            menuButton(.referenceBoard)
             menuButton(.openYunku)
             menuButton(.searchCurrentMove)
-        }
-
-        CommandMenu("数据") {
+            Divider()
+            menuButton(.playRandomNextMove)
+            menuButton(.hintNextMove)
+            menuButton(.practiceNewGame)
+            menuButton(.reviewThisGame)
+            menuButton(.focusedPractice)
+            menuButton(.stepLimitation)
+            Divider()
+            menuButton(.autoAddToOpening)
+            menuButton(.jumpToNextOpeningGap)
+            Divider()
             menuButton(.save)
             menuButton(.backup)
             menuButton(.restore)
-            Divider()
             menuButton(.checkDataVersion)
             menuButton(.importPGN)
             menuButton(.inputGame)
             menuButton(.browseGames)
-        }
-
-        CommandMenu("工具") {
+            Divider()
             menuButton(.fix)
             menuButton(.random)
-            menuButton(.markPath)
-            menuButton(.referenceBoard)
-            Divider()
-            menuButton(.stepLimitation)
-            menuButton(.jumpToNextOpeningGap)
-            menuButton(.autoAddToOpening)
         }
 
         CommandGroup(after: .toolbar) {
@@ -252,9 +242,7 @@ struct MacMenuCommands: Commands {
             menuToggle(.toggleBookmark)
             menuToggle(.inRedOpening)
             menuToggle(.inBlackOpening)
-        }
-
-        CommandMenu("筛选") {
+            Divider()
             menuToggle(.setFilterNone)
             Divider()
             menuToggle(.toggleFilterRedOpeningOnly)
@@ -268,10 +256,15 @@ struct MacMenuCommands: Commands {
         }
     }
 
+    private func menuLabel(_ text: String, shortcut: String?) -> String {
+        guard let shortcut = shortcut else { return text }
+        return "\(text)  [\(shortcut)]"
+    }
+
     @ViewBuilder
     private func menuButton(_ key: ActionDefinitions.ActionKey) -> some View {
         if let vm = viewModel, let info = vm.actionDefinitions.getActionInfo(key) {
-            Button(info.text) { info.action() }
+            Button(menuLabel(info.text, shortcut: info.shortcutsDisplayText)) { info.action() }
                 .disabled(!vm.isActionVisible(key))
         }
     }
@@ -279,7 +272,7 @@ struct MacMenuCommands: Commands {
     @ViewBuilder
     private func menuToggle(_ key: ActionDefinitions.ActionKey) -> some View {
         if let vm = viewModel, let info = vm.actionDefinitions.getToggleActionInfo(key) {
-            Toggle(info.text, isOn: Binding(
+            Toggle(menuLabel(info.text, shortcut: info.shortcutsDisplayText), isOn: Binding(
                 get: { info.isOn() },
                 set: { info.action($0) }
             ))
