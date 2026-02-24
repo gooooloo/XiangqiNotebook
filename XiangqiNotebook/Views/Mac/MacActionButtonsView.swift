@@ -18,6 +18,8 @@ struct MacActionButtonsView: View {
             .practiceNewGame,
             .reviewThisGame,
             .focusedPractice,
+            .practiceRedOpening,
+            .practiceBlackOpening,
             .removeMoveFromGame,
         ]
     }

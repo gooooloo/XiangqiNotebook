@@ -16,6 +16,8 @@ struct iPadActionButtonsView: View {
                     LargeButton(viewModel: viewModel, actionKey: .nextVariant)
                     LargeButton(viewModel: viewModel, actionKey: .practiceNewGame)
                     LargeButton(viewModel: viewModel, actionKey: .reviewThisGame)
+                    LargeButton(viewModel: viewModel, actionKey: .practiceRedOpening)
+                    LargeButton(viewModel: viewModel, actionKey: .practiceBlackOpening)
                     LargeButton(viewModel: viewModel, actionKey: .playRandomNextMove)
                     LargeButton(viewModel: viewModel, actionKey: .removeMoveFromGame)
                 }

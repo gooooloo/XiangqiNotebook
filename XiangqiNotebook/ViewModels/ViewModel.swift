@@ -225,6 +225,8 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.practiceNewGame, text: "练习新局", textIPhone: "练习", shortcuts: [.single("P")], supportedModes: ActionDefinitions.allModes) { self.practiceNewGame() }
         actionDefinitions.registerAction(.focusedPractice, text: "练习本局", textIPhone: "专练", shortcuts: [.single("Z")], supportedModes: ActionDefinitions.allModes) { self.startFocusedPractice() }
+        actionDefinitions.registerAction(.practiceRedOpening, text: "练习红方开局", supportedModes: ActionDefinitions.allModes) { self.practiceRedOpening() }
+        actionDefinitions.registerAction(.practiceBlackOpening, text: "练习黑方开局", supportedModes: ActionDefinitions.allModes) { self.practiceBlackOpening() }
         actionDefinitions.registerAction(.playRandomNextMove, text: "随机走子", textIPhone: "随机", shortcuts: [.sequence(",r")], supportedModes: [.practice]) { self.playRandomNextMove() }
         actionDefinitions.registerAction(.hintNextMove, text: "提示", textIPhone: "提示", supportedModes: [.practice]) { self.playRandomNextMove() }
 
@@ -1680,6 +1682,50 @@ class ViewModel: ObservableObject {
         sessionManager.startFocusedPractice()
 
         // Auto-play if it's opponent's turn
+        playRandomIfYourTurn(delay: 1.0)
+    }
+
+    func practiceRedOpening() {
+        // 退出 focusedPractice（如果正在进行）
+        if sessionManager.isInFocusedPractice {
+            sessionManager.exitFocusedPractice()
+        }
+
+        // 切换到红方开局范围
+        sessionManager.setFilters([Session.filterRedOpeningOnly])
+
+        // 先跳到起点，再锁定在开始局面
+        session.toStart()
+        if self.isAnyMoveLocked {
+            self.toggleLock()
+        }
+        self.toggleLock()
+        if session.sessionData.currentMode != .practice {
+            session.togglePracticeMode()
+        }
+
+        playRandomIfYourTurn(delay: 1.0)
+    }
+
+    func practiceBlackOpening() {
+        // 退出 focusedPractice（如果正在进行）
+        if sessionManager.isInFocusedPractice {
+            sessionManager.exitFocusedPractice()
+        }
+
+        // 切换到黑方开局范围
+        sessionManager.setFilters([Session.filterBlackOpeningOnly])
+
+        // 先跳到起点，再锁定在开始局面
+        session.toStart()
+        if self.isAnyMoveLocked {
+            self.toggleLock()
+        }
+        self.toggleLock()
+        if session.sessionData.currentMode != .practice {
+            session.togglePracticeMode()
+        }
+
         playRandomIfYourTurn(delay: 1.0)
     }
 
