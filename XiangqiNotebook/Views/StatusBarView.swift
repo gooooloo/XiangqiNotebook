@@ -29,16 +29,16 @@ struct StatusBarView: View {
     }
     
     private func gameStatRow(_ label: String, total: Int, wins: Int, draws: Int, losses: Int) -> some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 4) {
             Text(label)
             Text("总")
-            Text("\(total)").frame(minWidth: 16, alignment: .leading)
+            Text("\(total)").frame(minWidth: 24, alignment: .leading)
             Text("胜")
-            Text("\(wins)").frame(minWidth: 16, alignment: .leading)
+            Text("\(wins)").frame(minWidth: 24, alignment: .leading)
             Text("和")
-            Text("\(draws)").frame(minWidth: 16, alignment: .leading)
+            Text("\(draws)").frame(minWidth: 24, alignment: .leading)
             Text("负")
-            Text("\(losses)").frame(minWidth: 16, alignment: .leading)
+            Text("\(losses)").frame(minWidth: 24, alignment: .leading)
         }
         .font(fontStyle)
     }
