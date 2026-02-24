@@ -21,6 +21,8 @@ struct XiangqiNotebookApp: App {
         }
         #if os(macOS)
         .commands {
+            MacMenuCommands()
+
             // 在帮助菜单中添加隐私政策链接
             CommandGroup(after: .help) {
                 Button("隐私政策...") {

@@ -153,6 +153,7 @@ struct MacContentView: View {
                 }
             }
         }
+        .focusedSceneObject(viewModel)
         .onAppear {
             updateWindowTitle()
         }
@@ -171,7 +172,123 @@ struct MacContentView: View {
     }
 }
 
+// MARK: - Menu Bar Commands
+
+struct MacMenuCommands: Commands {
+    @FocusedObject private var viewModel: ViewModel?
+
+    var body: some Commands {
+        CommandMenu("导航") {
+            menuButton(.toStart)
+            menuButton(.stepBack)
+            menuButton(.stepForward)
+            menuButton(.toEnd)
+            Divider()
+            menuButton(.nextVariant)
+            menuButton(.previousPath)
+            menuButton(.nextPath)
+        }
+
+        CommandMenu("棋局") {
+            menuButton(.playRandomNextMove)
+            menuButton(.hintNextMove)
+            Divider()
+            menuButton(.practiceNewGame)
+            menuButton(.reviewThisGame)
+            menuButton(.focusedPractice)
+            Divider()
+            menuButton(.deleteMove)
+            menuButton(.removeMoveFromGame)
+            menuButton(.deleteScore)
+        }
+
+        CommandMenu("查询") {
+            menuButton(.queryScore)
+            menuButton(.queryEngineScore)
+            menuButton(.queryAllEngineScores)
+            Divider()
+            menuButton(.openYunku)
+            menuButton(.searchCurrentMove)
+        }
+
+        CommandMenu("数据") {
+            menuButton(.save)
+            menuButton(.backup)
+            menuButton(.restore)
+            Divider()
+            menuButton(.checkDataVersion)
+            menuButton(.importPGN)
+            menuButton(.inputGame)
+            menuButton(.browseGames)
+        }
+
+        CommandMenu("工具") {
+            menuButton(.fix)
+            menuButton(.random)
+            menuButton(.markPath)
+            menuButton(.referenceBoard)
+            Divider()
+            menuButton(.stepLimitation)
+            menuButton(.jumpToNextOpeningGap)
+            menuButton(.autoAddToOpening)
+        }
+
+        CommandGroup(after: .toolbar) {
+            Divider()
+            menuToggle(.flip)
+            menuToggle(.flipHorizontal)
+            Divider()
+            menuToggle(.toggleShowPath)
+            menuToggle(.toggleShowAllNextMoves)
+            Divider()
+            menuToggle(.togglePracticeMode)
+            menuToggle(.toggleLock)
+            menuToggle(.toggleCanNavigateBeforeLockedStep)
+            Divider()
+            menuToggle(.toggleIsCommentEditing)
+            menuToggle(.toggleAllowAddingNewMoves)
+            menuToggle(.toggleAutoExtendGameWhenPlayingBoardFen)
+            Divider()
+            menuToggle(.toggleBookmark)
+            menuToggle(.inRedOpening)
+            menuToggle(.inBlackOpening)
+        }
+
+        CommandMenu("筛选") {
+            menuToggle(.setFilterNone)
+            Divider()
+            menuToggle(.toggleFilterRedOpeningOnly)
+            menuToggle(.toggleFilterBlackOpeningOnly)
+            menuToggle(.toggleFilterRedRealGameOnly)
+            menuToggle(.toggleFilterBlackRealGameOnly)
+            Divider()
+            menuToggle(.setFilterFocusedPractice)
+            menuToggle(.toggleFilterSpecificGame)
+            menuToggle(.toggleFilterSpecificBook)
+        }
+    }
+
+    @ViewBuilder
+    private func menuButton(_ key: ActionDefinitions.ActionKey) -> some View {
+        if let vm = viewModel, let info = vm.actionDefinitions.getActionInfo(key) {
+            Button(info.text) { info.action() }
+                .disabled(!vm.isActionVisible(key))
+        }
+    }
+
+    @ViewBuilder
+    private func menuToggle(_ key: ActionDefinitions.ActionKey) -> some View {
+        if let vm = viewModel, let info = vm.actionDefinitions.getToggleActionInfo(key) {
+            Toggle(info.text, isOn: Binding(
+                get: { info.isOn() },
+                set: { info.action($0) }
+            ))
+            .disabled(!vm.isActionVisible(key) || !info.isEnabled())
+        }
+    }
+}
+
 #Preview {
     MacContentView()
 }
-#endif 
+#endif
