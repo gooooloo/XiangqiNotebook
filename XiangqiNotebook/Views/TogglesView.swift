@@ -18,6 +18,7 @@ struct TogglesView: View {
                 MyToggle(viewModel: viewModel, actionKey: .setFilterFocusedPractice)
                 MyToggle(viewModel: viewModel, actionKey: .toggleFilterSpecificGame)
                 MyToggle(viewModel: viewModel, actionKey: .toggleFilterSpecificBook)
+                MyToggle(viewModel: viewModel, actionKey: .toggleStepLimitation)
             }
             .padding(8) // 添加内边距，让内容不贴边
             .border(Color.gray)
@@ -72,13 +73,16 @@ struct MyToggle: View {
     var displayText: String {
         var text = toggleActionInfo.text
 
-        // 为特定棋局/棋书筛选添加名称
+        // 为特定棋局/棋书筛选添加名称，为步数限制显示当前值
         if actionKey == .toggleFilterSpecificGame,
            let gameName = viewModel.lastSpecificGameName, !gameName.isEmpty {
             text += ": \(gameName)"
         } else if actionKey == .toggleFilterSpecificBook,
                   let bookName = viewModel.lastSpecificBookName, !bookName.isEmpty {
             text += ": \(bookName)"
+        } else if actionKey == .toggleStepLimitation,
+                  let limit = viewModel.gameStepLimitation {
+            text += ": \(limit)"
         }
 
         if let displayText = toggleActionInfo.shortcutsDisplayText {

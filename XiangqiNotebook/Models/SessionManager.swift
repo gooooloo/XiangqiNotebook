@@ -138,11 +138,12 @@ class SessionManager: ObservableObject {
         }
 
         // 自动延伸对局（尽可能拓展更多符合 filter 的走法）
+        // 注意：此处使用 scope-only 的 databaseView（不含步数限制），
+        // 步数限制会在 Session 初始化时通过 rebuildDatabaseView 应用
         newSessionData.currentGame2 = GameOperations.autoExtendGame(
             game: newSessionData.currentGame2,
             nextFenIds: nil,
             databaseView: databaseView,
-            gameStepLimitation: newSessionData.gameStepLimitation,
             allowExtend: true
         )
 

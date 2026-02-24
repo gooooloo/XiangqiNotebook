@@ -17,15 +17,13 @@ class GameOperations {
     /// 自动扩展游戏路径
     ///
     /// - Parameters:
-    ///   - databaseView: 数据库视图，用于访问过滤后的数据
     ///   - game: 当前游戏路径
     ///   - nextFenIds: 可选的下一步 fenId 列表
-    ///   - gameStepLimitation: 游戏步数限制
+    ///   - databaseView: 数据库视图，用于访问过滤后的数据（步数限制已由 DatabaseView 的 fenId 过滤处理）
     ///   - allowExtend: 是否允许自动扩展
     static func autoExtendGame(game: [Int],
                             nextFenIds: [Int]? = nil,
                             databaseView: DatabaseView,
-                            gameStepLimitation: Int?,
                             allowExtend: Bool = true) -> [Int] {
         var extendedGame = game
         var fensInGame = Set(extendedGame)
@@ -46,24 +44,24 @@ class GameOperations {
 
         // extend game with lastMoveFenId or first move
         if allowExtend {
-            while gameStepLimitation == nil || extendedGame.count < 1 + gameStepLimitation! {
+            while true {
                 guard let fenId = extendedGame.last else { break }
                 guard let fenObject = databaseView.getFenObject(fenId) else { break }
                 let moves = databaseView.moves(from: fenId)
 
-            var nextFenId: Int
-            if let lastMoveFenId = fenObject.lastMoveFenId,
-                databaseView.move(from: fenId, to: lastMoveFenId) != nil {
-                nextFenId = lastMoveFenId
-            } else if !moves.isEmpty,
-                let firstMoveFenId = moves[0].targetFenId {
-                nextFenId = firstMoveFenId
-            } else {
-                break
-            }
+                var nextFenId: Int
+                if let lastMoveFenId = fenObject.lastMoveFenId,
+                    databaseView.move(from: fenId, to: lastMoveFenId) != nil {
+                    nextFenId = lastMoveFenId
+                } else if !moves.isEmpty,
+                    let firstMoveFenId = moves[0].targetFenId {
+                    nextFenId = firstMoveFenId
+                } else {
+                    break
+                }
 
-            // don't loop
-            if fensInGame.contains(nextFenId) { break }
+                // don't loop
+                if fensInGame.contains(nextFenId) { break }
 
                 extendedGame.append(nextFenId)
                 fensInGame.insert(nextFenId)
