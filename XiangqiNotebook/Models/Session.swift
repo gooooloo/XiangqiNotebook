@@ -851,6 +851,9 @@ extension Session {
             sessionData.autoExtendGameWhenPlayingBoardFen = true
             // 非练习模式下，显示路径
             sessionData.showPath = true
+            // 清除锁定并恢复完整视图
+            sessionData.lockedStep = nil
+            rebuildDatabaseView()
             // 自动扩展游戏
             autoExtendCurrentGame()
 
@@ -858,6 +861,9 @@ extension Session {
             // 复习模式下，显示路径以便观察局面
             sessionData.showPath = true
             sessionData.autoExtendGameWhenPlayingBoardFen = true
+            // 清除锁定并恢复完整视图
+            sessionData.lockedStep = nil
+            rebuildDatabaseView()
             autoExtendCurrentGame()
         }
 
@@ -1856,6 +1862,19 @@ extension Session {
             // 不管哪个dirty，都要更新界面
             self.dataChanged.toggle()
         }
+    }
+}
+
+// MARK: - 锁定当前步骤并隐藏后续
+extension Session {
+    func lockAndHideAfterCurrentStep() {
+        sessionData.lockedStep = sessionData.currentGameStep
+        sessionData.showPath = false
+        sessionData.autoExtendGameWhenPlayingBoardFen = false
+        cutGameUntilStep(sessionData.currentGameStep)
+        rebuildDatabaseView()
+        clearAllGamePaths()
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
     }
 }
 

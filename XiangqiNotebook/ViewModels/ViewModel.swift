@@ -776,9 +776,10 @@ class ViewModel: ObservableObject {
         sessionManager.loadBookmark(game)
     }
 
-    /// 加载复习项（通过 gamePath 导航到对应局面）
+    /// 加载复习项（通过 gamePath 导航到对应局面，锁定已走步骤并隐藏后续）
     func loadReviewItem(_ gamePath: [Int]) {
         sessionManager.loadBookmark(gamePath)
+        session.lockAndHideAfterCurrentStep()
     }
 
     /// 加载棋局（总是先切换到 Full 视图）
