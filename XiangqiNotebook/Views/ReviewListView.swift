@@ -3,6 +3,8 @@ import SwiftUI
 /// 复习库列表组件（macOS/iPad 共用）
 struct ReviewListView: View {
     @ObservedObject var viewModel: ViewModel
+    @State private var renamingFenId: Int?
+    @State private var renameText: String = ""
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -29,13 +31,6 @@ struct ReviewListView: View {
                                 }
                             }
                             Spacer()
-                            Button(action: {
-                                viewModel.removeReviewItem(fenId: item.fenId)
-                            }) {
-                                Image(systemName: "trash")
-                                    .foregroundColor(.red)
-                            }
-                            .buttonStyle(.borderless)
                         }
                         .padding(.vertical, 4)
                         .padding(.horizontal, 4)
@@ -47,12 +42,46 @@ struct ReviewListView: View {
                                 viewModel.loadReviewItem(gamePath)
                             }
                         }
+                        .contextMenu {
+                            Button {
+                                renameText = viewModel.reviewItemDescription(fenId: item.fenId)
+                                renamingFenId = item.fenId
+                            } label: {
+                                Label("重命名", systemImage: "pencil")
+                            }
+                            Button {
+                                viewModel.reviewAgain(fenId: item.fenId)
+                            } label: {
+                                Label("再次复习", systemImage: "arrow.counterclockwise")
+                            }
+                            Divider()
+                            Button(role: .destructive) {
+                                viewModel.removeReviewItem(fenId: item.fenId)
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
+                        }
                         Divider()
                     }
                 }
             }
         }
         .padding(8)
+        .alert("重命名复习项", isPresented: Binding(
+            get: { renamingFenId != nil },
+            set: { if !$0 { renamingFenId = nil } }
+        )) {
+            TextField("名称", text: $renameText)
+            Button("确定") {
+                if let fenId = renamingFenId {
+                    viewModel.renameReviewItem(fenId: fenId, name: renameText)
+                }
+                renamingFenId = nil
+            }
+            Button("取消", role: .cancel) {
+                renamingFenId = nil
+            }
+        }
     }
 
     private func dueStatusText(_ srsData: SRSData) -> String {

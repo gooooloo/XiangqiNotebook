@@ -4,6 +4,7 @@ import Foundation
 /// 每个复习项对应一个局面（fenId），存储在 DatabaseData.reviewItems 中
 class SRSData: Codable {
     var gamePath: [Int]?
+    var customName: String?
     var easeFactor: Double = 2.5
     var interval: Int = 0
     var repetitions: Int = 0

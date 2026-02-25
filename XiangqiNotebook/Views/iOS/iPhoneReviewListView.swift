@@ -5,6 +5,8 @@ import SwiftUI
 struct iPhoneReviewListView: View {
     @ObservedObject var viewModel: ViewModel
     @Binding var isPresented: Bool
+    @State private var renamingFenId: Int?
+    @State private var renameText: String = ""
 
     var body: some View {
         NavigationView {
@@ -32,13 +34,6 @@ struct iPhoneReviewListView: View {
                                         }
                                     }
                                     Spacer()
-                                    Button(action: {
-                                        viewModel.removeReviewItem(fenId: item.fenId)
-                                    }) {
-                                        Image(systemName: "trash")
-                                            .foregroundColor(.red)
-                                    }
-                                    .buttonStyle(.borderless)
                                 }
                                 .padding(.vertical, 8)
                                 .padding(.horizontal, 4)
@@ -49,6 +44,25 @@ struct iPhoneReviewListView: View {
                                     if let gamePath = item.srsData.gamePath {
                                         viewModel.loadReviewItem(gamePath)
                                         isPresented = false
+                                    }
+                                }
+                                .contextMenu {
+                                    Button {
+                                        renameText = viewModel.reviewItemDescription(fenId: item.fenId)
+                                        renamingFenId = item.fenId
+                                    } label: {
+                                        Label("重命名", systemImage: "pencil")
+                                    }
+                                    Button {
+                                        viewModel.reviewAgain(fenId: item.fenId)
+                                    } label: {
+                                        Label("再次复习", systemImage: "arrow.counterclockwise")
+                                    }
+                                    Divider()
+                                    Button(role: .destructive) {
+                                        viewModel.removeReviewItem(fenId: item.fenId)
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
                                     }
                                 }
                                 Divider()
@@ -65,6 +79,21 @@ struct iPhoneReviewListView: View {
                     Button("关闭") {
                         isPresented = false
                     }
+                }
+            }
+            .alert("重命名复习项", isPresented: Binding(
+                get: { renamingFenId != nil },
+                set: { if !$0 { renamingFenId = nil } }
+            )) {
+                TextField("名称", text: $renameText)
+                Button("确定") {
+                    if let fenId = renamingFenId {
+                        viewModel.renameReviewItem(fenId: fenId, name: renameText)
+                    }
+                    renamingFenId = nil
+                }
+                Button("取消", role: .cancel) {
+                    renamingFenId = nil
                 }
             }
         }

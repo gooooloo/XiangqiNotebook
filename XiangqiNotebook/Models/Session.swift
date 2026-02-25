@@ -327,6 +327,20 @@ class Session: ObservableObject {
         dataChanged.toggle()
     }
 
+    func renameReviewItem(fenId: Int, name: String) {
+        guard let srsData = databaseView.reviewItems[fenId] else { return }
+        srsData.customName = name.isEmpty ? nil : name
+        databaseView.updateReviewItem(for: fenId, srsData: srsData)
+        dataChanged.toggle()
+    }
+
+    func reviewAgain(fenId: Int) {
+        guard let srsData = databaseView.reviewItems[fenId] else { return }
+        srsData.nextReviewDate = Date()
+        databaseView.updateReviewItem(for: fenId, srsData: srsData)
+        dataChanged.toggle()
+    }
+
     /// 返回已到期的复习项，按 nextReviewDate 升序排列
     var dueReviewItems: [(fenId: Int, srsData: SRSData)] {
         databaseView.reviewItems

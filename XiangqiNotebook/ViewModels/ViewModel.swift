@@ -1453,7 +1453,18 @@ class ViewModel: ObservableObject {
     var isCurrentFenInReview: Bool { session.isCurrentFenInReview }
     var reviewItemList: [(fenId: Int, srsData: SRSData)] { session.reviewItemList }
     func removeReviewItem(fenId: Int) { session.removeReviewItem(fenId: fenId) }
+    func renameReviewItem(fenId: Int, name: String) { session.renameReviewItem(fenId: fenId, name: name) }
+    func reviewAgain(fenId: Int) {
+        session.reviewAgain(fenId: fenId)
+        if isInReviewMode {
+            startReview()
+        }
+    }
     func reviewItemDescription(fenId: Int) -> String {
+        if let srsData = session.databaseView.reviewItems[fenId],
+           let customName = srsData.customName, !customName.isEmpty {
+            return customName
+        }
         if let fenObj = session.databaseView.getFenObject(fenId),
            let comment = fenObj.comment, !comment.isEmpty {
             return comment
