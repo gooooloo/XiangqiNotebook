@@ -33,17 +33,12 @@ struct TogglesView: View {
             .padding(8) // 添加内边距，让内容不贴边
             .border(Color.gray)
 
-            VStack(alignment: .leading) {
-                MyToggle(viewModel: viewModel, actionKey: .toggleCanNavigateBeforeLockedStep)
-            }
-            .padding(8) // 添加内边距，让内容不贴边
-            .border(Color.gray)
-
             // 棋盘操作
             VStack(alignment: .leading) {
                 MyToggle(viewModel: viewModel, actionKey: .flip)
                 MyToggle(viewModel: viewModel, actionKey: .flipHorizontal)
                 MyToggle(viewModel: viewModel, actionKey: .toggleAutoExtendGameWhenPlayingBoardFen)
+                MyToggle(viewModel: viewModel, actionKey: .toggleCanNavigateBeforeLockedStep)
                 MyToggle(viewModel: viewModel, actionKey: .toggleShowPath)
                 MyToggle(viewModel: viewModel, actionKey: .toggleShowAllNextMoves)
                 MyToggle(viewModel: viewModel, actionKey: .togglePracticeMode)
