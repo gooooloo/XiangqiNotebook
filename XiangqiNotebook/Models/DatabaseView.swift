@@ -170,6 +170,10 @@ final class DatabaseView {
         database.databaseData.bookmarks
     }
 
+    var reviewItems: [Int: SRSData] {
+        database.databaseData.reviewItems
+    }
+
     var dataVersion: Int {
         database.databaseData.dataVersion
     }
@@ -467,6 +471,12 @@ final class DatabaseView {
             database.databaseData.fenToId[fenObject.fen] = fenId
             markDirty()
         }
+    }
+
+    /// 更新复习项（nil 表示删除）
+    func updateReviewItem(for fenId: Int, srsData: SRSData?) {
+        database.databaseData.reviewItems[fenId] = srsData
+        markDirty()
     }
 
     /// 更新 bookmarks
