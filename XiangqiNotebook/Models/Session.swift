@@ -327,6 +327,20 @@ class Session: ObservableObject {
         dataChanged.toggle()
     }
 
+    func renameReviewItem(fenId: Int, name: String) {
+        guard let srsData = databaseView.reviewItems[fenId] else { return }
+        srsData.customName = name.isEmpty ? nil : name
+        databaseView.updateReviewItem(for: fenId, srsData: srsData)
+        dataChanged.toggle()
+    }
+
+    func reviewAgain(fenId: Int) {
+        guard let srsData = databaseView.reviewItems[fenId] else { return }
+        srsData.nextReviewDate = Date()
+        databaseView.updateReviewItem(for: fenId, srsData: srsData)
+        dataChanged.toggle()
+    }
+
     /// 返回已到期的复习项，按 nextReviewDate 升序排列
     var dueReviewItems: [(fenId: Int, srsData: SRSData)] {
         databaseView.reviewItems
@@ -837,13 +851,18 @@ extension Session {
             sessionData.autoExtendGameWhenPlayingBoardFen = true
             // 非练习模式下，显示路径
             sessionData.showPath = true
+            // 清除锁定并恢复完整视图
+            sessionData.lockedStep = nil
+            rebuildDatabaseView()
             // 自动扩展游戏
             autoExtendCurrentGame()
 
         case .review:
-            // 复习模式下，显示路径以便观察局面
-            sessionData.showPath = true
+            // 复习模式下，保持用户当前的路径显示设置不变
             sessionData.autoExtendGameWhenPlayingBoardFen = true
+            // 清除锁定并恢复完整视图
+            sessionData.lockedStep = nil
+            rebuildDatabaseView()
             autoExtendCurrentGame()
         }
 
@@ -1842,6 +1861,25 @@ extension Session {
             // 不管哪个dirty，都要更新界面
             self.dataChanged.toggle()
         }
+    }
+}
+
+// MARK: - 锁定与解锁
+extension Session {
+    /// 清除锁定状态并恢复完整视图
+    func unlockIfNeeded() {
+        guard sessionData.lockedStep != nil else { return }
+        sessionData.lockedStep = nil
+        rebuildDatabaseView()
+    }
+
+    func lockAndHideAfterCurrentStep() {
+        sessionData.lockedStep = sessionData.currentGameStep
+        sessionData.autoExtendGameWhenPlayingBoardFen = false
+        cutGameUntilStep(sessionData.currentGameStep)
+        rebuildDatabaseView()
+        clearAllGamePaths()
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
     }
 }
 

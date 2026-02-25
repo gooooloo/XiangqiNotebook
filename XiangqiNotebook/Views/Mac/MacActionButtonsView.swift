@@ -29,6 +29,7 @@ struct MacActionButtonsView: View {
             .focusedPractice,
             isNormal ? .practiceRedOpening : nil,
             isNormal ? .practiceBlackOpening : nil,
+            isPractice ? .addToReview : nil,
             !isNormal ? .save : nil,
         ]
     }
@@ -44,6 +45,7 @@ struct MacActionButtonsView: View {
             .referenceBoard,
             .browseGames,
             .importPGN,
+            isNormal ? .addToReview : nil,
             isNormal ? .save : nil,
         ]
     }

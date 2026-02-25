@@ -462,12 +462,12 @@ class ViewModel: ObservableObject {
           }
         )
 
-        // 路径相关 - 只在常规模式可用
+        // 路径相关 - 常规模式和复习模式可用
         actionDefinitions.registerToggleAction(
           .toggleShowPath,
           text: "显示路径",
           shortcuts: [.sequence(",s")],
-          supportedModes: [.normal],
+          supportedModes: [.normal, .review],
           isEnabled: { self.session.sessionData.currentMode != .practice },
           isOn: { self.showPath },
           action: { newValue in
@@ -475,12 +475,12 @@ class ViewModel: ObservableObject {
           }
         )
 
-        // 显示所有下一步 - 只在常规模式可用
+        // 显示所有下一步 - 常规模式和复习模式可用
         actionDefinitions.registerToggleAction(
           .toggleShowAllNextMoves,
           text: "显示所有下一步",
           shortcuts: [.sequence(",n")],
-          supportedModes: [.normal],
+          supportedModes: [.normal, .review],
           isEnabled: { self.session.sessionData.currentMode != .practice },
           isOn: { self.showAllNextMoves },
           action: { newValue in
@@ -510,7 +510,7 @@ class ViewModel: ObservableObject {
           .toggleIsCommentEditing,
           text: "编辑评论区",
           shortcuts: [.single("c")],
-          supportedModes: [.normal],
+          supportedModes: [.normal, .review],
           isEnabled: { true },
           isOn: { self.isCommentEditing },
           action: { newValue in
@@ -776,9 +776,12 @@ class ViewModel: ObservableObject {
         sessionManager.loadBookmark(game)
     }
 
-    /// 加载复习项（通过 gamePath 导航到对应局面）
+    /// 加载复习项（通过 gamePath 导航到对应局面，锁定已走步骤并隐藏后续）
     func loadReviewItem(_ gamePath: [Int]) {
+        // 先清除上一次复习项的锁定，确保 loadBookmark 在完整视图上执行
+        session.unlockIfNeeded()
         sessionManager.loadBookmark(gamePath)
+        session.lockAndHideAfterCurrentStep()
     }
 
     /// 加载棋局（总是先切换到 Full 视图）
@@ -1453,7 +1456,18 @@ class ViewModel: ObservableObject {
     var isCurrentFenInReview: Bool { session.isCurrentFenInReview }
     var reviewItemList: [(fenId: Int, srsData: SRSData)] { session.reviewItemList }
     func removeReviewItem(fenId: Int) { session.removeReviewItem(fenId: fenId) }
+    func renameReviewItem(fenId: Int, name: String) { session.renameReviewItem(fenId: fenId, name: name) }
+    func reviewAgain(fenId: Int) {
+        session.reviewAgain(fenId: fenId)
+        if isInReviewMode {
+            startReview()
+        }
+    }
     func reviewItemDescription(fenId: Int) -> String {
+        if let srsData = session.databaseView.reviewItems[fenId],
+           let customName = srsData.customName, !customName.isEmpty {
+            return customName
+        }
         if let fenObj = session.databaseView.getFenObject(fenId),
            let comment = fenObj.comment, !comment.isEmpty {
             return comment
