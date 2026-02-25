@@ -10,6 +10,10 @@ struct MacActionButtonsView: View {
         viewModel.currentAppMode == .practice
     }
 
+    private var isNormal: Bool {
+        viewModel.currentAppMode == .normal
+    }
+
     /// 第一行按钮定义
     private var row1Keys: [ActionDefinitions.ActionKey?] {
         [
@@ -23,9 +27,9 @@ struct MacActionButtonsView: View {
             .practiceNewGame,
             .reviewThisGame,
             .focusedPractice,
-            isPractice ? nil : .practiceRedOpening,
-            isPractice ? nil : .practiceBlackOpening,
-            isPractice ? .save : nil,
+            isNormal ? .practiceRedOpening : nil,
+            isNormal ? .practiceBlackOpening : nil,
+            !isNormal ? .save : nil,
         ]
     }
 
@@ -40,7 +44,7 @@ struct MacActionButtonsView: View {
             .referenceBoard,
             .browseGames,
             .importPGN,
-            isPractice ? nil : .save,
+            isNormal ? .save : nil,
         ]
     }
 

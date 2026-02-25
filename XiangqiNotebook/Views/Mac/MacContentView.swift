@@ -51,20 +51,31 @@ struct MacContentView: View {
                     }
                     .frame(width: geometry.size.width * 0.2)
 
-                    // 右侧区域：着法列表 - 添加 ScrollView 使内容可滚动
-                    ScrollView {
+                    // 右侧区域
+                    if viewModel.isInReviewMode {
+                        // 复习模式：复习面板 + 复习库列表（填满） + 棋盘操作（底部）
                         VStack(spacing: 0) {
-                            // 模式选择器
                             ModeSelectorView(viewModel: viewModel)
-
-                            // 棋局筛选
-                            TogglesView(viewModel: viewModel)
-
-                            // 书签区域
-                            BookmarkListView(viewModel: viewModel)
+                            ReviewModeView(viewModel: viewModel)
+                            ScrollView {
+                                ReviewListView(viewModel: viewModel)
+                            }
+                            .border(Color.gray)
+                            .frame(maxHeight: .infinity)
+                            BoardOperationTogglesView(viewModel: viewModel)
                         }
+                        .frame(width: geometry.size.width * 0.2)
+                    } else {
+                        // 常规/练习模式：ScrollView 包裹
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                ModeSelectorView(viewModel: viewModel)
+                                TogglesView(viewModel: viewModel)
+                                BookmarkListView(viewModel: viewModel)
+                            }
+                        }
+                        .frame(width: geometry.size.width * 0.2)
                     }
-                    .frame(width: geometry.size.width * 0.2)
                 }
 
                 // 按钮区 - 占据所有宽度

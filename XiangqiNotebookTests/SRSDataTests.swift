@@ -319,4 +319,113 @@ struct SRSDataTests {
         #expect(list[0].fenId == 1)
         #expect(list[1].fenId == 2)
     }
+
+    // MARK: - Session.dueReviewItems
+
+    @Test func testDueReviewItemsFiltersOnlyDueItems() {
+        let session = createTestSession()
+
+        // Add a due item (past date)
+        let dueSrs = SRSData(gamePath: [1], nextReviewDate: Date().addingTimeInterval(-3600))
+        session.databaseView.updateReviewItem(for: 1, srsData: dueSrs)
+
+        // Add a not-due item (future date)
+        let futureSrs = SRSData(gamePath: [1, 2], nextReviewDate: Date().addingTimeInterval(86400))
+        session.databaseView.updateReviewItem(for: 2, srsData: futureSrs)
+
+        let dueItems = session.dueReviewItems
+        #expect(dueItems.count == 1)
+        #expect(dueItems[0].fenId == 1)
+    }
+
+    @Test func testDueReviewItemsSortedByNextReviewDate() {
+        let session = createTestSession()
+
+        // Add two due items with different dates
+        let olderDue = SRSData(gamePath: [1], nextReviewDate: Date().addingTimeInterval(-7200))
+        session.databaseView.updateReviewItem(for: 1, srsData: olderDue)
+
+        let newerDue = SRSData(gamePath: [1, 2], nextReviewDate: Date().addingTimeInterval(-3600))
+        session.databaseView.updateReviewItem(for: 2, srsData: newerDue)
+
+        let dueItems = session.dueReviewItems
+        #expect(dueItems.count == 2)
+        // Older due date should come first
+        #expect(dueItems[0].fenId == 1)
+        #expect(dueItems[1].fenId == 2)
+    }
+
+    @Test func testDueReviewItemsEmptyWhenNoDueItems() {
+        let session = createTestSession()
+
+        // Add only a future item
+        let futureSrs = SRSData(gamePath: [1, 2], nextReviewDate: Date().addingTimeInterval(86400))
+        session.databaseView.updateReviewItem(for: 2, srsData: futureSrs)
+
+        #expect(session.dueReviewItems.isEmpty)
+    }
+
+    // MARK: - Session.submitReviewRating
+
+    @Test func testSubmitReviewRatingUpdatesSRSData() {
+        let session = createTestSession()
+
+        // Add a due review item
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date().addingTimeInterval(-3600))
+        session.databaseView.updateReviewItem(for: 2, srsData: srs)
+
+        let beforeRepetitions = srs.repetitions
+        session.submitReviewRating(fenId: 2, quality: .good)
+
+        // After review, repetitions should increase
+        let updatedSrs = session.databaseView.reviewItems[2]!
+        #expect(updatedSrs.repetitions == beforeRepetitions + 1)
+        #expect(updatedSrs.lastReviewDate != nil)
+    }
+
+    @Test func testSubmitReviewRatingWithAgainResetsProgress() {
+        let session = createTestSession()
+
+        // Add a review item with some progress
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date().addingTimeInterval(-3600))
+        srs.repetitions = 3
+        srs.interval = 15
+        session.databaseView.updateReviewItem(for: 2, srsData: srs)
+
+        session.submitReviewRating(fenId: 2, quality: .again)
+
+        let updatedSrs = session.databaseView.reviewItems[2]!
+        #expect(updatedSrs.repetitions == 0)
+        #expect(updatedSrs.interval == 0)
+    }
+
+    @Test func testSubmitReviewRatingForNonexistentItem() {
+        let session = createTestSession()
+        // Should not crash when submitting for a fenId that has no review item
+        session.submitReviewRating(fenId: 999, quality: .good)
+    }
+
+    // MARK: - AppMode.review Codable
+
+    @Test func testAppModeReviewCodable() throws {
+        let mode = AppMode.review
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(mode)
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(AppMode.self, from: data)
+        #expect(decoded == .review)
+    }
+
+    @Test func testAppModeReviewRawValue() {
+        #expect(AppMode.review.rawValue == "review")
+    }
+
+    @Test func testAppModeAllCasesIncludesReview() {
+        #expect(AppMode.allCases.contains(.review))
+        #expect(AppMode.allCases.count == 3)
+    }
+
+    @Test func testAppModeReviewDisplayName() {
+        #expect(AppMode.review.displayName == "复习模式")
+    }
 }

@@ -73,6 +73,9 @@ struct iPhoneContentView: View {
         .sheet(isPresented: $viewModel.showReviewListIOS) {
             iPhoneReviewListView(viewModel: viewModel, isPresented: $viewModel.showReviewListIOS)
         }
+        .sheet(isPresented: $viewModel.showReviewModeIOS) {
+            iPhoneReviewModeView(viewModel: viewModel, isPresented: $viewModel.showReviewModeIOS)
+        }
         .alert(viewModel.globalAlertTitle, isPresented: $viewModel.showingGlobalAlert) {
             Button("确定") { }
         } message: {
