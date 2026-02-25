@@ -1119,17 +1119,16 @@ extension Session {
   }
 
   func playNextMove(_ move: Move) {
+    guard sessionData.autoExtendGameWhenPlayingBoardFen else { return }
     guard let targetFenId = move.targetFenId else { return }
     guard databaseView.containsFenId(targetFenId) else { return }
     guard sessionData.currentGameStep >= (sessionData.lockedStep ?? 0) else { return }
 
     let oldStep = sessionData.currentGameStep
     cutGameUntilStep(oldStep)
-    let databaseModified = playFenIdsAndAutoExtend([targetFenId], allowExtend: sessionData.autoExtendGameWhenPlayingBoardFen)
+    let databaseModified = playFenIdsAndAutoExtend([targetFenId], allowExtend: true)
 
-    if oldStep + 1 < sessionData.currentGame2.count {
-        sessionData.currentGameStep = oldStep + 1
-    }
+    // 不前进 currentGameStep — 仅替换下一步分支
     assert(sessionData.currentGameStep < sessionData.currentGame2.count)
 
     notifyDataChanged(markDatabaseDirty: databaseModified, markSessionDirty: true)
