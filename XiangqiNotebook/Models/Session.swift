@@ -1125,7 +1125,7 @@ extension Session {
 
     let oldStep = sessionData.currentGameStep
     cutGameUntilStep(oldStep)
-    let databaseModified = playFenIdsAndAutoExtend([targetFenId], allowExtend: true)
+    let databaseModified = playFenIdsAndAutoExtend([targetFenId], allowExtend: sessionData.autoExtendGameWhenPlayingBoardFen)
 
     // 不前进 currentGameStep — 仅替换下一步分支
     assert(sessionData.currentGameStep < sessionData.currentGame2.count)
