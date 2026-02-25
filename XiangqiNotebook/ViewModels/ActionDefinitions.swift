@@ -224,9 +224,12 @@ class ActionDefinitions {
         }
     }
     
+    /// 当前模式查询闭包，用于快捷键执行时检查 supportedModes
+    var currentMode: (() -> AppMode)?
+
     /// 所有操作的集合
     private var actionMap: [ActionKey: ActionInfo] = [:]
-    
+
     private var toggleActionMap: [ActionKey: ToggleActionInfo] = [:]
   
     
@@ -480,17 +483,24 @@ class ActionDefinitions {
     private func executeAction(_ actionKey: ActionKey) -> Bool {
         // 首先检查是否是普通动作
         if let actionInfo = actionMap[actionKey] {
+            if let currentMode = currentMode?() {
+                guard actionInfo.supportedModes.contains(currentMode) else { return false }
+            }
             actionInfo.action()
             return true
         }
-        
+
         // 然后检查是否是切换动作
         if let toggleInfo = toggleActionMap[actionKey] {
+            if let currentMode = currentMode?() {
+                guard toggleInfo.supportedModes.contains(currentMode) else { return false }
+            }
+            guard toggleInfo.isEnabled() else { return false }
             let currentState = toggleInfo.isOn()
             toggleInfo.action(!currentState)
             return true
         }
-        
+
         return false
     }
     

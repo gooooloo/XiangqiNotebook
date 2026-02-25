@@ -123,17 +123,28 @@ class ViewModel: ObservableObject {
             currentFenPathGroups: currentSession.getCurrentFenPathGroups()
         )
 
-        // 4. 监听 sessionManager 和 session 的变化
+        // 4. 练习模式一致性修复：如果加载的会话处于练习模式，强制隐藏路径
+        if currentSession.sessionData.currentMode == .practice {
+            currentSession.sessionData.showPath = false
+            currentSession.sessionData.showAllNextMoves = false
+        }
+
+        // 5. 监听 sessionManager 和 session 的变化
         setupSessionObservers()
 
-        // 5. 注册所有操作
+        // 6. 注册所有操作
         registerActions()
 
-        // 6. 设置引擎分数的 activeEngineKey（确保加载的分数文件能立即显示）
+        // 7. 设置 actionDefinitions 的当前模式查询
+        actionDefinitions.currentMode = { [weak self] in
+            self?.currentAppMode ?? .normal
+        }
+
+        // 8. 设置引擎分数的 activeEngineKey（确保加载的分数文件能立即显示）
         #if os(macOS)
         Database.shared.activeEngineKey = PikafishService.engineKey
 
-        // 7. App 退出时关闭引擎子进程，防止孤儿进程残留
+        // 9. App 退出时关闭引擎子进程，防止孤儿进程残留
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil, queue: .main
