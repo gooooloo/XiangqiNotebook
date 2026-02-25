@@ -858,8 +858,7 @@ extension Session {
             autoExtendCurrentGame()
 
         case .review:
-            // 复习模式下，显示路径以便观察局面
-            sessionData.showPath = true
+            // 复习模式下，保持用户当前的路径显示设置不变
             sessionData.autoExtendGameWhenPlayingBoardFen = true
             // 清除锁定并恢复完整视图
             sessionData.lockedStep = nil
@@ -1869,7 +1868,6 @@ extension Session {
 extension Session {
     func lockAndHideAfterCurrentStep() {
         sessionData.lockedStep = sessionData.currentGameStep
-        sessionData.showPath = false
         sessionData.autoExtendGameWhenPlayingBoardFen = false
         cutGameUntilStep(sessionData.currentGameStep)
         rebuildDatabaseView()

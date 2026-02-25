@@ -462,12 +462,12 @@ class ViewModel: ObservableObject {
           }
         )
 
-        // 路径相关 - 只在常规模式可用
+        // 路径相关 - 常规模式和复习模式可用
         actionDefinitions.registerToggleAction(
           .toggleShowPath,
           text: "显示路径",
           shortcuts: [.sequence(",s")],
-          supportedModes: [.normal],
+          supportedModes: [.normal, .review],
           isEnabled: { self.session.sessionData.currentMode != .practice },
           isOn: { self.showPath },
           action: { newValue in
@@ -475,12 +475,12 @@ class ViewModel: ObservableObject {
           }
         )
 
-        // 显示所有下一步 - 只在常规模式可用
+        // 显示所有下一步 - 常规模式和复习模式可用
         actionDefinitions.registerToggleAction(
           .toggleShowAllNextMoves,
           text: "显示所有下一步",
           shortcuts: [.sequence(",n")],
-          supportedModes: [.normal],
+          supportedModes: [.normal, .review],
           isEnabled: { self.session.sessionData.currentMode != .practice },
           isOn: { self.showAllNextMoves },
           action: { newValue in
