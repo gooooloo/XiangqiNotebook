@@ -6,6 +6,7 @@ struct MoveListItem {
     let notation: String            // 招法符号，如 "炮二平五", "马8进7"
     let redOpeningMarker: String    // 红方开局库标识，"r" 或空字符串
     let blackOpeningMarker: String  // 黑方开局库标识，"b" 或空字符串
+    let reviewMarker: String        // 复习库标识，"v" 或空字符串
     let markers: String             // 标记符号，如 "++++", "+++"（表示变着数量）
     let move: Move?                 // 对应的 Move 对象
 }
@@ -210,7 +211,7 @@ class GameOperations {
                 // 开始位置：空序号，"开始"作为招法，无标记
                 moveList.append(MoveListItem(number: "", notation: "开始",
                                             redOpeningMarker: "", blackOpeningMarker: "",
-                                            markers: "", move: nil))
+                                            reviewMarker: "", markers: "", move: nil))
                 continue
             }
 
@@ -220,7 +221,7 @@ class GameOperations {
             guard let move = databaseView.move(from: prevFenId, to: curFenId) else {
                 moveList.append(MoveListItem(number: "", notation: "nil_bug",
                                             redOpeningMarker: "", blackOpeningMarker: "",
-                                            markers: "", move: nil))
+                                            reviewMarker: "", markers: "", move: nil))
                 continue
             }
 
@@ -241,6 +242,7 @@ class GameOperations {
             let curFenObject = databaseView.getFenObject(curFenId)
             let redOpeningMarker = curFenObject?.isInRedOpening == true ? "r" : ""
             let blackOpeningMarker = curFenObject?.isInBlackOpening == true ? "b" : ""
+            let reviewMarker = databaseView.reviewItems[curFenId] != nil ? "v" : ""
 
             let moves = databaseView.moves(from: prevFenId)
             let movesLength = moves.count
@@ -257,6 +259,7 @@ class GameOperations {
             moveList.append(MoveListItem(number: number, notation: notation,
                                         redOpeningMarker: redOpeningMarker,
                                         blackOpeningMarker: blackOpeningMarker,
+                                        reviewMarker: reviewMarker,
                                         markers: markers, move: move))
         }
 

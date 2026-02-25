@@ -29,7 +29,12 @@ struct MoveListView: View {
                                 .frame(width: 8, alignment: .center)
                                 .foregroundColor(.secondary)
 
-                            // 第五列：变着标记（左对齐，获得剩余空间）
+                            // 第五列：复习库标识（居中对齐，固定宽度）
+                            Text(item.reviewMarker)
+                                .frame(width: 8, alignment: .center)
+                                .foregroundColor(.secondary)
+
+                            // 第六列：变着标记（左对齐，获得剩余空间）
                             Text(item.markers)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .foregroundColor(.secondary)
