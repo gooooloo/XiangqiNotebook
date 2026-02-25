@@ -70,6 +70,9 @@ struct iPhoneContentView: View {
         .sheet(isPresented: $viewModel.showEditCommentIOS) {
             iPhoneEditCommentView(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showReviewListIOS) {
+            iPhoneReviewListView(viewModel: viewModel, isPresented: $viewModel.showReviewListIOS)
+        }
         .alert(viewModel.globalAlertTitle, isPresented: $viewModel.showingGlobalAlert) {
             Button("确定") { }
         } message: {

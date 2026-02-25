@@ -301,6 +301,32 @@ class Session: ObservableObject {
         return databaseView.bookmarks[Array(sessionData.currentGame2[0...sessionData.currentGameStep])] != nil
     }
     
+    // MARK: - 复习项管理
+
+    var isCurrentFenInReview: Bool {
+        databaseView.reviewItems[currentFenId] != nil
+    }
+
+    var reviewItemList: [(fenId: Int, srsData: SRSData)] {
+        databaseView.reviewItems
+            .map { (fenId: $0.key, srsData: $0.value) }
+            .sorted { $0.srsData.nextReviewDate < $1.srsData.nextReviewDate }
+    }
+
+    func addCurrentFenToReview() {
+        let fenId = currentFenId
+        guard databaseView.reviewItems[fenId] == nil else { return }
+        let gamePath = Array(sessionData.currentGame2[0...sessionData.currentGameStep])
+        let srsData = SRSData(gamePath: gamePath)
+        databaseView.updateReviewItem(for: fenId, srsData: srsData)
+        dataChanged.toggle()
+    }
+
+    func removeReviewItem(fenId: Int) {
+        databaseView.updateReviewItem(for: fenId, srsData: nil)
+        dataChanged.toggle()
+    }
+
     var isCurrentBlackOrientation: Bool {
         sessionData.isBlackOrientation
     }

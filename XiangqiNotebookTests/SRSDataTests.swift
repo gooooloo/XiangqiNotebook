@@ -235,4 +235,88 @@ struct SRSDataTests {
         #expect(ReviewQuality.good.rawValue == 4)
         #expect(ReviewQuality.easy.rawValue == 5)
     }
+
+    // MARK: - Session Review Item Management
+
+    private func createTestSession() -> Session {
+        let testDatabaseData = DatabaseData()
+        let database = Database(testDatabaseData: testDatabaseData)
+
+        let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        let fen1 = FenObject(fen: startFen, fenId: 1)
+        database.databaseData.fenObjects2[1] = fen1
+        database.databaseData.fenToId[startFen] = 1
+
+        let fen2 = FenObject(fen: "fen2 - - 1 1", fenId: 2)
+        database.databaseData.fenObjects2[2] = fen2
+        database.databaseData.fenToId["fen2 - - 1 1"] = 2
+
+        let move1to2 = Move(sourceFenId: 1, targetFenId: 2)
+        fen1.addMoveIfNeeded(move: move1to2)
+        database.databaseData.moveObjects[1] = move1to2
+        database.databaseData.moveToId[[1, 2]] = 1
+
+        let sessionData = SessionData()
+        sessionData.currentGame2 = [1, 2]
+        sessionData.currentGameStep = 1
+        let databaseView = DatabaseView.full(database: database)
+        return try! Session(sessionData: sessionData, databaseView: databaseView)
+    }
+
+    @Test func testAddCurrentFenToReview() {
+        let session = createTestSession()
+        #expect(session.isCurrentFenInReview == false)
+
+        session.addCurrentFenToReview()
+        #expect(session.isCurrentFenInReview == true)
+        #expect(session.reviewItemList.count == 1)
+        #expect(session.reviewItemList[0].fenId == 2)
+        #expect(session.reviewItemList[0].srsData.gamePath == [1, 2])
+    }
+
+    @Test func testDuplicateAddDoesNotCreateDuplicate() {
+        let session = createTestSession()
+        session.addCurrentFenToReview()
+        session.addCurrentFenToReview()
+        #expect(session.reviewItemList.count == 1)
+    }
+
+    @Test func testRemoveReviewItem() {
+        let session = createTestSession()
+        session.addCurrentFenToReview()
+        #expect(session.isCurrentFenInReview == true)
+
+        session.removeReviewItem(fenId: session.currentFenId)
+        #expect(session.isCurrentFenInReview == false)
+        #expect(session.reviewItemList.isEmpty)
+    }
+
+    @Test func testIsCurrentFenInReviewReflectsState() {
+        let session = createTestSession()
+        #expect(session.isCurrentFenInReview == false)
+
+        session.addCurrentFenToReview()
+        #expect(session.isCurrentFenInReview == true)
+
+        session.removeReviewItem(fenId: session.currentFenId)
+        #expect(session.isCurrentFenInReview == false)
+    }
+
+    @Test func testReviewItemListSortedByNextReviewDate() {
+        let session = createTestSession()
+
+        // Add review item for fenId 2 (current)
+        session.addCurrentFenToReview()
+
+        // Manually add another review item with earlier date
+        let earlierDate = Date().addingTimeInterval(-7200)
+        let srs = SRSData(gamePath: [1], nextReviewDate: earlierDate)
+        session.databaseView.updateReviewItem(for: 1, srsData: srs)
+
+        let list = session.reviewItemList
+        #expect(list.count == 2)
+        // fenId 1 should come first (earlier nextReviewDate)
+        #expect(list[0].fenId == 1)
+        #expect(list[1].fenId == 2)
+    }
 }

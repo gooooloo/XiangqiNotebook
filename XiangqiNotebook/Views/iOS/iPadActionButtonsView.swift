@@ -51,6 +51,8 @@ struct iPadActionButtonsView: View {
                     LargeButton(viewModel: viewModel, actionKey: .inputGame)
                     LargeButton(viewModel: viewModel, actionKey: .browseGames)
                     LargeButton(viewModel: viewModel, actionKey: .searchCurrentMove)
+                    LargeButton(viewModel: viewModel, actionKey: .addToReview)
+                    LargeButton(viewModel: viewModel, actionKey: .showReviewList)
                 }
                 .frame(maxWidth: .infinity)
             }

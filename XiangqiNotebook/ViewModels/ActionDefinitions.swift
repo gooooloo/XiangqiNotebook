@@ -76,6 +76,9 @@ class ActionDefinitions {
         case toggleIsCommentEditing
         case toggleAllowAddingNewMoves  // 新增：允许增加新走法
 
+        case addToReview
+        case showReviewList
+        case showReviewListIOS
         case showBookmarkListIOS
         case showMoreActionsIOS
         case showEditCommentIOS

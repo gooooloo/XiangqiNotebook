@@ -112,6 +112,10 @@ struct MacContentView: View {
                 }
             )
         }
+        .sheet(isPresented: $viewModel.showingReviewListView) {
+            ReviewListView(viewModel: viewModel)
+                .frame(minWidth: 400, minHeight: 300)
+        }
         .onKeyPress { press in
             // 如果有任何 sheet 显示，禁用所有快捷键
             if viewModel.isAnySheetPresented {
@@ -281,6 +285,9 @@ struct MacMenuCommands: Commands {
             Divider()
             menuButton(.practiceRedOpening)
             menuButton(.practiceBlackOpening)
+            Divider()
+            menuButton(.addToReview)
+            menuButton(.showReviewList)
         }
     }
 

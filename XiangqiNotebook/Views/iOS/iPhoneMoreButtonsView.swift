@@ -51,8 +51,8 @@ struct iPhoneMoreOptionsView: View {
                         HStack(spacing: 15) {
                             iPhoneButton(viewModel: viewModel, actionKey: .showEditCommentIOS)
                             iPhoneButton(viewModel: viewModel, actionKey: .removeMoveFromGame)
-                            iPhoneButton(viewModel: viewModel, actionKey: nil)
-                            iPhoneButton(viewModel: viewModel, actionKey: nil)
+                            iPhoneButton(viewModel: viewModel, actionKey: .addToReview)
+                            iPhoneButton(viewModel: viewModel, actionKey: .showReviewListIOS)
                         }
                         .frame(maxWidth: .infinity)
 

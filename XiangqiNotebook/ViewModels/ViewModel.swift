@@ -50,6 +50,8 @@ class ViewModel: ObservableObject {
     @Published var showIOSBookMarkListView = false
     @Published var showIOSMoreActionsView = false
     @Published var showEditCommentIOS = false
+    @Published var showingReviewListView = false
+    @Published var showReviewListIOS = false
 
     // 检查是否有任何 sheet 正在显示（用于禁用快捷键）
     var isAnySheetPresented: Bool {
@@ -58,7 +60,8 @@ class ViewModel: ObservableObject {
                showingGameInputView ||
                showingGameBrowserView ||
                showingPGNImportSheet ||
-               showMarkPathView
+               showMarkPathView ||
+               showingReviewListView
     }
 
     // Global alert state
@@ -262,6 +265,16 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.showEditCommentIOS, text: "编辑评论", shortcuts: [.sequence(",e")], supportedModes: [.normal]) { self.showEditCommentIOS = true }
         actionDefinitions.registerAction(.showBookmarkListIOS, text: "书签", shortcuts: [.sequence(",m")]) { self.showIOSBookMarkListView = true }
         actionDefinitions.registerAction(.showMoreActionsIOS, text: "更多", shortcuts: [.sequence(",a")]) { self.showIOSMoreActionsView = true }
+
+        actionDefinitions.registerAction(.addToReview, text: "加入复习库", textIPhone: "复习+", shortcuts: [.sequence(",r")]) {
+            if self.session.isCurrentFenInReview {
+                self.session.removeReviewItem(fenId: self.session.currentFenId)
+            } else {
+                self.session.addCurrentFenToReview()
+            }
+        }
+        actionDefinitions.registerAction(.showReviewList, text: "复习库列表", shortcuts: [.sequence(",v")]) { self.showingReviewListView = true }
+        actionDefinitions.registerAction(.showReviewListIOS, text: "复习库", shortcuts: [.sequence(",v")]) { self.showReviewListIOS = true }
       
         actionDefinitions.registerToggleAction(
           .setFilterNone,
@@ -756,6 +769,11 @@ class ViewModel: ObservableObject {
     /// 加载书签（总是先切换到 Full 视图）
     func loadBookmark(_ game: [Int]) {
         sessionManager.loadBookmark(game)
+    }
+
+    /// 加载复习项（通过 gamePath 导航到对应局面）
+    func loadReviewItem(_ gamePath: [Int]) {
+        sessionManager.loadBookmark(gamePath)
     }
 
     /// 加载棋局（总是先切换到 Full 视图）
@@ -1427,6 +1445,20 @@ class ViewModel: ObservableObject {
     var currentMoveBadReason: String? { session.currentMoveBadReason }
     var currentCombinedComment: String? { session.currentCombinedComment }
     var bookmarkList: [(game: [Int], name: String)] { session.bookmarkList }
+    var isCurrentFenInReview: Bool { session.isCurrentFenInReview }
+    var reviewItemList: [(fenId: Int, srsData: SRSData)] { session.reviewItemList }
+    func removeReviewItem(fenId: Int) { session.removeReviewItem(fenId: fenId) }
+    func reviewItemDescription(fenId: Int) -> String {
+        if let fenObj = session.databaseView.getFenObject(fenId),
+           let comment = fenObj.comment, !comment.isEmpty {
+            return comment
+        }
+        if let fenObj = session.databaseView.getFenObject(fenId) {
+            let fen = fenObj.fen
+            return String(fen.prefix(20))
+        }
+        return "fenId: \(fenId)"
+    }
     var currentGameMoveListDisplay: [MoveListItem] { session.currentGameMoveList }
     var currentGameVariantListDisplay: [(moveString: String, move: Move)] {
         session.currentGameVariantList.sorted { $0.moveString < $1.moveString }

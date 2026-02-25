@@ -93,6 +93,10 @@ struct iPadContentView: View {
                 }
             )
         }
+        .sheet(isPresented: $viewModel.showingReviewListView) {
+            ReviewListView(viewModel: viewModel)
+                .frame(minWidth: 400, minHeight: 300)
+        }
     }
 }
 
