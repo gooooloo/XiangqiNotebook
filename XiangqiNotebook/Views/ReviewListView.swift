@@ -53,7 +53,6 @@ struct ReviewListView: View {
             }
         }
         .padding(8)
-        .border(Color.gray)
     }
 
     private func dueStatusText(_ srsData: SRSData) -> String {

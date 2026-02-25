@@ -52,6 +52,11 @@ class ViewModel: ObservableObject {
     @Published var showEditCommentIOS = false
     @Published var showingReviewListView = false
     @Published var showReviewListIOS = false
+    @Published var showReviewModeIOS = false
+
+    // 复习模式状态
+    @Published private(set) var reviewQueue: [(fenId: Int, srsData: SRSData)] = []
+    @Published private(set) var currentReviewIndex = 0
 
     // 检查是否有任何 sheet 正在显示（用于禁用快捷键）
     var isAnySheetPresented: Bool {
@@ -230,10 +235,10 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.searchCurrentMove, text: "搜索此步", shortcuts: [.sequence(",/")], supportedModes: [.normal]) { self.showSearchResultsWindow() }
         actionDefinitions.registerAction(.referenceBoard, text: "参考棋谱", shortcuts: [.modified([.command], "x")], supportedModes: [.normal]) { self.showReferenceBoard() }
 
-        actionDefinitions.registerAction(.practiceNewGame, text: "练习新局", textIPhone: "练习", shortcuts: [.single("P")], supportedModes: ActionDefinitions.allModes) { self.practiceNewGame() }
-        actionDefinitions.registerAction(.focusedPractice, text: "练习本局", textIPhone: "专练", shortcuts: [.single("Z")], supportedModes: ActionDefinitions.allModes) { self.startFocusedPractice() }
-        actionDefinitions.registerAction(.practiceRedOpening, text: "练习红方开局", supportedModes: ActionDefinitions.allModes) { self.practiceRedOpening() }
-        actionDefinitions.registerAction(.practiceBlackOpening, text: "练习黑方开局", supportedModes: ActionDefinitions.allModes) { self.practiceBlackOpening() }
+        actionDefinitions.registerAction(.practiceNewGame, text: "练习新局", textIPhone: "练习", shortcuts: [.single("P")], supportedModes: [.normal, .practice]) { self.practiceNewGame() }
+        actionDefinitions.registerAction(.focusedPractice, text: "练习本局", textIPhone: "专练", shortcuts: [.single("Z")], supportedModes: [.normal, .practice]) { self.startFocusedPractice() }
+        actionDefinitions.registerAction(.practiceRedOpening, text: "练习红方开局", supportedModes: [.normal, .practice]) { self.practiceRedOpening() }
+        actionDefinitions.registerAction(.practiceBlackOpening, text: "练习黑方开局", supportedModes: [.normal, .practice]) { self.practiceBlackOpening() }
         actionDefinitions.registerAction(.playRandomNextMove, text: "随机走子", textIPhone: "随机", shortcuts: [.sequence(",r")], supportedModes: [.practice]) { self.playRandomNextMove() }
         actionDefinitions.registerAction(.hintNextMove, text: "提示", textIPhone: "提示", supportedModes: [.practice]) { self.playRandomNextMove() }
 
@@ -1459,6 +1464,68 @@ class ViewModel: ObservableObject {
         }
         return "fenId: \(fenId)"
     }
+
+    // MARK: - 复习模式
+
+    var isInReviewMode: Bool { currentAppMode == .review }
+
+    /// 复习流程进行中（队列非空且未完成）
+    var isReviewingInProgress: Bool {
+        !reviewQueue.isEmpty && currentReviewIndex < reviewQueue.count
+    }
+
+    /// 复习全部完成
+    var isReviewComplete: Bool {
+        !reviewQueue.isEmpty && currentReviewIndex >= reviewQueue.count
+    }
+
+    /// 复习进度显示
+    var reviewProgress: String {
+        "\(min(currentReviewIndex + 1, reviewQueue.count))/\(reviewQueue.count)"
+    }
+
+    /// 启动复习：筛选到期项，构建队列，导航到第一项
+    func startReview() {
+        let dueItems = session.dueReviewItems
+        reviewQueue = dueItems
+        currentReviewIndex = 0
+        if let first = dueItems.first, let gamePath = first.srsData.gamePath {
+            loadReviewItem(gamePath)
+        }
+    }
+
+    /// 提交复习评分，前进到下一项
+    func submitReviewRating(_ quality: ReviewQuality) {
+        guard isReviewingInProgress else { return }
+        let item = reviewQueue[currentReviewIndex]
+        session.submitReviewRating(fenId: item.fenId, quality: quality)
+        currentReviewIndex += 1
+        if isReviewingInProgress {
+            let nextItem = reviewQueue[currentReviewIndex]
+            if let gamePath = nextItem.srsData.gamePath {
+                loadReviewItem(gamePath)
+            }
+        }
+    }
+
+    /// 跳过当前复习项
+    func skipCurrentReviewItem() {
+        guard isReviewingInProgress else { return }
+        currentReviewIndex += 1
+        if isReviewingInProgress {
+            let nextItem = reviewQueue[currentReviewIndex]
+            if let gamePath = nextItem.srsData.gamePath {
+                loadReviewItem(gamePath)
+            }
+        }
+    }
+
+    /// 退出复习模式，重置状态
+    func exitReviewMode() {
+        reviewQueue = []
+        currentReviewIndex = 0
+        setMode(.normal)
+    }
     var currentGameMoveListDisplay: [MoveListItem] { session.currentGameMoveList }
     var currentGameVariantListDisplay: [(moveString: String, move: Move)] {
         session.currentGameVariantList.sorted { $0.moveString < $1.moveString }
@@ -1674,6 +1741,19 @@ class ViewModel: ObservableObject {
 
     func setMode(_ mode: AppMode) {
         session.setMode(mode)
+        if mode == .review {
+            startReview()
+            #if os(iOS)
+            // iPhone 上以 sheet 形式展示复习面板
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                showReviewModeIOS = true
+            }
+            #endif
+        } else {
+            // 退出复习模式时重置队列
+            reviewQueue = []
+            currentReviewIndex = 0
+        }
     }
 
     /// 查询指定 ActionKey 在当前模式下是否可见

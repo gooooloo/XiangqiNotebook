@@ -33,21 +33,29 @@ struct TogglesView: View {
             .padding(8) // 添加内边距，让内容不贴边
             .border(Color.gray)
 
-            // 棋盘操作
-            VStack(alignment: .leading) {
-                MyToggle(viewModel: viewModel, actionKey: .flip)
-                MyToggle(viewModel: viewModel, actionKey: .flipHorizontal)
-                MyToggle(viewModel: viewModel, actionKey: .toggleAutoExtendGameWhenPlayingBoardFen)
-                MyToggle(viewModel: viewModel, actionKey: .toggleCanNavigateBeforeLockedStep)
-                MyToggle(viewModel: viewModel, actionKey: .toggleShowPath)
-                MyToggle(viewModel: viewModel, actionKey: .toggleShowAllNextMoves)
-                MyToggle(viewModel: viewModel, actionKey: .togglePracticeMode)
-                MyToggle(viewModel: viewModel, actionKey: .toggleIsCommentEditing)
-                MyToggle(viewModel: viewModel, actionKey: .toggleAllowAddingNewMoves)
-            }
-            .padding(8) // 添加内边距，让内容不贴边
-            .border(Color.gray)
+            BoardOperationTogglesView(viewModel: viewModel)
         }
+    }
+}
+
+/// 棋盘操作区域（独立组件，复习模式下也显示）
+struct BoardOperationTogglesView: View {
+    @ObservedObject var viewModel: ViewModel
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            MyToggle(viewModel: viewModel, actionKey: .flip)
+            MyToggle(viewModel: viewModel, actionKey: .flipHorizontal)
+            MyToggle(viewModel: viewModel, actionKey: .toggleAutoExtendGameWhenPlayingBoardFen)
+            MyToggle(viewModel: viewModel, actionKey: .toggleCanNavigateBeforeLockedStep)
+            MyToggle(viewModel: viewModel, actionKey: .toggleShowPath)
+            MyToggle(viewModel: viewModel, actionKey: .toggleShowAllNextMoves)
+            MyToggle(viewModel: viewModel, actionKey: .togglePracticeMode)
+            MyToggle(viewModel: viewModel, actionKey: .toggleIsCommentEditing)
+            MyToggle(viewModel: viewModel, actionKey: .toggleAllowAddingNewMoves)
+        }
+        .padding(8)
+        .border(Color.gray)
     }
 }
 

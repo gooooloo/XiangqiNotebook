@@ -327,6 +327,22 @@ class Session: ObservableObject {
         dataChanged.toggle()
     }
 
+    /// 返回已到期的复习项，按 nextReviewDate 升序排列
+    var dueReviewItems: [(fenId: Int, srsData: SRSData)] {
+        databaseView.reviewItems
+            .filter { $0.value.isDue }
+            .map { (fenId: $0.key, srsData: $0.value) }
+            .sorted { $0.srsData.nextReviewDate < $1.srsData.nextReviewDate }
+    }
+
+    /// 提交复习评分，更新 SRS 数据并持久化
+    func submitReviewRating(fenId: Int, quality: ReviewQuality) {
+        guard let srsData = databaseView.reviewItems[fenId] else { return }
+        srsData.review(quality: quality)
+        databaseView.updateReviewItem(for: fenId, srsData: srsData)
+        dataChanged.toggle()
+    }
+
     var isCurrentBlackOrientation: Bool {
         sessionData.isBlackOrientation
     }
@@ -822,6 +838,12 @@ extension Session {
             // 非练习模式下，显示路径
             sessionData.showPath = true
             // 自动扩展游戏
+            autoExtendCurrentGame()
+
+        case .review:
+            // 复习模式下，显示路径以便观察局面
+            sessionData.showPath = true
+            sessionData.autoExtendGameWhenPlayingBoardFen = true
             autoExtendCurrentGame()
         }
 
