@@ -510,7 +510,7 @@ class ViewModel: ObservableObject {
           .toggleIsCommentEditing,
           text: "编辑评论区",
           shortcuts: [.single("c")],
-          supportedModes: [.normal],
+          supportedModes: [.normal, .review],
           isEnabled: { true },
           isOn: { self.isCommentEditing },
           action: { newValue in
