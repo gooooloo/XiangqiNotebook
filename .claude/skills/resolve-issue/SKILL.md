@@ -6,6 +6,10 @@ argument-hint: [issue-number]
 
 Guide the full lifecycle of resolving a GitHub issue — from selection through planning, implementation, PR creation, code review, to final closure.
 
+## Important Rules
+
+- **Never commit or push directly to the `main` branch.** Always create a feature branch (e.g. `fix/xxx`, `feature/xxx`) before making any changes.
+
 ## Steps
 
 ### 1. Select GitHub Issue
@@ -20,7 +24,8 @@ Guide the full lifecycle of resolving a GitHub issue — from selection through 
 - Design an implementation approach
 - Present the plan for user approval
 
-### 3. Implement
+### 3. Create Feature Branch & Implement
+- Create a descriptive branch name based on the issue (e.g. `fix/xxx`, `feature/xxx`) and switch to it **before making any code changes**
 - Execute the approved plan
 - Run tests to verify changes
 - Ask the user to verify the changes look correct
@@ -30,7 +35,6 @@ Guide the full lifecycle of resolving a GitHub issue — from selection through 
 - Run `git status` to see all changed files (never use `-uall`)
 - Run `git diff` to see staged and unstaged changes
 - Run `git log --oneline -5` to see recent commit message style
-- Create a descriptive branch name based on the changes (e.g. `fix/xxx`, `feature/xxx`)
 - Stage only the relevant files by name (do NOT use `git add -A` or `git add .`)
 - Exclude unrelated changes (e.g. local Xcode config like `DEVELOPMENT_TEAM`)
 - Write a detailed commit message:
