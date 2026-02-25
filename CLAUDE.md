@@ -133,3 +133,7 @@ xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -dest
 # 运行单个测试方法
 xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName/testMethodName
 ```
+
+## Git 提交禁止事项
+
+- **禁止提交 `DEVELOPMENT_TEAM`**: 绝不能将 `DEVELOPMENT_TEAM` 设置提交到 git。如果 `project.pbxproj` 中出现 `DEVELOPMENT_TEAM` 的改动，必须在提交前 revert 该行。

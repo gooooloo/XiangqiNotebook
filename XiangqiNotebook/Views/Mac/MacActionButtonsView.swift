@@ -6,6 +6,10 @@ import AppKit
 struct MacActionButtonsView: View {
     @ObservedObject var viewModel: ViewModel
 
+    private var isPractice: Bool {
+        viewModel.currentAppMode == .practice
+    }
+
     /// 第一行按钮定义
     private var row1Keys: [ActionDefinitions.ActionKey?] {
         [
@@ -14,45 +18,31 @@ struct MacActionButtonsView: View {
             .stepForward,
             .toEnd,
             .nextVariant,
-            (viewModel.currentAppMode == .practice && viewModel.isMyTurn) ? .hintNextMove : .playRandomNextMove,
+            (isPractice && viewModel.isMyTurn) ? .hintNextMove : .playRandomNextMove,
+            .random,
             .practiceNewGame,
             .reviewThisGame,
             .focusedPractice,
-            .practiceRedOpening,
-            .practiceBlackOpening,
-            .removeMoveFromGame,
+            isPractice ? nil : .practiceRedOpening,
+            isPractice ? nil : .practiceBlackOpening,
+            isPractice ? .save : nil,
         ]
     }
 
-    /// 第二行按钮定义
-    private let row2Keys: [ActionDefinitions.ActionKey?] = [
-        .queryScore,
-        .queryEngineScore,
-        .queryAllEngineScores,
-        .openYunku,
-        .fix,
-        .markPath,
-        .referenceBoard,
-        .previousPath,
-        .nextPath,
-        .random,
-        .jumpToNextOpeningGap,
-        .autoAddToOpening,
-    ]
-
-    /// 第三行按钮定义
-    private let row3Keys: [ActionDefinitions.ActionKey?] = [
-        .checkDataVersion,
-        .save,
-        .backup,
-        .restore,
-        .deleteMove,
-        .deleteScore,
-        .inputGame,
-        .browseGames,
-        .importPGN,
-        .searchCurrentMove,
-    ]
+    /// 第二行按钮定义（仅普通模式可见）
+    private var row2Keys: [ActionDefinitions.ActionKey?] {
+        [
+            .queryScore,
+            .queryEngineScore,
+            .queryAllEngineScores,
+            .openYunku,
+            .markPath,
+            .referenceBoard,
+            .browseGames,
+            .importPGN,
+            isPractice ? nil : .save,
+        ]
+    }
 
     /// 检查按钮是否可见
     private func isVisible(_ key: ActionDefinitions.ActionKey?) -> Bool {
@@ -70,7 +60,7 @@ struct MacActionButtonsView: View {
 
     /// 最大可见按钮数量
     private var maxVisibleCount: Int {
-        max(visibleKeys(for: row1Keys).count, visibleKeys(for: row2Keys).count, visibleKeys(for: row3Keys).count)
+        max(visibleKeys(for: row1Keys).count, visibleKeys(for: row2Keys).count)
     }
 
     /// 渲染一行按钮
@@ -96,8 +86,9 @@ struct MacActionButtonsView: View {
     var body: some View {
         VStack(alignment: .leading) {
             buttonRow(keys: row1Keys)
-            buttonRow(keys: row2Keys)
-            buttonRow(keys: row3Keys)
+            if !visibleKeys(for: row2Keys).isEmpty {
+                buttonRow(keys: row2Keys)
+            }
         }
         .padding(8)
         .border(Color.gray)

@@ -178,53 +178,31 @@ struct MacMenuCommands: Commands {
     @FocusedObject private var viewModel: ViewModel?
 
     var body: some Commands {
-        CommandMenu("操作") {
-            menuButton(.toStart)
-            menuButton(.stepBack)
-            menuButton(.stepForward)
-            menuButton(.toEnd)
+        // 文件 menu
+        CommandGroup(after: .saveItem) {
             Divider()
-            menuButton(.nextVariant)
-            menuButton(.previousPath)
-            menuButton(.nextPath)
+            menuButton(.save)
+            Divider()
+            menuButton(.backup)
+            menuButton(.restore)
+            Divider()
+            menuButton(.checkDataVersion)
+            menuButton(.importPGN)
+            menuButton(.inputGame)
+            menuButton(.browseGames)
+        }
+
+        // 编辑 menu
+        CommandGroup(after: .undoRedo) {
             Divider()
             menuButton(.deleteMove)
             menuButton(.removeMoveFromGame)
             menuButton(.deleteScore)
             Divider()
-            menuButton(.queryScore)
-            menuButton(.queryEngineScore)
-            menuButton(.queryAllEngineScores)
-            Divider()
-            menuButton(.markPath)
-            menuButton(.referenceBoard)
-            menuButton(.openYunku)
-            menuButton(.searchCurrentMove)
-            Divider()
-            menuButton(.playRandomNextMove)
-            menuButton(.hintNextMove)
-            menuButton(.practiceNewGame)
-            menuButton(.reviewThisGame)
-            menuButton(.focusedPractice)
-            menuButton(.practiceRedOpening)
-            menuButton(.practiceBlackOpening)
-            menuButton(.stepLimitation)
-            Divider()
-            menuButton(.autoAddToOpening)
-            menuButton(.jumpToNextOpeningGap)
-            Divider()
-            menuButton(.save)
-            menuButton(.backup)
-            menuButton(.restore)
-            menuButton(.checkDataVersion)
-            menuButton(.importPGN)
-            menuButton(.inputGame)
-            menuButton(.browseGames)
-            Divider()
             menuButton(.fix)
-            menuButton(.random)
         }
 
+        // 显示 menu
         CommandGroup(after: .toolbar) {
             Divider()
             menuToggle(.flip)
@@ -233,18 +211,17 @@ struct MacMenuCommands: Commands {
             menuToggle(.toggleShowPath)
             menuToggle(.toggleShowAllNextMoves)
             Divider()
-            menuToggle(.togglePracticeMode)
-            menuToggle(.toggleLock)
-            menuToggle(.toggleCanNavigateBeforeLockedStep)
-            Divider()
             menuToggle(.toggleIsCommentEditing)
             menuToggle(.toggleAllowAddingNewMoves)
             menuToggle(.toggleAutoExtendGameWhenPlayingBoardFen)
             Divider()
-            menuToggle(.toggleBookmark)
-            menuToggle(.inRedOpening)
-            menuToggle(.inBlackOpening)
-            Divider()
+            menuToggle(.togglePracticeMode)
+            menuToggle(.toggleLock)
+            menuToggle(.toggleCanNavigateBeforeLockedStep)
+        }
+
+        // 筛选 menu
+        CommandMenu("筛选") {
             menuToggle(.setFilterNone)
             Divider()
             menuToggle(.toggleFilterRedOpeningOnly)
@@ -255,6 +232,55 @@ struct MacMenuCommands: Commands {
             menuToggle(.setFilterFocusedPractice)
             menuToggle(.toggleFilterSpecificGame)
             menuToggle(.toggleFilterSpecificBook)
+            Divider()
+            menuButton(.stepLimitation)
+            Divider()
+            menuToggle(.toggleBookmark)
+            menuToggle(.inRedOpening)
+            menuToggle(.inBlackOpening)
+        }
+
+        // 导航 menu
+        CommandMenu("导航") {
+            menuButton(.toStart)
+            menuButton(.stepBack)
+            menuButton(.stepForward)
+            menuButton(.toEnd)
+            Divider()
+            menuButton(.nextVariant)
+            menuButton(.previousPath)
+            menuButton(.nextPath)
+            Divider()
+            menuButton(.random)
+        }
+
+        // 分析 menu
+        CommandMenu("分析") {
+            menuButton(.queryScore)
+            menuButton(.queryEngineScore)
+            menuButton(.queryAllEngineScores)
+            Divider()
+            menuButton(.referenceBoard)
+            menuButton(.openYunku)
+            menuButton(.searchCurrentMove)
+            Divider()
+            menuButton(.markPath)
+            Divider()
+            menuButton(.autoAddToOpening)
+            menuButton(.jumpToNextOpeningGap)
+        }
+
+        // 练习 menu
+        CommandMenu("练习") {
+            menuButton(.playRandomNextMove)
+            menuButton(.hintNextMove)
+            Divider()
+            menuButton(.practiceNewGame)
+            menuButton(.reviewThisGame)
+            menuButton(.focusedPractice)
+            Divider()
+            menuButton(.practiceRedOpening)
+            menuButton(.practiceBlackOpening)
         }
     }
 
