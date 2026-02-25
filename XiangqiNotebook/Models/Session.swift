@@ -1864,8 +1864,15 @@ extension Session {
     }
 }
 
-// MARK: - 锁定当前步骤并隐藏后续
+// MARK: - 锁定与解锁
 extension Session {
+    /// 清除锁定状态并恢复完整视图
+    func unlockIfNeeded() {
+        guard sessionData.lockedStep != nil else { return }
+        sessionData.lockedStep = nil
+        rebuildDatabaseView()
+    }
+
     func lockAndHideAfterCurrentStep() {
         sessionData.lockedStep = sessionData.currentGameStep
         sessionData.autoExtendGameWhenPlayingBoardFen = false

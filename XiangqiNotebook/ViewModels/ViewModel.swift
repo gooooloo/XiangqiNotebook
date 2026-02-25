@@ -778,6 +778,8 @@ class ViewModel: ObservableObject {
 
     /// 加载复习项（通过 gamePath 导航到对应局面，锁定已走步骤并隐藏后续）
     func loadReviewItem(_ gamePath: [Int]) {
+        // 先清除上一次复习项的锁定，确保 loadBookmark 在完整视图上执行
+        session.unlockIfNeeded()
         sessionManager.loadBookmark(gamePath)
         session.lockAndHideAfterCurrentStep()
     }
