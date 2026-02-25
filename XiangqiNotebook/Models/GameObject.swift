@@ -168,10 +168,18 @@ class BookObject: Identifiable, Codable {
     }
 }
 
-class GameResultStatistics: Codable {
+class GameResultStatistics: Codable, Equatable {
     var redWin: Int = 0
     var blackWin: Int = 0
     var draw: Int = 0
     var notFinished: Int = 0
     var unknown: Int = 0
+
+    static func == (lhs: GameResultStatistics, rhs: GameResultStatistics) -> Bool {
+        lhs.redWin == rhs.redWin &&
+        lhs.blackWin == rhs.blackWin &&
+        lhs.draw == rhs.draw &&
+        lhs.notFinished == rhs.notFinished &&
+        lhs.unknown == rhs.unknown
+    }
 }

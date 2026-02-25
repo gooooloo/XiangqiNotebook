@@ -1756,6 +1756,77 @@ extension Session {
         return id
     }
 
+    // MARK: - 重新统计实战统计
+
+    func recalculateGameStatistics(database: Database? = nil) {
+        let db = database ?? Database.shared
+        let fullView = DatabaseView.full(database: db)
+        var newRedStats: [Int: GameResultStatistics] = [:]
+        var newBlackStats: [Int: GameResultStatistics] = [:]
+
+        for game in fullView.getAllGameObjects() {
+            guard game.iAmRed || game.iAmBlack else { continue }
+
+            // 收集棋局涉及的所有 fenId
+            var fenIds = Set<Int>()
+            if let startFenId = game.startingFenId {
+                fenIds.insert(startFenId)
+            }
+            for moveId in game.moveIds {
+                if let move = fullView.move(id: moveId) {
+                    fenIds.insert(move.sourceFenId)
+                    if let targetFenId = move.targetFenId {
+                        fenIds.insert(targetFenId)
+                    }
+                }
+            }
+
+            // 累加统计
+            for fenId in fenIds {
+                if game.iAmRed {
+                    let stats = newRedStats[fenId] ?? GameResultStatistics()
+                    incrementStatistics(stats, gameResult: game.gameResult)
+                    newRedStats[fenId] = stats
+                }
+                if game.iAmBlack {
+                    let stats = newBlackStats[fenId] ?? GameResultStatistics()
+                    incrementStatistics(stats, gameResult: game.gameResult)
+                    newBlackStats[fenId] = stats
+                }
+            }
+        }
+
+        // 比较并更新
+        let oldRedStats = fullView.myRealRedGameStatisticsByFenId
+        let oldBlackStats = fullView.myRealBlackGameStatisticsByFenId
+        let redChanged = !statisticsDictionariesEqual(oldRedStats, newRedStats)
+        let blackChanged = !statisticsDictionariesEqual(oldBlackStats, newBlackStats)
+
+        if redChanged || blackChanged {
+            db.databaseData.myRealRedGameStatisticsByFenId = newRedStats
+            db.databaseData.myRealBlackGameStatisticsByFenId = newBlackStats
+            notifyDataChanged(markDatabaseDirty: true)
+        }
+    }
+
+    private func incrementStatistics(_ stats: GameResultStatistics, gameResult: GameResult) {
+        switch gameResult {
+        case .redWin:      stats.redWin += 1
+        case .blackWin:    stats.blackWin += 1
+        case .draw:        stats.draw += 1
+        case .notFinished: stats.notFinished += 1
+        case .unknown:     stats.unknown += 1
+        }
+    }
+
+    private func statisticsDictionariesEqual(_ lhs: [Int: GameResultStatistics], _ rhs: [Int: GameResultStatistics]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        for (key, lhsValue) in lhs {
+            guard let rhsValue = rhs[key], lhsValue == rhsValue else { return false }
+        }
+        return true
+    }
+
     func deleteGame(_ gameId: UUID) {
         // 删除前先扣减实战统计（使用未过滤的视图获取棋局信息）
         let fullView = DatabaseView.full(database: Database.shared)
