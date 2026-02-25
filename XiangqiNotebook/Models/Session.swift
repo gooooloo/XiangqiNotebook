@@ -121,7 +121,12 @@ class Session: ObservableObject {
 
         return databaseView.moves(from: prevFenId)
     }
-    
+
+    var currentNextMovesList: [(moveString: String, move: Move)] {
+        let moves = databaseView.moves(from: currentFenId)
+        return moves.map { (databaseView.formatMove($0, isHorizontalFlipped: sessionData.isHorizontalFlipped), $0) }
+    }
+
     var currentFenComment: String? {
         currentFenObject.comment
     }
@@ -1107,6 +1112,23 @@ extension Session {
     let databaseModified = playFenIdsAndAutoExtend([targetFenId!], allowExtend: sessionData.autoExtendGameWhenPlayingBoardFen)
 
     sessionData.currentGameStep = oldStep // Invariant: we always at the same step when playing variants
+    assert(sessionData.currentGameStep < sessionData.currentGame2.count)
+
+    notifyDataChanged(markDatabaseDirty: databaseModified, markSessionDirty: true)
+  }
+
+  func playNextMove(_ move: Move) {
+    guard let targetFenId = move.targetFenId else { return }
+    guard databaseView.containsFenId(targetFenId) else { return }
+    guard sessionData.currentGameStep >= (sessionData.lockedStep ?? 0) else { return }
+
+    let oldStep = sessionData.currentGameStep
+    cutGameUntilStep(oldStep)
+    let databaseModified = playFenIdsAndAutoExtend([targetFenId], allowExtend: sessionData.autoExtendGameWhenPlayingBoardFen)
+
+    if oldStep + 1 < sessionData.currentGame2.count {
+        sessionData.currentGameStep = oldStep + 1
+    }
     assert(sessionData.currentGameStep < sessionData.currentGame2.count)
 
     notifyDataChanged(markDatabaseDirty: databaseModified, markSessionDirty: true)

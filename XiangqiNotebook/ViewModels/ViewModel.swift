@@ -1544,7 +1544,16 @@ class ViewModel: ObservableObject {
     var currentGameVariantListDisplay: [(moveString: String, move: Move)] {
         session.currentGameVariantList.sorted { $0.moveString < $1.moveString }
     }
-    
+
+    var currentNextMovesListDisplay: [(moveString: String, move: Move)] {
+        session.currentNextMovesList.sorted { $0.moveString < $1.moveString }
+    }
+
+    func playNextMove(_ move: Move) {
+        session.playNextMove(move)
+        queryFenScoreSilentlyIfNeeded()
+    }
+
     // 路径相关的属性
     var currentPathIndexDisplay: Int? { session.currentPathIndexDisplay }
     var totalPathsCount: Int? { session.totalPathsCount }

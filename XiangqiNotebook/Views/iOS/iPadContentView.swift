@@ -40,8 +40,12 @@ struct iPadContentView: View {
                     VStack {
                         MoveListView(viewModel: viewModel)
                             .frame(width: geometry.size.width * 0.2)
+                        // 变着列表 + 下一步招法列表（左右并排）
+                    HStack(spacing: 0) {
                         VariantListView(viewModel: viewModel)
-                            .frame(height: geometry.size.height * 0.2)
+                        NextMovesListView(viewModel: viewModel)
+                    }
+                    .frame(height: geometry.size.height * 0.25)
                     }
                     .frame(width: geometry.size.width * 0.2)
                     
