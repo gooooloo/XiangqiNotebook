@@ -854,8 +854,9 @@ extension Session {
         case .normal:
             // 非练习模式下，自动拓展
             sessionData.autoExtendGameWhenPlayingBoardFen = true
-            // 非练习模式下，显示路径
+            // 非练习模式下，显示路径和所有下一步
             sessionData.showPath = true
+            sessionData.showAllNextMoves = true
             // 清除锁定并恢复完整视图
             sessionData.lockedStep = nil
             rebuildDatabaseView()
