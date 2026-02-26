@@ -53,6 +53,7 @@ struct BoardOperationTogglesView: View {
             MyToggle(viewModel: viewModel, actionKey: .togglePracticeMode)
             MyToggle(viewModel: viewModel, actionKey: .toggleIsCommentEditing)
             MyToggle(viewModel: viewModel, actionKey: .toggleAllowAddingNewMoves)
+            MyToggle(viewModel: viewModel, actionKey: .toggleConsecutiveMoveMode)
         }
         .padding(8)
         .border(Color.gray)

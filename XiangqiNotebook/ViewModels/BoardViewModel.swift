@@ -10,6 +10,7 @@ class BoardViewModel: Equatable {
     private var pieceViewModels: [PieceViewModel] = createPieceViewModels()
     private var currentFenPathGroups: [PathGroup]
     private var nextMovesPathGroups: [PathGroup]
+    private var allowConsecutiveMoves: Bool = false
 
     static func == (lhs: BoardViewModel, rhs: BoardViewModel) -> Bool {
         return lhs.pieceViewModels == rhs.pieceViewModels
@@ -76,9 +77,15 @@ class BoardViewModel: Equatable {
     }
 
     public func isPieceBelongToCurrentPlayer(_ piece: String) -> Bool {
+        // 连走模式下允许移动任意棋子，不受走棋方限制
+        if allowConsecutiveMoves { return true }
         let currentTurn = getCurrentTurn()
-        return (currentTurn == "r" && piece.hasPrefix("r")) || 
+        return (currentTurn == "r" && piece.hasPrefix("r")) ||
                (currentTurn == "b" && piece.hasPrefix("b"))
+    }
+
+    public func updateAllowConsecutiveMoves(_ allow: Bool) {
+        self.allowConsecutiveMoves = allow
     }
 
     private static func createPieceViewModels() -> [PieceViewModel] {

@@ -47,6 +47,13 @@ internal class Database: ObservableObject {
     }
     #endif
 
+    /// 创建临时（非持久化）数据库实例，用于连走模式等临时会话
+    /// 此实例不会自动保存到磁盘，退出后数据丢弃
+    internal init(temporaryFrom data: DatabaseData) {
+        self.databaseData = data
+        print("✅ Database: 创建临时数据库实例")
+    }
+
     // MARK: - Data Mutation
 
     /// 标记数据已修改

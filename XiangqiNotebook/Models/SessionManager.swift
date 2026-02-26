@@ -5,15 +5,21 @@ import Combine
 class SessionManager: ObservableObject {
     @Published private(set) var mainSession: Session
     @Published private(set) var practiceSession: Session?
+    @Published private(set) var consecutiveMoveSession: Session?
 
-    /// 当前活跃的 Session（practiceSession 优先，否则 mainSession）
+    /// 当前活跃的 Session（practiceSession 优先，再是 consecutiveMoveSession，否则 mainSession）
     var currentSession: Session {
-        practiceSession ?? mainSession
+        practiceSession ?? consecutiveMoveSession ?? mainSession
     }
 
     /// 是否处于专注练习模式
     var isInFocusedPractice: Bool {
         practiceSession != nil
+    }
+
+    /// 是否处于连走模式
+    var isInConsecutiveMoveMode: Bool {
+        consecutiveMoveSession != nil
     }
 
     // MARK: - 初始化
@@ -74,9 +80,12 @@ class SessionManager: ObservableObject {
         // 注意：即使目标 filters 与当前 filters 相同，也不能快速退出。
         // 因为底层数据可能已变化（如用户将当前位置移出开局库），需要重新构建 DatabaseView 并裁剪游戏。
 
-        // 0. 如果当前在 focusedPractice 模式，先退出
+        // 0. 如果当前在 focusedPractice 或连走模式，先退出
         if isInFocusedPractice {
             exitFocusedPractice()
+        }
+        if isInConsecutiveMoveMode {
+            exitConsecutiveMoveMode()
         }
 
         // 1. 从当前 mainSession 复制状态到新的 SessionData
@@ -267,6 +276,63 @@ class SessionManager: ObservableObject {
 
         // 清除临时 session
         practiceSession = nil
+
+        // 触发 objectWillChange
+        objectWillChange.send()
+    }
+
+    // MARK: - 连走模式
+
+    /// 进入连走模式
+    /// 创建一个临时会话，从当前局面开始，不与主数据库关联，退出后数据丢弃
+    func startConsecutiveMoveMode() {
+        // 如果当前在专注练习模式，先退出
+        if isInFocusedPractice {
+            exitFocusedPractice()
+        }
+
+        // 获取当前局面的 FEN（连走模式从此局面开始）
+        let currentFen = mainSession.currentFen
+
+        // 创建临时数据库（仅包含当前局面，不与主数据库关联）
+        let tempData = DatabaseData()
+        let startFenId = 1
+        let fenObject = FenObject(fen: currentFen, fenId: startFenId)
+        tempData.fenObjects2[startFenId] = fenObject
+        tempData.fenToId[currentFen] = startFenId
+        let tempDatabase = Database(temporaryFrom: tempData)
+
+        // 创建临时 DatabaseView（全库视图，使用临时数据库）
+        let tempDatabaseView = DatabaseView.full(database: tempDatabase)
+
+        // 创建 SessionData（从当前会话继承朝向等视图设置）
+        let sessionData = SessionData()
+        sessionData.currentGame2 = [startFenId]
+        sessionData.currentGameStep = 0
+        sessionData.allowAddingNewMoves = true
+        sessionData.isBlackOrientation = mainSession.sessionData.isBlackOrientation
+        sessionData.isHorizontalFlipped = mainSession.sessionData.isHorizontalFlipped
+        sessionData.showPath = false
+        sessionData.showAllNextMoves = false
+
+        // 创建连走会话
+        do {
+            self.consecutiveMoveSession = try Session(sessionData: sessionData, databaseView: tempDatabaseView)
+        } catch {
+            print("❌ 创建连走模式会话失败: \(error)")
+            return
+        }
+
+        // 触发 objectWillChange，通知 ViewModel 重新订阅
+        objectWillChange.send()
+    }
+
+    /// 退出连走模式，丢弃临时会话数据
+    func exitConsecutiveMoveMode() {
+        guard consecutiveMoveSession != nil else { return }
+
+        // 清除临时 session（临时数据库随之释放）
+        consecutiveMoveSession = nil
 
         // 触发 objectWillChange
         objectWillChange.send()

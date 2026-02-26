@@ -76,6 +76,8 @@ class ActionDefinitions {
         case toggleIsCommentEditing
         case toggleAllowAddingNewMoves  // 新增：允许增加新走法
 
+        case toggleConsecutiveMoveMode  // 新增：连走模式开关
+
         case addToReview
         case showReviewList
         case showReviewListIOS

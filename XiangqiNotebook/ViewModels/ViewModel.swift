@@ -218,7 +218,7 @@ class ViewModel: ObservableObject {
         boardViewModel.updateNextMovesPathGroups(nextMovesPathGroups: session.getNextMovesPathGroups())
         boardViewModel.updateShowPath(showPath: showPath)
         boardViewModel.updateShowAllNextMoves(showAllNextMoves: showAllNextMoves)
-
+        boardViewModel.updateAllowConsecutiveMoves(isInConsecutiveMoveMode)
 
         // 通知 ViewModel 的观察者（View）
         objectWillChange.send()
@@ -536,6 +536,21 @@ class ViewModel: ObservableObject {
           isEnabled: { self.session.canToggleAllowAddingNewMoves },
           isOn: { self.session.allowAddingNewMoves },
           action: { _ in self.session.toggleAllowAddingNewMoves() }
+        )
+
+        // 连走模式 - 临时会话，不持久化
+        actionDefinitions.registerToggleAction(
+          .toggleConsecutiveMoveMode,
+          text: "连走模式",
+          isEnabled: { !self.sessionManager.isInFocusedPractice },
+          isOn: { self.isInConsecutiveMoveMode },
+          action: { newValue in
+            if newValue {
+                self.startConsecutiveMoveMode()
+            } else {
+                self.exitConsecutiveMoveMode()
+            }
+          }
         )
     }
     
@@ -873,40 +888,42 @@ class ViewModel: ObservableObject {
     }
     
     func saveToDefault() {
-        let session = self.session
+        // 始终使用 mainSession 进行保存（连走模式和练习模式均使用临时会话，不应保存其数据）
+        let mainSession = sessionManager.mainSession
 
         // 检查远程版本（database）
         if let remoteVersion = DatabaseStorage.loadDataVersionFromDefault(),
-           remoteVersion > session.currentCheckpointDataVersion {
+           remoteVersion > mainSession.currentCheckpointDataVersion {
             platformService.showConfirmAlert(
                 title: "存档文件可能在别处被修改过",
                 message: "检测到存档文件中的版本号大于当前版本号，可能存档文件在别处被修改过。请问是否要覆盖存档文件，强行保存？",
                 completion: { result in
                     if result {
-                        self.saveToDefaultWithResultNotification(session: session)
+                        self.saveToDefaultWithResultNotification(session: mainSession)
                     } else {
                         self.showWarningAlert( message: "保存取消", info: "保存取消")
                     }
                 }
             )
         } else {
-            self.saveToDefaultWithResultNotification(session: session)
+            self.saveToDefaultWithResultNotification(session: mainSession)
         }
     }
 
     func saveToDefaultWithResultNotification(session: Session) {
         do {
-            // 1. 保存 database（通过 DatabaseView）
+            // 1. 保存 database（通过 session 的 DatabaseView）
+            // 注意：此方法始终以 mainSession 调用，连走模式和练习模式不保存临时数据库
             try session.databaseView.save()
 
             // 2. 保存引擎分数文件
             try session.databaseView.saveEngineScores()
 
             // 3. 保存 mainSession（通过 SessionStorage）
-            // 注意：只保存 mainSession，practiceSession 是临时的
+            // 注意：只保存 mainSession，practiceSession 和 consecutiveMoveSession 是临时的
             try SessionStorage.saveSessionToDefault(session: sessionManager.mainSessionData)
 
-            self.setDataClean()
+            session.setDataClean()
             self.showAlert(
                 message: "保存成功",
                 info: "数据已成功保存"
@@ -1008,11 +1025,12 @@ class ViewModel: ObservableObject {
                     print("[ViewModel] 用户选择保留本地修改，将覆盖远程数据")
 
                     do {
-                        // 强制保存本地数据到 iCloud（覆盖远程，通过 DatabaseView）
-                        try self.session.databaseView.save()
-                        // 注意：只保存 mainSession，practiceSession 是临时的
+                        // 强制保存本地数据到 iCloud（覆盖远程，通过 mainSession 的 DatabaseView）
+                        // 注意：连走模式使用临时数据库，必须始终保存 mainSession 的数据库
+                        try self.sessionManager.mainSession.databaseView.save()
+                        // 注意：只保存 mainSession，practiceSession 和 consecutiveMoveSession 是临时的
                         try SessionStorage.saveSessionToDefault(session: self.sessionManager.mainSessionData)
-                        self.setDataClean()
+                        self.sessionManager.mainSession.setDataClean()
 
                         self.platformService.showAlert(
                             title: "已保存",
@@ -1854,6 +1872,20 @@ class ViewModel: ObservableObject {
 
         // Auto-play if it's opponent's turn
         playRandomIfYourTurn(delay: 1.0)
+    }
+
+    // MARK: - 连走模式
+
+    var isInConsecutiveMoveMode: Bool {
+        sessionManager.isInConsecutiveMoveMode
+    }
+
+    func startConsecutiveMoveMode() {
+        sessionManager.startConsecutiveMoveMode()
+    }
+
+    func exitConsecutiveMoveMode() {
+        sessionManager.exitConsecutiveMoveMode()
     }
 
     func practiceRedOpening() {
