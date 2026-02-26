@@ -64,10 +64,15 @@ struct iPadContentView: View {
                             .frame(maxHeight: .infinity)
                             BoardOperationTogglesView(viewModel: viewModel)
                         } else {
-                            // 常规/练习模式：棋局筛选 + 书签
-                            TogglesView(viewModel: viewModel)
-                            BookmarkListView(viewModel: viewModel)
-                                .frame(maxHeight: .infinity)
+                            // 常规/练习模式：棋局筛选 + 书签 + 实战列表
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    TogglesView(viewModel: viewModel)
+                                    BookmarkListView(viewModel: viewModel)
+                                    RealGameListView(viewModel: viewModel)
+                                }
+                            }
+                            .frame(maxHeight: .infinity)
                         }
                     }
                     .frame(width: geometry.size.width * 0.2)

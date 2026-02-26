@@ -166,6 +166,26 @@ class Session: ObservableObject {
         }
     }
 
+    /// 获取包含当前局面的实战对局列表，按日期降序排列
+    var relatedRealGamesForCurrentFen: [GameObject] {
+        let currentFenId = self.currentFenId
+
+        // 获取"我的实战"书籍中所有游戏（递归包含子书籍）
+        guard databaseView.getBookObjectUnfiltered(Session.myRealGameBookId) != nil else {
+            return []
+        }
+        let allGames = databaseView.getGamesInBookRecursivelyUnfiltered(bookId: Session.myRealGameBookId)
+
+        // 过滤出包含当前 fenId 的游戏，按日期降序排列
+        return allGames
+            .filter { game in databaseView.gameContainsFenId(gameId: game.id, fenId: currentFenId) }
+            .sorted { g1, g2 in
+                let d1 = g1.gameDate ?? g1.creationDate ?? .distantPast
+                let d2 = g2.gameDate ?? g2.creationDate ?? .distantPast
+                return d1 > d2
+            }
+    }
+
     var currentFenCanChangeInBlackOpening: Bool {
         currentFenObject.canChangeInBlackOpening
     }

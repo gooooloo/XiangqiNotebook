@@ -1949,4 +1949,9 @@ class ViewModel: ObservableObject {
     var relatedCoursesForCurrentFen: [GameObject] {
         session.relatedCoursesForCurrentFen
     }
+
+    /// 获取包含当前局面的实战对局列表（转发到 Session）
+    var relatedRealGamesForCurrentFen: [GameObject] {
+        session.relatedRealGamesForCurrentFen
+    }
 }
