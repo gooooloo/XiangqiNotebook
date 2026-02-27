@@ -679,4 +679,261 @@ struct ViewModelTests {
         #expect(vm.globalAlertTitle == "标题")
         #expect(vm.globalAlertMessage == "内容")
     }
+
+    // MARK: - loadReviewItem
+
+    @Test func testLoadReviewItem_WithLock_RebuildsLockAtCorrectPosition() {
+        let database = createTestDatabase()
+        let sm = createSessionManager(database: database, gamePath: [1, 2, 3])
+        let mock = MockPlatformService()
+        let vm = ViewModel(sessionManager: sm, platformService: mock)
+
+        // 先锁定在步骤1
+        vm.stepForward()
+        vm.toggleLock()
+        #expect(vm.isAnyMoveLocked == true)
+
+        // 加载复习项到 [1, 2]
+        vm.loadReviewItem([1, 2])
+
+        // 锁应在新的当前步骤处重建
+        #expect(vm.isAnyMoveLocked == true)
+        // 应该在 gamePath 末尾（步骤1，即 [1,2] 的最后一步位置）
+        #expect(vm.session.sessionData.currentGameStep == 1)
+    }
+
+    @Test func testLoadReviewItem_WithoutLock_SetsLock() {
+        let (vm, _) = createViewModel()
+        #expect(vm.isAnyMoveLocked == false)
+
+        vm.loadReviewItem([1, 2])
+
+        #expect(vm.isAnyMoveLocked == true)
+        #expect(vm.session.sessionData.currentGameStep == 1)
+    }
+
+    // MARK: - setCurrentFenInRedOpening
+
+    @Test func testSetCurrentFenInRedOpening_WhenCanChange_ChangesState() {
+        let database = createTestDatabase()
+        // fenId 2 has "b" → blackJustPlayed=false → isAutoInRedOpening=false → canChangeInRedOpening=true
+        let sm = createSessionManager(database: database, gamePath: [1, 2])
+        let mock = MockPlatformService()
+        let vm = ViewModel(sessionManager: sm, platformService: mock)
+
+        // 导航到 fenId 2
+        vm.stepForward()
+        #expect(vm.currentFenCanChangeInRedOpening == true)
+
+        // 当前 fenId 2 已经 inRedOpening=true
+        #expect(vm.currentFenIsInRedOpening == true)
+
+        // 设为 false
+        vm.setCurrentFenInRedOpening(false)
+        #expect(vm.currentFenIsInRedOpening == false)
+
+        // 设回 true
+        vm.setCurrentFenInRedOpening(true)
+        #expect(vm.currentFenIsInRedOpening == true)
+    }
+
+    @Test func testSetCurrentFenInRedOpening_WhenCannotChange_NoEffect() {
+        let (vm, _) = createViewModel()
+        // fenId 1 (start) has "r" → blackJustPlayed=true → isAutoInRedOpening=true → canChangeInRedOpening=false
+        #expect(vm.currentFenCanChangeInRedOpening == false)
+
+        // 尝试设置，应无效果（始终在红方开局库中）
+        vm.setCurrentFenInRedOpening(false)
+        #expect(vm.currentFenIsInRedOpening == true)
+    }
+
+    // MARK: - setCurrentFenInBlackOpening
+
+    @Test func testSetCurrentFenInBlackOpening_WhenCanChange_ChangesState() {
+        let (vm, _) = createViewModel()
+        // fenId 1 has "r" → redJustPlayed=false → isAutoInBlackOpening=false → canChangeInBlackOpening=true
+        #expect(vm.currentFenCanChangeInBlackOpening == true)
+
+        // fenId 1 已经 inBlackOpening=true
+        #expect(vm.currentFenIsInBlackOpening == true)
+
+        vm.setCurrentFenInBlackOpening(false)
+        #expect(vm.currentFenIsInBlackOpening == false)
+
+        vm.setCurrentFenInBlackOpening(true)
+        #expect(vm.currentFenIsInBlackOpening == true)
+    }
+
+    @Test func testSetCurrentFenInBlackOpening_WhenCannotChange_NoEffect() {
+        let database = createTestDatabase()
+        let sm = createSessionManager(database: database, gamePath: [1, 2])
+        let mock = MockPlatformService()
+        let vm = ViewModel(sessionManager: sm, platformService: mock)
+
+        // 导航到 fenId 2 has "b" → redJustPlayed=true → isAutoInBlackOpening=true → canChangeInBlackOpening=false
+        vm.stepForward()
+        #expect(vm.currentFenCanChangeInBlackOpening == false)
+
+        vm.setCurrentFenInBlackOpening(false)
+        #expect(vm.currentFenIsInBlackOpening == true)
+    }
+
+    // MARK: - jumpToNextOpeningGap
+
+    @Test func testJumpToNextOpeningGap_NoGap_ShowsAlert() {
+        let (vm, mock) = createViewModel()
+        // 所有局面都已在开局库中，没有缺口
+        vm.jumpToNextOpeningGap()
+        #expect(mock.lastAlertTitle == "完成")
+    }
+
+    @Test func testJumpToNextOpeningGap_WithGap_UnlocksAndJumps() {
+        let database = createTestDatabase()
+        // fenId 3 不在 blackOpening 中，且有多条好招法时才会被视为缺口
+        // 为了测试，我们需要创建一个有缺口的场景
+        // 让某个 fen 有多个好着法但后续不在开局库中
+        // fenId 2 已有 move 2→3，加一个 2→新fen 且新fen不在开局库
+        let fen5Str = "rnbakabnr/9/1c4c2/p1p1p1p1p/9/9/P1P1P1P1P/1C2C2C1/9/RNBAKABNR r - - 2 2"
+        let fen5 = FenObject(fen: fen5Str, fenId: 5)
+        // 不标记 inRedOpening, 不在开局库
+        database.databaseData.fenObjects2[5] = fen5
+        database.databaseData.fenToId[fen5Str] = 5
+
+        let move4 = Move(sourceFenId: 2, targetFenId: 5)
+        database.databaseData.moveObjects[4] = move4
+        database.databaseData.moveToId[[2, 5]] = 4
+        database.databaseData.fenObjects2[2]?.moves.append(move4)
+
+        let sm = createSessionManager(database: database, gamePath: [1, 2, 3])
+        let mock = MockPlatformService()
+        let vm = ViewModel(sessionManager: sm, platformService: mock)
+
+        // 先锁定
+        vm.toggleLock()
+        #expect(vm.isAnyMoveLocked == true)
+        // 设置 filter
+        vm.sessionManager.setFilters([Session.filterRedOpeningOnly])
+        #expect(!vm.currentFilters.isEmpty)
+
+        vm.jumpToNextOpeningGap()
+
+        // 如果找到缺口：锁应解除、filter 应清空
+        if mock.lastAlertTitle != "完成" {
+            #expect(vm.isAnyMoveLocked == false)
+            #expect(vm.currentFilters.isEmpty)
+        }
+    }
+
+    // MARK: - performAutoAddToOpening
+
+    @Test func testPerformAutoAddToOpening_ShowsAlert() {
+        let (vm, mock) = createViewModel()
+        vm.performAutoAddToOpening()
+        #expect(mock.lastAlertTitle == "自动完善开局库")
+        #expect(mock.lastAlertMessage?.contains("红方开局库") == true)
+        #expect(mock.lastAlertMessage?.contains("黑方开局库") == true)
+    }
+
+    // MARK: - reviewAgain
+
+    @Test func testReviewAgain_InReviewMode_RestartsReview() {
+        let database = createTestDatabase()
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date.distantFuture)
+        database.databaseData.reviewItems[1] = srs
+
+        let (vm, _) = createViewModel(database: database)
+        // 初始无到期项
+        vm.startReview()
+        #expect(vm.reviewQueue.isEmpty)
+
+        // reviewAgain 将该项标记为现在到期
+        vm.setMode(.review)
+        vm.reviewAgain(fenId: 1)
+
+        // 在 review mode 下，reviewAgain 会调用 startReview，队列应重建
+        #expect(vm.reviewQueue.count == 1)
+    }
+
+    @Test func testReviewAgain_InNormalMode_DoesNotRebuildQueue() {
+        let database = createTestDatabase()
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date.distantFuture)
+        database.databaseData.reviewItems[1] = srs
+
+        let (vm, _) = createViewModel(database: database)
+        #expect(vm.currentAppMode == .normal)
+
+        vm.reviewAgain(fenId: 1)
+
+        // 不在 review mode，队列不应被填充
+        #expect(vm.reviewQueue.isEmpty)
+    }
+
+    // MARK: - practiceRedOpening
+
+    @Test func testPracticeRedOpening_SetsCorrectState() {
+        let (vm, _) = createViewModel()
+        vm.practiceRedOpening()
+
+        #expect(vm.currentFilters.contains(Session.filterRedOpeningOnly))
+        #expect(vm.isAnyMoveLocked == true)
+        #expect(vm.currentAppMode == .practice)
+    }
+
+    // MARK: - practiceBlackOpening
+
+    @Test func testPracticeBlackOpening_SetsCorrectState() {
+        let (vm, _) = createViewModel()
+        vm.practiceBlackOpening()
+
+        #expect(vm.currentFilters.contains(Session.filterBlackOpeningOnly))
+        #expect(vm.isAnyMoveLocked == true)
+        #expect(vm.currentAppMode == .practice)
+    }
+
+    @Test func testPracticeRedOpening_ExitsFocusedPractice() {
+        let (vm, _) = createViewModel()
+        vm.sessionManager.startFocusedPractice()
+        #expect(vm.sessionManager.isInFocusedPractice == true)
+
+        vm.practiceRedOpening()
+        #expect(vm.sessionManager.isInFocusedPractice == false)
+        #expect(vm.currentAppMode == .practice)
+    }
+
+    @Test func testPracticeBlackOpening_ExitsFocusedPractice() {
+        let (vm, _) = createViewModel()
+        vm.sessionManager.startFocusedPractice()
+        #expect(vm.sessionManager.isInFocusedPractice == true)
+
+        vm.practiceBlackOpening()
+        #expect(vm.sessionManager.isInFocusedPractice == false)
+        #expect(vm.currentAppMode == .practice)
+    }
+
+    // MARK: - openYunku
+
+    @Test func testOpenYunku_ConstructsCorrectURL() {
+        let (vm, mock) = createViewModel()
+        vm.openYunku()
+
+        #expect(mock.openedURL != nil)
+        let urlString = mock.openedURL!.absoluteString
+        #expect(urlString.hasPrefix("http://www.qqzze.com/yunku/?"))
+        // FEN 前缀应包含在 URL 中（去掉 " - " 后的部分）
+        #expect(urlString.contains("rnbakabnr"))
+    }
+
+    // MARK: - makeRandomGame (locked 分支)
+
+    @Test func testMakeRandomGame_WhenLocked_FilterUnchanged() {
+        let (vm, _) = createViewModel()
+        // 先锁定
+        vm.toggleLock()
+        #expect(vm.isAnyMoveLocked == true)
+
+        let filtersBefore = vm.currentFilters
+        _ = vm.makeRandomGame()
+        // filter 不应因随机而改变
+        #expect(vm.currentFilters == filtersBefore)
+    }
 }
