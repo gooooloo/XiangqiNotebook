@@ -815,6 +815,9 @@ class ViewModel: ObservableObject {
         session.unlockIfNeeded()
         sessionManager.loadBookmark(gamePath)
         session.lockAndHideAfterCurrentStep()
+        // 每次进入新条目时重置为隐藏，避免上一条目的手动开启影响下一条目
+        session.sessionData.showPath = false
+        session.sessionData.showAllNextMoves = false
     }
 
     /// 加载棋局（总是先切换到 Full 视图）

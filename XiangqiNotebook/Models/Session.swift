@@ -864,8 +864,10 @@ extension Session {
             autoExtendCurrentGame()
 
         case .review:
-            // 复习模式下，保持用户当前的路径显示设置不变
+            // 复习模式下，默认隐藏路径和下一步着法以测试记忆
             sessionData.autoExtendGameWhenPlayingBoardFen = true
+            sessionData.showPath = false
+            sessionData.showAllNextMoves = false
             // 清除锁定并恢复完整视图
             sessionData.lockedStep = nil
             rebuildDatabaseView()

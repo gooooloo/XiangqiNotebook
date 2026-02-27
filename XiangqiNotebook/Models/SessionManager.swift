@@ -92,8 +92,14 @@ class SessionManager: ObservableObject {
         newSessionData.gameStepLimitation = mainSession.sessionData.gameStepLimitation
         newSessionData.canNavigateBeforeLockedStep = mainSession.sessionData.canNavigateBeforeLockedStep
         newSessionData.currentMode = mainSession.sessionData.currentMode
-        newSessionData.showPath = mainSession.sessionData.showPath
-        newSessionData.showAllNextMoves = true  // 切换筛选时默认打开"显示所有下一步"
+        // 复习/练习模式下保持当前设置，其他情况默认打开路径和下一步
+        if mainSession.sessionData.currentMode == .review || mainSession.sessionData.currentMode == .practice {
+            newSessionData.showPath = mainSession.sessionData.showPath
+            newSessionData.showAllNextMoves = mainSession.sessionData.showAllNextMoves
+        } else {
+            newSessionData.showPath = mainSession.sessionData.showPath
+            newSessionData.showAllNextMoves = true
+        }
         newSessionData.autoExtendGameWhenPlayingBoardFen = mainSession.sessionData.autoExtendGameWhenPlayingBoardFen
         newSessionData.isCommentEditing = mainSession.sessionData.isCommentEditing
         newSessionData.focusedPracticeGamePath = focusedPath
