@@ -6,6 +6,7 @@ import AppKit
 struct MacContentView: View {
     @StateObject private var viewModel: ViewModel
     @FocusState private var isViewFocused: Bool
+    @State private var keyMonitor: Any?
     
     init() {
         _viewModel = StateObject(wrappedValue: ViewModel(
@@ -130,39 +131,6 @@ struct MacContentView: View {
             ReviewListView(viewModel: viewModel)
                 .frame(minWidth: 400, minHeight: 300)
         }
-        .onKeyPress { press in
-            // 如果有任何 sheet 显示，禁用所有快捷键
-            if viewModel.isAnySheetPresented {
-                return .ignored
-            }
-
-            // 检查焦点是否在文本输入控件上
-            if let firstResponder = NSApp.keyWindow?.firstResponder {
-                // 如果焦点在 TextField 上，禁用所有快捷键
-                if firstResponder is NSTextField {
-                    return .ignored
-                }
-
-                // 如果焦点在 TextEditor (NSTextView) 上
-                if firstResponder is NSTextView {
-                    if !viewModel.isCommentEditing {
-                        // 评论编辑已关闭但焦点仍在 TextEditor，强制清除焦点
-                        clearTextEditorFocus()
-                        // 清除焦点后继续处理快捷键
-                    } else {
-                        // 在编辑模式中，只处理 Escape 键
-                        if press.key == .escape {
-                            clearTextEditorFocus()
-                            return .handled
-                        }
-                        return .ignored
-                    }
-                }
-            }
-
-            let handled = viewModel.actionDefinitions.handleSwiftUIKeyPress(press)
-            return handled ? .handled : .ignored
-        }
         .onChange(of: viewModel.isCommentEditing) { oldValue, newValue in
             // 当评论编辑状态从 true 变为 false 时，清除焦点
             if oldValue && !newValue {
@@ -174,11 +142,67 @@ struct MacContentView: View {
         .focusedSceneObject(viewModel)
         .onAppear {
             updateWindowTitle()
+            installKeyMonitor()
+        }
+        .onDisappear {
+            removeKeyMonitor()
         }
         .onReceive(viewModel.objectWillChange) { _ in
             // 监听 ViewModel 的任何变化，及时更新窗口标题
             // 这样可以捕获 filter 切换、棋局加载等所有导致 windowTitle 变化的情况
             updateWindowTitle()
+        }
+    }
+
+    /// 安装全局按键监控，不依赖 SwiftUI 焦点系统
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // 如果有任何 sheet 显示，不处理快捷键
+            if viewModel.isAnySheetPresented { return event }
+
+            // 检查焦点是否在文本输入控件上
+            if let firstResponder = NSApp.keyWindow?.firstResponder {
+                // 如果焦点在 TextField 上，不处理快捷键
+                if firstResponder is NSTextField { return event }
+
+                // 如果焦点在 TextEditor (NSTextView) 上
+                if firstResponder is NSTextView {
+                    if !viewModel.isCommentEditing {
+                        // 评论编辑已关闭但焦点仍在 TextEditor，强制清除焦点
+                        NSApp.keyWindow?.makeFirstResponder(nil)
+                        // 清除焦点后继续处理快捷键
+                    } else {
+                        // 在编辑模式中，只处理 Escape 键
+                        if event.keyCode == 53 { // Escape
+                            NSApp.keyWindow?.makeFirstResponder(nil)
+                            return nil
+                        }
+                        return event
+                    }
+                }
+            }
+
+            // 提取字符和修饰键，分发到快捷键处理器
+            guard let chars = event.characters, let character = chars.first else { return event }
+            let flags = event.modifierFlags
+            if viewModel.actionDefinitions.handleKeyDown(
+                character: character,
+                command: flags.contains(.command),
+                control: flags.contains(.control),
+                option: flags.contains(.option)
+            ) {
+                return nil // 已处理，消费事件
+            }
+            return event // 未处理，传递给系统
+        }
+    }
+
+    /// 移除按键监控
+    private func removeKeyMonitor() {
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
         }
     }
 
