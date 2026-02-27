@@ -366,6 +366,35 @@ class ActionDefinitions {
         return false
     }
     
+    /// 处理按键事件（用于 macOS NSEvent 监控，不依赖 SwiftUI 焦点系统）
+    func handleKeyDown(character: Character, command: Bool = false, control: Bool = false, option: Bool = false) -> Bool {
+        var modifiers = KeyModifiers()
+        if command { modifiers.insert(.command) }
+        if control { modifiers.insert(.control) }
+        if option { modifiers.insert(.option) }
+
+        if !modifiers.isEmpty {
+            let shortcutKey = ShortcutKey.modified(modifiers, character)
+            if let actionKey = shortcutLookup[shortcutKey] {
+                return executeAction(actionKey)
+            }
+        }
+
+        if isInSequenceMode {
+            return handleSequenceInput(character)
+        }
+
+        if modifiers.isEmpty {
+            let shortcutKey = ShortcutKey.single(character)
+            if let actionKey = shortcutLookup[shortcutKey] {
+                return executeAction(actionKey)
+            }
+            return startSequenceMode(with: character)
+        }
+
+        return false
+    }
+
     /// 处理按键事件（兼容旧版本）
     func handleKeyPress(_ key: KeyEquivalent) -> Bool {
         #if os(iOS) || os(tvOS) || os(watchOS)
