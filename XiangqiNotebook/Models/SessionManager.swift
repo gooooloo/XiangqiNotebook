@@ -5,7 +5,7 @@ import Combine
 class SessionManager: ObservableObject {
     @Published private(set) var mainSession: Session
     @Published private(set) var practiceSession: Session?
-    private let database: Database
+    private(set) var database: Database
 
     /// 当前活跃的 Session（practiceSession 优先，否则 mainSession）
     var currentSession: Session {

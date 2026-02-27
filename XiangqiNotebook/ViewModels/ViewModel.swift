@@ -154,6 +154,28 @@ class ViewModel: ObservableObject {
         #endif
     }
     
+    #if DEBUG
+    /// 可测试的初始化器，允许直接注入 SessionManager，跳过文件加载和 iCloud 监听
+    init(sessionManager: SessionManager, platformService: PlatformService) {
+        self.sessionManager = sessionManager
+        self.platformService = platformService
+        let currentSession = sessionManager.currentSession
+        self.boardViewModel = BoardViewModel(
+            fen: currentSession.currentFen,
+            orientation: currentSession.isCurrentBlackOrientation ? "black" : "red",
+            isHorizontalFlipped: currentSession.isCurrentHorizontalFlipped,
+            showPath: currentSession.showPath,
+            showAllNextMoves: currentSession.showAllNextMoves,
+            shouldAnimate: false,
+            currentFenPathGroups: currentSession.getCurrentFenPathGroups()
+        )
+        registerActions()
+        actionDefinitions.currentMode = { [weak self] in
+            self?.currentAppMode ?? .normal
+        }
+    }
+    #endif
+
     // 当前 Session 的订阅（需要在 Session 切换时重新创建）
     private var currentSessionSubscription: AnyCancellable?
 
@@ -1751,7 +1773,7 @@ class ViewModel: ObservableObject {
 
     func importPGNFile(content: String, username: String) -> PGNImportResult {
         session.setupDefaultBooksIfNeeded()
-        let databaseView = DatabaseView.full(database: Database.shared)
+        let databaseView = DatabaseView.full(database: sessionManager.database)
         let result = PGNImportService.importPGN(content: content, username: username, databaseView: databaseView)
         if result.imported > 0 {
             // Database is already marked dirty by PGNImportService operations.
