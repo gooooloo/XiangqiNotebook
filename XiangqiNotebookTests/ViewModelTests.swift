@@ -651,6 +651,108 @@ struct ViewModelTests {
         #expect(vm.currentReviewIndex == 0)
     }
 
+    @Test func testSetMode_ReviewMode_HidesNextMovesByDefault() {
+        let database = createTestDatabase()
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date.distantPast)
+        database.databaseData.reviewItems[1] = srs
+
+        let (vm, _) = createViewModel(database: database)
+        // 手动开启 showAllNextMoves 以验证 review 模式会关闭它
+        vm.toggleShowAllNextMoves()
+        #expect(vm.showAllNextMoves == true)
+
+        // 进入 review 模式，应默认隐藏
+        vm.setMode(.review)
+        #expect(vm.showAllNextMoves == false)
+    }
+
+    @Test func testSetMode_ReviewMode_HidesPathByDefault() {
+        let database = createTestDatabase()
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date.distantPast)
+        database.databaseData.reviewItems[1] = srs
+
+        let (vm, _) = createViewModel(database: database)
+        // showPath 默认为 true
+        #expect(vm.showPath == true)
+
+        // 进入 review 模式，应默认隐藏路径
+        vm.setMode(.review)
+        #expect(vm.showPath == false)
+    }
+
+    @Test func testSetMode_ReviewToNormal_RestoresNextMoves() {
+        let database = createTestDatabase()
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date.distantPast)
+        database.databaseData.reviewItems[1] = srs
+
+        let (vm, _) = createViewModel(database: database)
+        vm.setMode(.review)
+        #expect(vm.showAllNextMoves == false)
+        #expect(vm.showPath == false)
+
+        vm.setMode(.normal)
+        #expect(vm.showAllNextMoves == true)
+        #expect(vm.showPath == true)
+    }
+
+    @Test func testSetMode_ReviewMode_ToggleNextMovesWorks() {
+        let database = createTestDatabase()
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date.distantPast)
+        database.databaseData.reviewItems[1] = srs
+
+        let (vm, _) = createViewModel(database: database)
+        vm.setMode(.review)
+        #expect(vm.showAllNextMoves == false)
+
+        // 在复习模式下可以手动切换显示
+        vm.toggleShowAllNextMoves()
+        #expect(vm.showAllNextMoves == true)
+
+        vm.toggleShowAllNextMoves()
+        #expect(vm.showAllNextMoves == false)
+    }
+
+    @Test func testSetMode_ReviewMode_TogglePathWorks() {
+        let database = createTestDatabase()
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date.distantPast)
+        database.databaseData.reviewItems[1] = srs
+
+        let (vm, _) = createViewModel(database: database)
+        vm.setMode(.review)
+        #expect(vm.showPath == false)
+
+        // 在复习模式下可以手动切换路径显示
+        vm.toggleShowPath()
+        #expect(vm.showPath == true)
+
+        vm.toggleShowPath()
+        #expect(vm.showPath == false)
+    }
+
+    @Test func testLoadReviewItem_ResetsPathAndNextMoves() {
+        let database = createTestDatabase()
+        let srs1 = SRSData(gamePath: [1, 2], nextReviewDate: Date.distantPast)
+        let srs2 = SRSData(gamePath: [1, 4], nextReviewDate: Date.distantPast)
+        database.databaseData.reviewItems[1] = srs1
+        database.databaseData.reviewItems[2] = srs2
+
+        let (vm, _) = createViewModel(database: database)
+        vm.setMode(.review)
+        #expect(vm.showPath == false)
+        #expect(vm.showAllNextMoves == false)
+
+        // 手动开启路径和下一步
+        vm.toggleShowPath()
+        vm.toggleShowAllNextMoves()
+        #expect(vm.showPath == true)
+        #expect(vm.showAllNextMoves == true)
+
+        // 加载下一个复习条目，应重置为隐藏
+        vm.loadReviewItem([1, 4])
+        #expect(vm.showPath == false)
+        #expect(vm.showAllNextMoves == false)
+    }
+
     // MARK: - Navigation
 
     @Test func testStepForward_AdvancesPosition() {

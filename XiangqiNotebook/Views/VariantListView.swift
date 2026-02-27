@@ -32,7 +32,7 @@ struct VariantListView: View {
                 .scrollPosition(id: .constant(viewModel.currentGameVariantListDisplay.firstIndex(where: {
                     $0.move.targetFenId == viewModel.currentFenId
                 })))
-                .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
+                .opacity(viewModel.currentAppMode == .practice || (viewModel.currentAppMode == .review && !viewModel.showAllNextMoves) ? 0 : 1)
             }
             Spacer()
         }
@@ -70,7 +70,7 @@ struct NextMovesListView: View {
                         }
                     }
                 }
-                .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
+                .opacity(viewModel.currentAppMode == .practice || (viewModel.currentAppMode == .review && !viewModel.showAllNextMoves) ? 0 : 1)
             }
             Spacer()
         }
