@@ -56,7 +56,7 @@ struct SessionManagerTests {
         sessionData.currentGame2 = [startFenId]
         sessionData.currentGameStep = 0
         let session = try! Session(sessionData: sessionData, databaseView: databaseView)
-        return SessionManager(mainSession: session)
+        return SessionManager(mainSession: session, database: database)
     }
 
     // MARK: - Factory Creation Tests
@@ -150,9 +150,23 @@ struct SessionManagerTests {
         #expect(manager.mainSession.sessionData.filters.isEmpty)
     }
 
-    // 注意：setFilters 内部使用 Database.shared 而非测试数据库，
-    // 因此无法在单元测试中验证 currentGame 的迁移逻辑。
-    // 该行为需要通过集成测试验证。
+    @Test func testSetFilters_PreservesCurrentGame() {
+        let database = createTestDatabase()
+        let manager = createSessionManager(database: database)
+
+        // 设置当前棋局为 [1, 2, 3]（全部在红方开局范围内）
+        manager.mainSession.sessionData.currentGame2 = [1, 2, 3]
+        manager.mainSession.sessionData.currentGameStep = 2
+
+        // 切换到红方开局视图
+        manager.setFilters([Session.filterRedOpeningOnly])
+
+        // 因为 fenId 1, 2, 3 都标记了 inRedOpening，应该保留完整路径
+        let game = manager.mainSession.sessionData.currentGame2
+        #expect(game.contains(1))
+        #expect(game.contains(2))
+        #expect(game.contains(3))
+    }
 
     // MARK: - loadGame Tests
 
