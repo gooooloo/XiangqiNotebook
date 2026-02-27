@@ -6,48 +6,42 @@ import AppKit
 struct MacActionButtonsView: View {
     @ObservedObject var viewModel: ViewModel
 
-    private var isPractice: Bool {
-        viewModel.currentAppMode == .practice
-    }
-
-    private var isNormal: Bool {
-        viewModel.currentAppMode == .normal
-    }
-
-    /// 第一行按钮定义
-    private var row1Keys: [ActionDefinitions.ActionKey?] {
-        [
-            .toStart,
-            .stepBack,
-            .stepForward,
-            .toEnd,
-            .nextVariant,
-            (isPractice && viewModel.isMyTurn) ? .hintNextMove : .playRandomNextMove,
-            .random,
-            .practiceNewGame,
-            .reviewThisGame,
-            .focusedPractice,
-            isNormal ? .practiceRedOpening : nil,
-            isNormal ? .practiceBlackOpening : nil,
-            isPractice ? .addToReview : nil,
-            !isNormal ? .save : nil,
-        ]
-    }
-
-    /// 第二行按钮定义（仅普通模式可见）
-    private var row2Keys: [ActionDefinitions.ActionKey?] {
-        [
-            .queryScore,
-            .queryEngineScore,
-            .queryAllEngineScores,
-            .openYunku,
-            .markPath,
-            .referenceBoard,
-            .browseGames,
-            .importPGN,
-            isNormal ? .addToReview : nil,
-            isNormal ? .save : nil,
-        ]
+    /// 按钮行布局，根据模式穷举配置
+    /// 新增 AppMode 时编译器会强制要求处理
+    private var buttonRows: [[ActionDefinitions.ActionKey?]] {
+        switch viewModel.currentAppMode {
+        case .normal:
+            return [
+                [
+                    .toStart, .stepBack, .stepForward, .toEnd,
+                    .nextVariant, .playRandomNextMove, .random,
+                    .practiceNewGame, .reviewThisGame, .focusedPractice,
+                    .practiceRedOpening, .practiceBlackOpening,
+                ],
+                [
+                    .queryScore, .queryEngineScore, .queryAllEngineScores,
+                    .openYunku, .markPath, .referenceBoard, .browseGames, .importPGN,
+                    .addToReview, .save,
+                ],
+            ]
+        case .practice:
+            return [
+                [
+                    .toStart, .stepBack, .stepForward, .toEnd,
+                    viewModel.isMyTurn ? .hintNextMove : .playRandomNextMove,
+                    .practiceNewGame, .reviewThisGame, .focusedPractice,
+                    .addToReview, .save,
+                ],
+            ]
+        case .review:
+            return [
+                [
+                    .toStart, .stepBack, .stepForward, .toEnd,
+                    .practiceNewGame, .reviewThisGame, .focusedPractice,
+                    .save,
+                ],
+            ]
+        }
     }
 
     /// 检查按钮是否可见
@@ -66,7 +60,7 @@ struct MacActionButtonsView: View {
 
     /// 最大可见按钮数量
     private var maxVisibleCount: Int {
-        max(visibleKeys(for: row1Keys).count, visibleKeys(for: row2Keys).count)
+        buttonRows.map { visibleKeys(for: $0).count }.max() ?? 0
     }
 
     /// 渲染一行按钮
@@ -91,9 +85,11 @@ struct MacActionButtonsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            buttonRow(keys: row1Keys)
-            if !visibleKeys(for: row2Keys).isEmpty {
-                buttonRow(keys: row2Keys)
+            ForEach(Array(buttonRows.enumerated()), id: \.offset) { _, rowKeys in
+                let visible = visibleKeys(for: rowKeys)
+                if !visible.isEmpty {
+                    buttonRow(keys: rowKeys)
+                }
             }
         }
         .padding(8)
