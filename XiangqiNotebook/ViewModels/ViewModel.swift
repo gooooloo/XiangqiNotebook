@@ -1640,6 +1640,7 @@ class ViewModel: ObservableObject {
     var isBookmarked: Bool { session.isBookmarked }
     var isCurrentBlackOrientation: Bool { session.isCurrentBlackOrientation }
     var isCurrentHorizontalFlipped: Bool { session.isCurrentHorizontalFlipped }
+    var isRedTurn: Bool { session.blackJustPlayed }
     var isMyTurn: Bool {
         let iamBlack = session.isCurrentBlackOrientation
         let blackJustPlayed = session.blackJustPlayed
