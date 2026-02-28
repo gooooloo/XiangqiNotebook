@@ -76,6 +76,9 @@ struct MacContentView: View {
                                 ModeSelectorView(viewModel: viewModel)
                                 TogglesView(viewModel: viewModel)
                                 BookmarkListView(viewModel: viewModel)
+                                if viewModel.currentAppMode == .normal {
+                                    RealGameListView(viewModel: viewModel)
+                                }
                             }
                         }
                         .frame(width: geometry.size.width * 0.2)

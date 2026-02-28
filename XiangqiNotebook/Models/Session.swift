@@ -20,6 +20,12 @@ class Session: ObservableObject {
     var sessionDataDirty: Bool = false
     var engineScoreDirty: Bool = false
 
+    // MARK: - 实战列表缓存
+    private var _cachedRealGames: [GameObject] = []
+    private var _cachedHasMoreRealGames: Bool = false
+    private var _cachedRealGamesFenId: Int = -1
+    private var _cachedRealGamesDataVersion: Bool = false
+
     // databaseDirty 现在通过 databaseView.isDirty 访问
     var databaseDirty: Bool {
         return databaseView.isDirty
@@ -164,6 +170,100 @@ class Session: ObservableObject {
         return allGames.filter { game in
             databaseView.gameContainsFenId(gameId: game.id, fenId: currentFenId)
         }
+    }
+
+    /// 获取包含当前局面的实战对局列表，按日期降序排列
+    /// 结果按 currentFenId 和 dataChanged 缓存，避免每次访问都重新计算
+    var relatedRealGamesForCurrentFen: [GameObject] {
+        let fenId = self.currentFenId
+        let dataVersion = self.dataChanged
+
+        // 缓存命中：fenId 和数据版本都未变化
+        if fenId == _cachedRealGamesFenId && dataVersion == _cachedRealGamesDataVersion {
+            return _cachedRealGames
+        }
+
+        let (games, hasMore) = computeRelatedRealGames(for: fenId, pinnedGameId: currentSpecificGameId)
+        _cachedRealGamesFenId = fenId
+        _cachedRealGamesDataVersion = dataVersion
+        _cachedRealGames = games
+        _cachedHasMoreRealGames = hasMore
+        return games
+    }
+
+    /// 是否有更多相关实战（超过显示限制）
+    var hasMoreRelatedRealGames: Bool {
+        // 确保缓存已计算
+        _ = relatedRealGamesForCurrentFen
+        return _cachedHasMoreRealGames
+    }
+
+    /// 计算包含指定 fenId 的实战对局列表（最多返回5个）
+    /// pinnedGameId 指定的棋局（如果匹配）始终置顶，确保当前筛选的棋局可见
+    private func computeRelatedRealGames(for fenId: Int, pinnedGameId: UUID? = nil) -> (games: [GameObject], hasMore: Bool) {
+        guard databaseView.getBookObjectUnfiltered(Session.myRealGameBookId) != nil else {
+            return ([], false)
+        }
+
+        let limit = 5
+
+        // 先尝试获取 pinned 棋局（确认它包含该局面）
+        var pinned: GameObject? = nil
+        if let pinnedId = pinnedGameId,
+           let game = databaseView.getGameObjectUnfiltered(pinnedId) {
+            if databaseView.isRealGamesIndexReady {
+                if let gameIds = databaseView.realGameIds(for: fenId), gameIds.contains(pinnedId) {
+                    pinned = game
+                }
+            } else if databaseView.gameContainsFenId(gameId: pinnedId, fenId: fenId) {
+                pinned = game
+            }
+        }
+
+        let remaining = pinned != nil ? limit - 1 : limit
+
+        // 优先使用反向索引（O(1) 查询）
+        if databaseView.isRealGamesIndexReady {
+            guard let gameIds = databaseView.realGameIds(for: fenId) else {
+                if let pinned = pinned { return ([pinned], false) }
+                return ([], false)
+            }
+
+            var matched: [GameObject] = []
+            for gameId in gameIds {
+                if gameId == pinnedGameId { continue }
+                if let game = databaseView.getGameObjectUnfiltered(gameId) {
+                    matched.append(game)
+                    if matched.count > remaining {
+                        break
+                    }
+                }
+            }
+
+            let hasMore = matched.count > remaining
+            var result = Array(matched.prefix(remaining))
+            if let pinned = pinned { result.insert(pinned, at: 0) }
+            return (result, hasMore)
+        }
+
+        // Fallback：索引未就绪时线性遍历
+        let allGames = databaseView.getGamesInBookRecursivelyUnfiltered(bookId: Session.myRealGameBookId)
+
+        var matched: [GameObject] = []
+        for game in allGames {
+            if game.id == pinnedGameId { continue }
+            if databaseView.gameContainsFenId(gameId: game.id, fenId: fenId) {
+                matched.append(game)
+                if matched.count > remaining {
+                    break
+                }
+            }
+        }
+
+        let hasMore = matched.count > remaining
+        var result = Array(matched.prefix(remaining))
+        if let pinned = pinned { result.insert(pinned, at: 0) }
+        return (result, hasMore)
     }
 
     var currentFenCanChangeInBlackOpening: Bool {

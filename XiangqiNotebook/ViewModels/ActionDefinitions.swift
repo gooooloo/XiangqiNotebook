@@ -79,6 +79,7 @@ class ActionDefinitions {
         case addToReview
         case showReviewList
         case showReviewListIOS
+        case showRealGameListIOS
         case showBookmarkListIOS
         case showMoreActionsIOS
         case showEditCommentIOS

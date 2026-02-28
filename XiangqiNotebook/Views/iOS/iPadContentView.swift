@@ -64,10 +64,13 @@ struct iPadContentView: View {
                             .frame(maxHeight: .infinity)
                             BoardOperationTogglesView(viewModel: viewModel)
                         } else {
-                            // 常规/练习模式：棋局筛选 + 书签
+                            // 常规/练习模式：棋局筛选 + 书签 + 实战列表
                             TogglesView(viewModel: viewModel)
                             BookmarkListView(viewModel: viewModel)
                                 .frame(maxHeight: .infinity)
+                            if viewModel.currentAppMode == .normal {
+                                RealGameListView(viewModel: viewModel)
+                            }
                         }
                     }
                     .frame(width: geometry.size.width * 0.2)

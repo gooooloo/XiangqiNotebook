@@ -383,6 +383,23 @@ final class DatabaseView {
         return false
     }
 
+    // MARK: - Real Games Index
+
+    /// 实战反查表索引是否已就绪
+    var isRealGamesIndexReady: Bool {
+        database.isRealGamesIndexReady
+    }
+
+    /// 通过反查表获取包含指定 fenId 的实战 gameId 集合
+    func realGameIds(for fenId: Int) -> Set<UUID>? {
+        database.realGamesByFenId[fenId]
+    }
+
+    /// 构建实战反查表索引（委托给 Database）
+    func buildRealGamesIndex() {
+        database.buildRealGamesIndex()
+    }
+
     // MARK: - Book and Game Management Methods
 
     func addBook(name: String, parentBookId: UUID? = nil) -> UUID {
