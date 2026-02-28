@@ -123,15 +123,18 @@ Views ↔ ViewModels ↔ Session ↔ DatabaseView ↔ Database
 - 存储层操作
 
 ### 测试命令速查
+
+**重要：xcodebuild 输出量极大，必须用管道过滤，否则会耗尽上下文窗口导致会话中断。** 始终在命令末尾添加 `2>&1 | grep -E "TEST (SUCCEEDED|FAILED)|error:|fatal:"` 只保留关键结果。如需查看失败详情，可用 `| grep -E "TEST (SUCCEEDED|FAILED)|passed|failed|error:"` 或 `| tail -50`。
+
 ```bash
 # 运行全部测试（代码修改后必须执行）
-xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS'
+xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' 2>&1 | grep -E "TEST (SUCCEEDED|FAILED)|error:|fatal:"
 
 # 运行指定测试类
-xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName
+xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName 2>&1 | grep -E "TEST (SUCCEEDED|FAILED)|error:|fatal:"
 
 # 运行单个测试方法
-xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName/testMethodName
+xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName/testMethodName 2>&1 | grep -E "TEST (SUCCEEDED|FAILED)|error:|fatal:"
 ```
 
 ## Git 提交禁止事项
