@@ -22,18 +22,16 @@ struct RealGameListView: View {
                     .padding(.vertical, 2)
                     .padding(.horizontal, 4)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(games) { game in
-                            RealGameListItemView(game: game, viewModel: viewModel)
-                            Divider()
-                        }
-                        if hasMore {
-                            Text("...")
-                                .foregroundColor(.secondary)
-                                .padding(.vertical, 2)
-                                .padding(.horizontal, 4)
-                        }
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(games) { game in
+                        RealGameListItemView(game: game, viewModel: viewModel)
+                        Divider()
+                    }
+                    if hasMore {
+                        Text("...")
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 2)
+                            .padding(.horizontal, 4)
                     }
                 }
             }
