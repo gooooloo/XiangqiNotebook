@@ -14,6 +14,12 @@ internal class Database: ObservableObject {
     @Published private(set) var databaseData: DatabaseData
     @Published private(set) var isDirty: Bool = false
 
+    // MARK: - Real Games Index
+    /// 实战反查表：fenId → 包含该局面的实战 gameId 集合（仅限"我的实战"书下的游戏）
+    private(set) var realGamesByFenId: [Int: Set<UUID>] = [:]
+    /// 索引是否已构建完成
+    private(set) var isRealGamesIndexReady: Bool = false
+
     // MARK: - Engine Score Properties
     /// 引擎分数数据，key 为 engineKey（如 "Pikafish_2024-12-28_d34"）
     private(set) var engineScores: [String: EngineScoreData] = [:]
@@ -52,6 +58,8 @@ internal class Database: ObservableObject {
     /// 标记数据已修改
     func markDirty() {
         guard !isDirty else { return }
+
+        invalidateRealGamesIndex()
 
         DispatchQueue.main.async {
             self.isDirty = true
@@ -153,6 +161,61 @@ internal class Database: ObservableObject {
     /// 引擎分数是否有未保存的修改
     var isEngineScoreDirty: Bool {
         !dirtyEngineKeys.isEmpty
+    }
+
+    // MARK: - Real Games Index Operations
+
+    /// 构建实战反查表索引
+    /// 遍历"我的实战"书下所有游戏，建立 fenId → gameId 映射
+    func buildRealGamesIndex() {
+        let myRealGameBookId = Session.myRealGameBookId
+
+        guard let book = databaseData.bookObjects[myRealGameBookId] else {
+            realGamesByFenId = [:]
+            isRealGamesIndexReady = true
+            return
+        }
+
+        var index: [Int: Set<UUID>] = [:]
+        var visitedBookIds = Set<UUID>()
+
+        func collectGames(from bookId: UUID) {
+            guard !visitedBookIds.contains(bookId) else { return }
+            visitedBookIds.insert(bookId)
+
+            guard let currentBook = databaseData.bookObjects[bookId] else { return }
+
+            for gameId in currentBook.gameIds {
+                guard let game = databaseData.gameObjects[gameId] else { continue }
+
+                // 索引 startingFenId
+                if let startingFenId = game.startingFenId {
+                    index[startingFenId, default: []].insert(gameId)
+                }
+
+                // 索引所有着法的 sourceFenId 和 targetFenId
+                for moveId in game.moveIds {
+                    guard let move = databaseData.moveObjects[moveId] else { continue }
+                    index[move.sourceFenId, default: []].insert(gameId)
+                    if let targetFenId = move.targetFenId {
+                        index[targetFenId, default: []].insert(gameId)
+                    }
+                }
+            }
+
+            for subBookId in currentBook.subBookIds {
+                collectGames(from: subBookId)
+            }
+        }
+
+        collectGames(from: myRealGameBookId)
+        realGamesByFenId = index
+        isRealGamesIndexReady = true
+    }
+
+    /// 使索引失效（数据变更时调用）
+    func invalidateRealGamesIndex() {
+        isRealGamesIndexReady = false
     }
 
     // MARK: - Backup/Restore

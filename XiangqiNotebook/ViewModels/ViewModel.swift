@@ -51,6 +51,7 @@ class ViewModel: ObservableObject {
     @Published var showIOSMoreActionsView = false
     @Published var showEditCommentIOS = false
     @Published var showingReviewListView = false
+    @Published var showRealGameListIOS = false
     @Published var showReviewListIOS = false
     @Published var showReviewModeIOS = false
 
@@ -140,11 +141,19 @@ class ViewModel: ObservableObject {
             self?.currentAppMode ?? .normal
         }
 
-        // 8. 设置引擎分数的 activeEngineKey（确保加载的分数文件能立即显示）
+        // 8. 异步构建实战反查表索引
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            Database.shared.buildRealGamesIndex()
+            DispatchQueue.main.async {
+                self?.session.dataChanged.toggle()
+            }
+        }
+
+        // 9. 设置引擎分数的 activeEngineKey（确保加载的分数文件能立即显示）
         #if os(macOS)
         Database.shared.activeEngineKey = PikafishService.engineKey
 
-        // 9. App 退出时关闭引擎子进程，防止孤儿进程残留
+        // 10. App 退出时关闭引擎子进程，防止孤儿进程残留
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil, queue: .main
@@ -313,6 +322,7 @@ class ViewModel: ObservableObject {
         }
         actionDefinitions.registerAction(.showReviewList, text: "复习库列表", shortcuts: [.sequence(",v")]) { self.showingReviewListView = true }
         actionDefinitions.registerAction(.showReviewListIOS, text: "复习库", shortcuts: [.sequence(",v")]) { self.showReviewListIOS = true }
+        actionDefinitions.registerAction(.showRealGameListIOS, text: "实战", shortcuts: [.sequence(",g")]) { self.showRealGameListIOS = true }
       
         actionDefinitions.registerToggleAction(
           .setFilterNone,
@@ -1978,5 +1988,10 @@ class ViewModel: ObservableObject {
     /// 获取包含当前局面的实战对局列表（转发到 Session）
     var relatedRealGamesForCurrentFen: [GameObject] {
         session.relatedRealGamesForCurrentFen
+    }
+
+    /// 是否有更多相关实战（超过5个）
+    var hasMoreRelatedRealGames: Bool {
+        session.hasMoreRelatedRealGames
     }
 }

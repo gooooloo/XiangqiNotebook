@@ -20,6 +20,12 @@ class Session: ObservableObject {
     var sessionDataDirty: Bool = false
     var engineScoreDirty: Bool = false
 
+    // MARK: - 实战列表缓存
+    private var _cachedRealGames: [GameObject] = []
+    private var _cachedHasMoreRealGames: Bool = false
+    private var _cachedRealGamesFenId: Int = -1
+    private var _cachedRealGamesDataVersion: Bool = false
+
     // databaseDirty 现在通过 databaseView.isDirty 访问
     var databaseDirty: Bool {
         return databaseView.isDirty
@@ -167,23 +173,74 @@ class Session: ObservableObject {
     }
 
     /// 获取包含当前局面的实战对局列表，按日期降序排列
+    /// 结果按 currentFenId 和 dataChanged 缓存，避免每次访问都重新计算
     var relatedRealGamesForCurrentFen: [GameObject] {
-        let currentFenId = self.currentFenId
+        let fenId = self.currentFenId
+        let dataVersion = self.dataChanged
 
-        // 获取"我的实战"书籍中所有游戏（递归包含子书籍）
-        guard databaseView.getBookObjectUnfiltered(Session.myRealGameBookId) != nil else {
-            return []
+        // 缓存命中：fenId 和数据版本都未变化
+        if fenId == _cachedRealGamesFenId && dataVersion == _cachedRealGamesDataVersion {
+            return _cachedRealGames
         }
+
+        let (games, hasMore) = computeRelatedRealGames(for: fenId)
+        _cachedRealGamesFenId = fenId
+        _cachedRealGamesDataVersion = dataVersion
+        _cachedRealGames = games
+        _cachedHasMoreRealGames = hasMore
+        return games
+    }
+
+    /// 是否有更多相关实战（超过显示限制）
+    var hasMoreRelatedRealGames: Bool {
+        // 确保缓存已计算
+        _ = relatedRealGamesForCurrentFen
+        return _cachedHasMoreRealGames
+    }
+
+    /// 计算包含指定 fenId 的实战对局列表（最多返回5个）
+    private func computeRelatedRealGames(for fenId: Int) -> (games: [GameObject], hasMore: Bool) {
+        guard databaseView.getBookObjectUnfiltered(Session.myRealGameBookId) != nil else {
+            return ([], false)
+        }
+
+        // 优先使用反向索引（O(1) 查询）
+        if databaseView.isRealGamesIndexReady {
+            guard let gameIds = databaseView.realGameIds(for: fenId) else {
+                return ([], false)
+            }
+
+            var matched: [GameObject] = []
+            for gameId in gameIds {
+                if let game = databaseView.getGameObjectUnfiltered(gameId) {
+                    matched.append(game)
+                    if matched.count > 5 {
+                        break
+                    }
+                }
+            }
+
+            let hasMore = matched.count > 5
+            let result = Array(matched.prefix(5))
+            return (result, hasMore)
+        }
+
+        // Fallback：索引未就绪时线性遍历
         let allGames = databaseView.getGamesInBookRecursivelyUnfiltered(bookId: Session.myRealGameBookId)
 
-        // 过滤出包含当前 fenId 的游戏，按日期降序排列
-        return allGames
-            .filter { game in databaseView.gameContainsFenId(gameId: game.id, fenId: currentFenId) }
-            .sorted { g1, g2 in
-                let d1 = g1.gameDate ?? g1.creationDate ?? .distantPast
-                let d2 = g2.gameDate ?? g2.creationDate ?? .distantPast
-                return d1 > d2
+        var matched: [GameObject] = []
+        for game in allGames {
+            if databaseView.gameContainsFenId(gameId: game.id, fenId: fenId) {
+                matched.append(game)
+                if matched.count > 5 {
+                    break
+                }
             }
+        }
+
+        let hasMore = matched.count > 5
+        let result = Array(matched.prefix(5))
+        return (result, hasMore)
     }
 
     var currentFenCanChangeInBlackOpening: Bool {
