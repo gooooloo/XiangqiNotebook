@@ -29,12 +29,6 @@ struct RealGameListView: View {
                             .onTapGesture { toggleSelection(game.id) }
                         Divider()
                     }
-                    if hasMore {
-                        Text("...")
-                            .foregroundColor(.secondary)
-                            .padding(.vertical, 2)
-                            .padding(.horizontal, 4)
-                    }
                 }
             }
         }
