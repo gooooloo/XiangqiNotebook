@@ -8,14 +8,17 @@ struct RealGameListView: View {
         viewModel.relatedRealGamesForCurrentFen
     }
 
+    private var hasMore: Bool {
+        viewModel.hasMoreRelatedRealGames
+    }
+
     var body: some View {
         VStack(alignment: .leading) {
-            Text("实战 (\(games.count))")
+            Text("实战 (\(games.count)\(hasMore ? "+" : ""))")
 
             if games.isEmpty {
                 Text("无相关实战")
                     .foregroundColor(.secondary)
-                    .font(.caption)
                     .padding(.vertical, 2)
                     .padding(.horizontal, 4)
             } else {
@@ -24,6 +27,12 @@ struct RealGameListView: View {
                         ForEach(games) { game in
                             RealGameListItemView(game: game, viewModel: viewModel)
                             Divider()
+                        }
+                        if hasMore {
+                            Text("...")
+                                .foregroundColor(.secondary)
+                                .padding(.vertical, 2)
+                                .padding(.horizontal, 4)
                         }
                     }
                 }
@@ -46,18 +55,17 @@ private struct RealGameListItemView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(game.displayTitle)
-                .font(.caption)
                 .lineLimit(1)
 
             HStack(spacing: 4) {
                 if let date = game.gameDate {
                     Text(date, style: .date)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundColor(.secondary)
                 }
                 Spacer()
                 Text(game.gameResult.rawValue)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundColor(resultColor(game.gameResult))
             }
         }
@@ -72,9 +80,6 @@ private struct RealGameListItemView: View {
             } label: {
                 Label("筛选此棋局", systemImage: "line.3.horizontal.decrease.circle")
             }
-        }
-        .onTapGesture {
-            viewModel.loadGame(game.id)
         }
     }
 
