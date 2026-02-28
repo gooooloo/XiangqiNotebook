@@ -56,6 +56,13 @@ struct iPhoneMoreOptionsView: View {
                         }
                         .frame(maxWidth: .infinity)
 
+                        if viewModel.currentAppMode == .normal {
+                            HStack(spacing: 15) {
+                                iPhoneButton(viewModel: viewModel, actionKey: .showRealGameListIOS)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+
                         // 滚动到底部锚点
                         Color.clear.frame(height: 1).id("bottom")
                     }

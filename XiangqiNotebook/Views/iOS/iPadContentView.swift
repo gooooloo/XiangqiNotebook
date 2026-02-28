@@ -69,7 +69,9 @@ struct iPadContentView: View {
                                 VStack(spacing: 0) {
                                     TogglesView(viewModel: viewModel)
                                     BookmarkListView(viewModel: viewModel)
-                                    RealGameListView(viewModel: viewModel)
+                                    if viewModel.currentAppMode == .normal {
+                                        RealGameListView(viewModel: viewModel)
+                                    }
                                 }
                             }
                             .frame(maxHeight: .infinity)
