@@ -65,16 +65,12 @@ struct iPadContentView: View {
                             BoardOperationTogglesView(viewModel: viewModel)
                         } else {
                             // 常规/练习模式：棋局筛选 + 书签 + 实战列表
-                            ScrollView {
-                                VStack(spacing: 0) {
-                                    TogglesView(viewModel: viewModel)
-                                    BookmarkListView(viewModel: viewModel)
-                                    if viewModel.currentAppMode == .normal {
-                                        RealGameListView(viewModel: viewModel)
-                                    }
-                                }
+                            TogglesView(viewModel: viewModel)
+                            BookmarkListView(viewModel: viewModel)
+                                .frame(maxHeight: .infinity)
+                            if viewModel.currentAppMode == .normal {
+                                RealGameListView(viewModel: viewModel)
                             }
-                            .frame(maxHeight: .infinity)
                         }
                     }
                     .frame(width: geometry.size.width * 0.2)

@@ -73,6 +73,9 @@ struct iPhoneContentView: View {
         .sheet(isPresented: $viewModel.showReviewListIOS) {
             iPhoneReviewListView(viewModel: viewModel, isPresented: $viewModel.showReviewListIOS)
         }
+        .sheet(isPresented: $viewModel.showRealGameListIOS) {
+            iPhoneRealGameListView(viewModel: viewModel, isPresented: $viewModel.showRealGameListIOS)
+        }
         .sheet(isPresented: $viewModel.showReviewModeIOS) {
             iPhoneReviewModeView(viewModel: viewModel, isPresented: $viewModel.showReviewModeIOS)
         }
