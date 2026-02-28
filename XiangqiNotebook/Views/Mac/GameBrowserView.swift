@@ -15,6 +15,7 @@ struct GameBrowserView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedBookId: UUID?
     @State private var selectedGameId: UUID?
+    @State private var expandedBookIds: Set<UUID>?
     @State private var showingAddBookSheet = false
     @State private var showingAddGameSheet = false
     #if os(macOS)
@@ -30,13 +31,15 @@ struct GameBrowserView: View {
             BookTreeSidebarView(
                 viewModel: viewModel,
                 selectedBookId: $selectedBookId,
+                expandedBookIds: $expandedBookIds,
                 showingPGNImportSheet: $showingPGNImportSheet
             )
             .frame(minWidth: 250, maxWidth: 300)
             #else
             BookTreeSidebarView(
                 viewModel: viewModel,
-                selectedBookId: $selectedBookId
+                selectedBookId: $selectedBookId,
+                expandedBookIds: $expandedBookIds
             )
             .frame(minWidth: 250, maxWidth: 300)
             #endif
@@ -80,22 +83,35 @@ struct GameBrowserView: View {
             }
         }
         .onAppear {
-            // 自动定位到当前特定棋局（只在首次显示且未选中任何棋局时执行）
-            if selectedGameId == nil,
-               viewModel.currentFilters.contains(Session.filterSpecificGame),
+            let sessionData = viewModel.session.sessionData
+
+            // 恢复折叠状态
+            expandedBookIds = sessionData.gameBrowserExpandedBookIds
+
+            // 自动定位到当前特定棋局（优先级最高）
+            if viewModel.currentFilters.contains(Session.filterSpecificGame),
                let gameId = viewModel.currentSpecificGameId {
-
-                // 设置选中的棋局
                 selectedGameId = gameId
-
-                // 查找这个棋局所属的棋谱
                 for book in viewModel.allBookObjects {
                     if book.gameIds.contains(gameId) {
                         selectedBookId = book.id
                         break
                     }
                 }
+            } else {
+                // 恢复上次的选中状态
+                selectedBookId = sessionData.gameBrowserSelectedBookId
+                selectedGameId = sessionData.gameBrowserSelectedGameId
             }
+        }
+        .onChange(of: selectedBookId) {
+            viewModel.session.sessionData.gameBrowserSelectedBookId = selectedBookId
+        }
+        .onChange(of: selectedGameId) {
+            viewModel.session.sessionData.gameBrowserSelectedGameId = selectedGameId
+        }
+        .onChange(of: expandedBookIds) {
+            viewModel.session.sessionData.gameBrowserExpandedBookIds = expandedBookIds
         }
     }
 }
@@ -364,6 +380,7 @@ struct EditGameView: View {
 struct BookTreeSidebarView: View {
     @ObservedObject var viewModel: ViewModel
     @Binding var selectedBookId: UUID?
+    @Binding var expandedBookIds: Set<UUID>?
     #if os(macOS)
     @Binding var showingPGNImportSheet: Bool
     #endif
@@ -404,6 +421,7 @@ struct BookTreeSidebarView: View {
                             book: book,
                             viewModel: viewModel,
                             selectedBookId: $selectedBookId,
+                            expandedBookIds: $expandedBookIds,
                             level: 0
                         )
                     }
@@ -422,11 +440,30 @@ struct BookTreeNodeView: View {
     let book: BookObject
     @ObservedObject var viewModel: ViewModel
     @Binding var selectedBookId: UUID?
+    @Binding var expandedBookIds: Set<UUID>?
     let level: Int
-    @State private var isExpanded: Bool = true
     @State private var showingEditBookSheet = false
     @State private var showingAddSubBookSheet = false
     @State private var showingDeleteAlert = false
+
+    // nil = 全部展开（默认）；有值时只展开 set 中的 ID
+    private var isExpanded: Bool {
+        guard let ids = expandedBookIds else { return true }
+        return ids.contains(book.id)
+    }
+
+    private func toggleExpanded() {
+        if expandedBookIds == nil {
+            // 首次折叠：初始化 set 为所有 book ID，然后移除当前
+            var allIds = Set(viewModel.allBookObjects.map { $0.id })
+            allIds.remove(book.id)
+            expandedBookIds = allIds
+        } else if expandedBookIds!.contains(book.id) {
+            expandedBookIds!.remove(book.id)
+        } else {
+            expandedBookIds!.insert(book.id)
+        }
+    }
 
     private var subBooks: [BookObject] {
         book.subBookIds.compactMap { subBookId in
@@ -473,7 +510,7 @@ struct BookTreeNodeView: View {
                 // 展开/收起按钮
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        isExpanded.toggle()
+                        toggleExpanded()
                     }
                 }) {
                     Image(systemName: subBooks.isEmpty ? "circle" : (isExpanded ? "chevron.down" : "chevron.right"))
@@ -553,6 +590,7 @@ struct BookTreeNodeView: View {
                         book: subBook,
                         viewModel: viewModel,
                         selectedBookId: $selectedBookId,
+                        expandedBookIds: $expandedBookIds,
                         level: level + 1
                     )
                 }

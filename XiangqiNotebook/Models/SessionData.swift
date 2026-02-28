@@ -19,6 +19,9 @@ class SessionData: Codable {
     var specificGameId: UUID? = nil
     var specificBookId: UUID? = nil
     var allowAddingNewMoves: Bool = true
+    var gameBrowserExpandedBookIds: Set<UUID>? = nil
+    var gameBrowserSelectedBookId: UUID? = nil
+    var gameBrowserSelectedGameId: UUID? = nil
 
     init() {
         // 所有属性都已在声明时设置了默认值
@@ -48,6 +51,9 @@ class SessionData: Codable {
         case specificGameId = "specific_game_id"
         case specificBookId = "specific_book_id"
         case allowAddingNewMoves = "allow_adding_new_moves"
+        case gameBrowserExpandedBookIds = "game_browser_expanded_book_ids"
+        case gameBrowserSelectedBookId = "game_browser_selected_book_id"
+        case gameBrowserSelectedGameId = "game_browser_selected_game_id"
     }
 
     required init(from decoder: Decoder) throws {
@@ -77,6 +83,9 @@ class SessionData: Codable {
             currentMode = AppMode(rawValue: modeString) ?? .normal
         }
         allowAddingNewMoves = try container.decodeIfPresent(Bool.self, forKey: .allowAddingNewMoves) ?? true
+        gameBrowserExpandedBookIds = try container.decodeIfPresent(Set<UUID>.self, forKey: .gameBrowserExpandedBookIds)
+        gameBrowserSelectedBookId = try container.decodeIfPresent(UUID.self, forKey: .gameBrowserSelectedBookId)
+        gameBrowserSelectedGameId = try container.decodeIfPresent(UUID.self, forKey: .gameBrowserSelectedGameId)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -100,5 +109,8 @@ class SessionData: Codable {
         try container.encodeIfPresent(specificBookId, forKey: .specificBookId)
         try container.encode(currentMode, forKey: .currentMode)
         try container.encode(allowAddingNewMoves, forKey: .allowAddingNewMoves)
+        try container.encodeIfPresent(gameBrowserExpandedBookIds, forKey: .gameBrowserExpandedBookIds)
+        try container.encodeIfPresent(gameBrowserSelectedBookId, forKey: .gameBrowserSelectedBookId)
+        try container.encodeIfPresent(gameBrowserSelectedGameId, forKey: .gameBrowserSelectedGameId)
     }
 }
