@@ -5,6 +5,7 @@ import Combine
 class SessionManager: ObservableObject {
     @Published private(set) var mainSession: Session
     @Published private(set) var practiceSession: Session?
+    private(set) var database: Database
 
     /// 当前活跃的 Session（practiceSession 优先，否则 mainSession）
     var currentSession: Session {
@@ -18,8 +19,9 @@ class SessionManager: ObservableObject {
 
     // MARK: - 初始化
 
-    init(mainSession: Session) {
+    init(mainSession: Session, database: Database = .shared) {
         self.mainSession = mainSession
+        self.database = database
     }
 
     /// 从 SessionData 创建 SessionManager 实例
@@ -42,7 +44,7 @@ class SessionManager: ObservableObject {
             let mainSession = try Session(sessionData: sessionData, databaseView: databaseView)
 
             // 3. 返回 SessionManager
-            return SessionManager(mainSession: mainSession)
+            return SessionManager(mainSession: mainSession, database: database)
 
         } catch {
             // Fallback: 创建默认的 SessionManager
@@ -90,8 +92,14 @@ class SessionManager: ObservableObject {
         newSessionData.gameStepLimitation = mainSession.sessionData.gameStepLimitation
         newSessionData.canNavigateBeforeLockedStep = mainSession.sessionData.canNavigateBeforeLockedStep
         newSessionData.currentMode = mainSession.sessionData.currentMode
-        newSessionData.showPath = mainSession.sessionData.showPath
-        newSessionData.showAllNextMoves = true  // 切换筛选时默认打开"显示所有下一步"
+        // 复习/练习模式下保持当前设置，其他情况默认打开路径和下一步
+        if mainSession.sessionData.currentMode == .review || mainSession.sessionData.currentMode == .practice {
+            newSessionData.showPath = mainSession.sessionData.showPath
+            newSessionData.showAllNextMoves = mainSession.sessionData.showAllNextMoves
+        } else {
+            newSessionData.showPath = mainSession.sessionData.showPath
+            newSessionData.showAllNextMoves = true
+        }
         newSessionData.autoExtendGameWhenPlayingBoardFen = mainSession.sessionData.autoExtendGameWhenPlayingBoardFen
         newSessionData.isCommentEditing = mainSession.sessionData.isCommentEditing
         newSessionData.focusedPracticeGamePath = focusedPath
@@ -105,7 +113,7 @@ class SessionManager: ObservableObject {
             newSessionData.allowAddingNewMoves = mainSession.sessionData.allowAddingNewMoves
         } else if filters.contains(Session.filterSpecificGame) {
             // 特定棋局：根据 isFullyRecorded 决定
-            let fullView = DatabaseView.full(database: Database.shared)
+            let fullView = DatabaseView.full(database: database)
             if let gameId = specificGameId,
                let game = fullView.getGameObject(gameId),
                game.isFullyRecorded {
@@ -122,7 +130,7 @@ class SessionManager: ObservableObject {
         }
 
         // 2. 根据 filters 构造相应的 DatabaseView
-        let databaseView = Self.createDatabaseView(for: filters, focusedPath: focusedPath, specificGameId: specificGameId, specificBookId: specificBookId, database: .shared)
+        let databaseView = Self.createDatabaseView(for: filters, focusedPath: focusedPath, specificGameId: specificGameId, specificBookId: specificBookId, database: database)
 
         // 3. 按视图裁剪 currentGame2/currentGameStep（移除不在视图范围的 fenId）
         let oldGame = Array(newSessionData.currentGame2[0...newSessionData.currentGameStep])
@@ -243,7 +251,7 @@ class SessionManager: ObservableObject {
             focusedPath: practiceSessionData.focusedPracticeGamePath,
             specificGameId: nil,
             specificBookId: nil,
-            database: .shared
+            database: database
         )
 
         // 使用主构造器创建 practiceSession
