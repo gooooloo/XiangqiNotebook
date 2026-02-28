@@ -45,27 +45,28 @@ private struct RealGameListItemView: View {
     let game: GameObject
     @ObservedObject var viewModel: ViewModel
 
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy年MM月dd日"
+        return f
+    }()
+
     private var isCurrentlyLoaded: Bool {
         viewModel.currentFilters.contains(Session.filterSpecificGame) &&
             viewModel.currentSpecificGameId == game.id
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 4) {
             Text(game.displayTitle)
                 .lineLimit(1)
-
-            HStack(spacing: 4) {
-                if let date = game.gameDate {
-                    Text(date, style: .date)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Text(game.gameResult.rawValue)
-                    .font(.caption)
-                    .foregroundColor(resultColor(game.gameResult))
+            Spacer()
+            if let date = game.gameDate {
+                Text(Self.dateFormatter.string(from: date))
+                    .monospacedDigit()
             }
+            Text(game.gameResult.rawValue)
+                .foregroundColor(resultColor(game.gameResult))
         }
         .padding(.vertical, 2)
         .padding(.horizontal, 4)
