@@ -3,6 +3,7 @@ import SwiftUI
 /// 实战列表组件：显示包含当前局面的实战对局
 struct RealGameListView: View {
     @ObservedObject var viewModel: ViewModel
+    @State private var selectedGameId: UUID? = nil
 
     private var games: [GameObject] {
         viewModel.relatedRealGamesForCurrentFen
@@ -24,7 +25,8 @@ struct RealGameListView: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(games) { game in
-                        RealGameListItemView(game: game, viewModel: viewModel)
+                        RealGameListItemView(game: game, viewModel: viewModel, isSelected: selectedGameId == game.id)
+                            .onTapGesture { toggleSelection(game.id) }
                         Divider()
                     }
                     if hasMore {
@@ -39,11 +41,16 @@ struct RealGameListView: View {
         .padding(8)
         .border(Color.gray)
     }
+
+    private func toggleSelection(_ id: UUID) {
+        selectedGameId = selectedGameId == id ? nil : id
+    }
 }
 
 private struct RealGameListItemView: View {
     let game: GameObject
     @ObservedObject var viewModel: ViewModel
+    var isSelected: Bool
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -71,7 +78,7 @@ private struct RealGameListItemView: View {
         .padding(.vertical, 2)
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isCurrentlyLoaded ? Color.blue.opacity(0.2) : Color.clear)
+        .background((isSelected || isCurrentlyLoaded) ? Color.blue.opacity(0.2) : Color.clear)
         .contentShape(Rectangle())
         .contextMenu {
             Button {
