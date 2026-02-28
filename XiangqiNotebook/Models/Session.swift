@@ -183,7 +183,7 @@ class Session: ObservableObject {
             return _cachedRealGames
         }
 
-        let (games, hasMore) = computeRelatedRealGames(for: fenId)
+        let (games, hasMore) = computeRelatedRealGames(for: fenId, pinnedGameId: currentSpecificGameId)
         _cachedRealGamesFenId = fenId
         _cachedRealGamesDataVersion = dataVersion
         _cachedRealGames = games
@@ -199,29 +199,50 @@ class Session: ObservableObject {
     }
 
     /// 计算包含指定 fenId 的实战对局列表（最多返回5个）
-    private func computeRelatedRealGames(for fenId: Int) -> (games: [GameObject], hasMore: Bool) {
+    /// pinnedGameId 指定的棋局（如果匹配）始终置顶，确保当前筛选的棋局可见
+    private func computeRelatedRealGames(for fenId: Int, pinnedGameId: UUID? = nil) -> (games: [GameObject], hasMore: Bool) {
         guard databaseView.getBookObjectUnfiltered(Session.myRealGameBookId) != nil else {
             return ([], false)
         }
 
+        let limit = 5
+
+        // 先尝试获取 pinned 棋局（确认它包含该局面）
+        var pinned: GameObject? = nil
+        if let pinnedId = pinnedGameId,
+           let game = databaseView.getGameObjectUnfiltered(pinnedId) {
+            if databaseView.isRealGamesIndexReady {
+                if let gameIds = databaseView.realGameIds(for: fenId), gameIds.contains(pinnedId) {
+                    pinned = game
+                }
+            } else if databaseView.gameContainsFenId(gameId: pinnedId, fenId: fenId) {
+                pinned = game
+            }
+        }
+
+        let remaining = pinned != nil ? limit - 1 : limit
+
         // 优先使用反向索引（O(1) 查询）
         if databaseView.isRealGamesIndexReady {
             guard let gameIds = databaseView.realGameIds(for: fenId) else {
+                if let pinned = pinned { return ([pinned], false) }
                 return ([], false)
             }
 
             var matched: [GameObject] = []
             for gameId in gameIds {
+                if gameId == pinnedGameId { continue }
                 if let game = databaseView.getGameObjectUnfiltered(gameId) {
                     matched.append(game)
-                    if matched.count > 5 {
+                    if matched.count > remaining {
                         break
                     }
                 }
             }
 
-            let hasMore = matched.count > 5
-            let result = Array(matched.prefix(5))
+            let hasMore = matched.count > remaining
+            var result = Array(matched.prefix(remaining))
+            if let pinned = pinned { result.insert(pinned, at: 0) }
             return (result, hasMore)
         }
 
@@ -230,16 +251,18 @@ class Session: ObservableObject {
 
         var matched: [GameObject] = []
         for game in allGames {
+            if game.id == pinnedGameId { continue }
             if databaseView.gameContainsFenId(gameId: game.id, fenId: fenId) {
                 matched.append(game)
-                if matched.count > 5 {
+                if matched.count > remaining {
                     break
                 }
             }
         }
 
-        let hasMore = matched.count > 5
-        let result = Array(matched.prefix(5))
+        let hasMore = matched.count > remaining
+        var result = Array(matched.prefix(remaining))
+        if let pinned = pinned { result.insert(pinned, at: 0) }
         return (result, hasMore)
     }
 
