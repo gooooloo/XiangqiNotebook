@@ -46,6 +46,9 @@ struct StatusBarView: View {
     var body: some View {
         VStack {
             HStack {
+                Text("下步走子: \(viewModel.isRedTurn ? "红方" : "黑方")")
+                    .font(fontStyle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Text("分数: \(viewModel.displayScore)")
                     .font(fontStyle)
                     .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
