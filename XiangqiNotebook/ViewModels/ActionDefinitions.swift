@@ -49,7 +49,8 @@ class ActionDefinitions {
         case practiceBlackOpening
         case searchCurrentMove
         case importPGN  // 新增：导入PGN按钮
-        case exportPGN  // 新增：导出PGN按钮
+        case exportPGNCurrentDatabaseView  // 导出所有变着PGN
+        case exportPGNCurrentGame  // 导出当前棋局PGN
         case autoAddToOpening  // 新增：自动完善开局库
         case jumpToNextOpeningGap  // 新增：跳转到下一个开局缺口
         case copyFEN  // 拷贝当前FEN到剪贴板
