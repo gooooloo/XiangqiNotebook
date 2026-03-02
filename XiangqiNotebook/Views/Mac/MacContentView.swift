@@ -246,6 +246,8 @@ struct MacMenuCommands: Commands {
             menuButton(.deleteScore)
             Divider()
             menuButton(.fix)
+            Divider()
+            menuButton(.copyFEN)
         }
 
         // 显示 menu
