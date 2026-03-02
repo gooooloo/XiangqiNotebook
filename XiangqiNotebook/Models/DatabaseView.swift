@@ -38,6 +38,12 @@ final class DatabaseView {
         return database.databaseData.fenObjects2[fenId]
     }
 
+    /// 获取 FenObject（不受 scope 过滤影响）
+    /// - Note: 用于需要访问所有局面的场景（如 PGN 导出时遍历完整树结构）
+    func getFenObjectUnfiltered(_ fenId: Int) -> FenObject? {
+        return database.databaseData.fenObjects2[fenId]
+    }
+
     /// 检查 fenId 是否属于当前视图 scope
     func containsFenId(_ fenId: Int) -> Bool {
         return fenIdFilter(fenId)
