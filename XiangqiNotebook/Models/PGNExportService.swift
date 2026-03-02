@@ -3,7 +3,7 @@ import Foundation
 enum PGNExportService {
 
     /// Export all root-to-leaf paths in the DatabaseView tree as PGN games
-    static func exportPGN(databaseView: DatabaseView, rootFenId: Int) -> String {
+    static func exportCurrentDatabaseView(databaseView: DatabaseView, rootFenId: Int) -> String {
         let paths = generateAllPaths(databaseView: databaseView, rootFenId: rootFenId)
         var pgnStrings: [String] = []
         for (index, path) in paths.enumerated() {
@@ -95,6 +95,14 @@ enum PGNExportService {
         movetext += " *"
 
         return headers.joined(separator: "\n") + "\n" + movetext
+    }
+
+    /// Export a single game path (currentGame2) as PGN
+    static func exportCurrentGame(path: [Int], databaseView: DatabaseView) -> String {
+        guard let pgn = exportPath(path, gameNumber: 1, databaseView: databaseView) else {
+            return ""
+        }
+        return pgn
     }
 
     // MARK: - Private Helpers

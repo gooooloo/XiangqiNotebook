@@ -304,7 +304,8 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcuts: [.sequence(",i")], supportedModes: [.normal]) { self.showingGameInputView = true }
         actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",fff")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
         actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",p")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
-        actionDefinitions.registerAction(.exportPGN, text: "导出PGN...", supportedModes: [.normal]) { self.exportPGN() }
+        actionDefinitions.registerAction(.exportPGNCurrentDatabaseView, text: "导出所有变着PGN...", supportedModes: [.normal]) { self.exportPGNCurrentDatabaseView() }
+        actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", supportedModes: [.normal]) { self.exportPGNCurrentGame() }
 
         actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { self.session.recalculateGameStatistics() }
@@ -1823,14 +1824,19 @@ class ViewModel: ObservableObject {
         return result
     }
 
-    func exportPGNContent() -> String {
+    func exportPGNCurrentDatabaseViewContent() -> String {
         let rootFenId = session.sessionData.currentGame2[0]
-        return PGNExportService.exportPGN(databaseView: session.databaseView, rootFenId: rootFenId)
+        return PGNExportService.exportCurrentDatabaseView(databaseView: session.databaseView, rootFenId: rootFenId)
+    }
+
+    func exportPGNCurrentGameContent() -> String {
+        let path = session.sessionData.currentGame2
+        return PGNExportService.exportCurrentGame(path: path, databaseView: session.databaseView)
     }
 
     #if os(macOS)
-    func exportPGN() {
-        let content = exportPGNContent()
+    func exportPGNCurrentDatabaseView() {
+        let content = exportPGNCurrentDatabaseViewContent()
         guard !content.isEmpty else {
             showGlobalAlert(title: "导出PGN", message: "当前范围内没有可导出的路径")
             return
@@ -1839,7 +1845,28 @@ class ViewModel: ObservableObject {
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.plainText]
         savePanel.nameFieldStringValue = "export.pgn"
-        savePanel.title = "导出PGN"
+        savePanel.title = "导出所有变着PGN"
+
+        guard savePanel.runModal() == .OK, let url = savePanel.url else { return }
+
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            showGlobalAlert(title: "导出失败", message: error.localizedDescription)
+        }
+    }
+
+    func exportPGNCurrentGame() {
+        let content = exportPGNCurrentGameContent()
+        guard !content.isEmpty else {
+            showGlobalAlert(title: "导出PGN", message: "当前棋局没有可导出的着法")
+            return
+        }
+
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.plainText]
+        savePanel.nameFieldStringValue = "export.pgn"
+        savePanel.title = "导出当前棋局PGN"
 
         guard savePanel.runModal() == .OK, let url = savePanel.url else { return }
 

@@ -233,7 +233,8 @@ struct MacMenuCommands: Commands {
             Divider()
             menuButton(.checkDataVersion)
             menuButton(.importPGN)
-            menuButton(.exportPGN)
+            menuButton(.exportPGNCurrentDatabaseView)
+            menuButton(.exportPGNCurrentGame)
             menuButton(.inputGame)
             menuButton(.browseGames)
         }

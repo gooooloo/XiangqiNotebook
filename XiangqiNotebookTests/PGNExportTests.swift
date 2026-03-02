@@ -48,7 +48,7 @@ struct PGNExportTests {
     @Test func testExportEmptyDatabase() {
         let database = Database(testDatabaseData: DatabaseData())
         let databaseView = DatabaseView.full(database: database)
-        let exported = PGNExportService.exportPGN(databaseView: databaseView, rootFenId: 1)
+        let exported = PGNExportService.exportCurrentDatabaseView(databaseView: databaseView, rootFenId: 1)
         #expect(exported.isEmpty)
     }
 
@@ -69,7 +69,7 @@ struct PGNExportTests {
         let result = PGNImportService.importPGN(content: pgn, username: "", databaseView: databaseView)
         #expect(result.imported == 1)
 
-        let exported = PGNExportService.exportPGN(databaseView: databaseView, rootFenId: 1)
+        let exported = PGNExportService.exportCurrentDatabaseView(databaseView: databaseView, rootFenId: 1)
         #expect(!exported.isEmpty)
 
         // Verify minimal headers (no player names, no date)
@@ -110,7 +110,7 @@ struct PGNExportTests {
         let result = PGNImportService.importPGN(content: pgn, username: "", databaseView: databaseView)
         #expect(result.imported == 2)
 
-        let exported = PGNExportService.exportPGN(databaseView: databaseView, rootFenId: 1)
+        let exported = PGNExportService.exportCurrentDatabaseView(databaseView: databaseView, rootFenId: 1)
         #expect(!exported.isEmpty)
 
         // Should produce 2 PGN games (2 distinct root-to-leaf paths)
@@ -209,7 +209,7 @@ struct PGNExportTests {
         #expect(paths.count == 1)
         #expect(paths[0].count == 3)
 
-        let exported = PGNExportService.exportPGN(databaseView: redView, rootFenId: rootFenId)
+        let exported = PGNExportService.exportCurrentDatabaseView(databaseView: redView, rootFenId: rootFenId)
         #expect(!exported.isEmpty)
         #expect(exported.contains("1."))
     }
@@ -245,6 +245,44 @@ struct PGNExportTests {
         #expect(result == nil)
     }
 
+    // MARK: - exportCurrentGame Tests
+
+    @Test func testExportCurrentGameLinearPath() {
+        let database = Database(testDatabaseData: DatabaseData())
+        let databaseView = DatabaseView.full(database: database)
+
+        let pgn = """
+        [Game "1"]
+        [Result "*"]
+
+        1. h2e2 h9g7 *
+        """
+        _ = PGNImportService.importPGN(content: pgn, username: "", databaseView: databaseView)
+
+        // Build currentGame2-like path: root → after h2e2 → after h9g7
+        let paths = PGNExportService.generateAllPaths(databaseView: databaseView, rootFenId: 1)
+        #expect(paths.count == 1)
+
+        let exported = PGNExportService.exportCurrentGame(path: paths[0], databaseView: databaseView)
+        #expect(!exported.isEmpty)
+        #expect(exported.contains("[Game \"1\"]"))
+        #expect(exported.contains("1."))
+    }
+
+    @Test func testExportCurrentGameEmptyPath() {
+        let database = Database(testDatabaseData: DatabaseData())
+        let databaseView = DatabaseView.full(database: database)
+        let exported = PGNExportService.exportCurrentGame(path: [], databaseView: databaseView)
+        #expect(exported.isEmpty)
+    }
+
+    @Test func testExportCurrentGameSingleNode() {
+        let database = Database(testDatabaseData: DatabaseData())
+        let databaseView = DatabaseView.full(database: database)
+        let exported = PGNExportService.exportCurrentGame(path: [1], databaseView: databaseView)
+        #expect(exported.isEmpty)
+    }
+
     // MARK: - Database without fenId=1
 
     @Test func testExportWithoutFenId1() {
@@ -254,7 +292,7 @@ struct PGNExportTests {
         // DatabaseData() creates empty data with no fenObjects — fenId=1 doesn't exist
         // But DatabaseStorage.createEmptyDatabase() creates fenId=1
         // With empty DatabaseData, getFenObjectUnfiltered(1) returns nil → empty
-        let exported = PGNExportService.exportPGN(databaseView: databaseView, rootFenId: 1)
+        let exported = PGNExportService.exportCurrentDatabaseView(databaseView: databaseView, rootFenId: 1)
         #expect(exported.isEmpty)
     }
 }
