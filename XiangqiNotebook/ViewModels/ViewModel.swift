@@ -304,6 +304,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcuts: [.sequence(",i")], supportedModes: [.normal]) { self.showingGameInputView = true }
         actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",fff")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
         actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",p")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
+        actionDefinitions.registerAction(.exportPGN, text: "导出PGN...", supportedModes: [.normal]) { self.exportPGN() }
 
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { self.session.recalculateGameStatistics() }
         actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", supportedModes: [.normal]) { self.performAutoAddToOpening() }
@@ -1796,6 +1797,34 @@ class ViewModel: ObservableObject {
         }
         return result
     }
+
+    func exportPGNContent() -> String {
+        let rootFenId = session.sessionData.currentGame2[0]
+        return PGNExportService.exportPGN(databaseView: session.databaseView, rootFenId: rootFenId)
+    }
+
+    #if os(macOS)
+    func exportPGN() {
+        let content = exportPGNContent()
+        guard !content.isEmpty else {
+            showGlobalAlert(title: "导出PGN", message: "当前范围内没有可导出的路径")
+            return
+        }
+
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.plainText]
+        savePanel.nameFieldStringValue = "export.pgn"
+        savePanel.title = "导出PGN"
+
+        guard savePanel.runModal() == .OK, let url = savePanel.url else { return }
+
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            showGlobalAlert(title: "导出失败", message: error.localizedDescription)
+        }
+    }
+    #endif
 
     func getGameObjectUnfiltered(_ gameId: UUID) -> GameObject? {
         return session.getGameObjectUnfiltered(gameId)

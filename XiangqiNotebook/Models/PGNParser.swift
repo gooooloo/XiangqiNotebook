@@ -267,6 +267,36 @@ enum PGNParser {
         return (fenSequence, false)
     }
 
+    // MARK: - Reverse Conversion (Export)
+
+    /// Convert app FEN to PGN FEN format
+    /// App uses "r" for red's turn with " - - 1 1" suffix; PGN uses "w" without suffix
+    static func appFenToPgnFen(_ fen: String) -> String {
+        let parts = fen.split(separator: " ", maxSplits: 1)
+        guard parts.count >= 1 else { return fen }
+        let boardPart = String(parts[0])
+        let turnChar = parts.count > 1 ? String(parts[1].prefix(1)) : "w"
+        let pgnTurn = turnChar == "r" ? "w" : "b"
+        return boardPart + " " + pgnTurn
+    }
+
+    /// Convert PieceMove to PGN coordinate string (e.g., "h2e2")
+    /// PieceMove row/column come from FEN rows: row 0 = top (black side) = PGN row 0
+    static func pieceMoveToCoord(_ pieceMove: PieceMove) -> String {
+        let columns = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
+        return "\(columns[pieceMove.fromColumn])\(pieceMove.fromRow)\(columns[pieceMove.toColumn])\(pieceMove.toRow)"
+    }
+
+    /// Convert GameResult to PGN result string
+    static func gameResultToPgnResult(_ result: GameResult) -> String {
+        switch result {
+        case .redWin: return "1-0"
+        case .blackWin: return "0-1"
+        case .draw: return "1/2-1/2"
+        case .notFinished, .unknown: return "*"
+        }
+    }
+
     // MARK: - Result Parsing
 
     /// Parse PGN result string to GameResult
