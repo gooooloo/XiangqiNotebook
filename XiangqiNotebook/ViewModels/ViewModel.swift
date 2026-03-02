@@ -306,6 +306,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",p")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
         actionDefinitions.registerAction(.exportPGN, text: "导出PGN...", supportedModes: [.normal]) { self.exportPGN() }
 
+        actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { self.session.recalculateGameStatistics() }
         actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", supportedModes: [.normal]) { self.performAutoAddToOpening() }
         actionDefinitions.registerAction(.jumpToNextOpeningGap, text: "跳转开局缺口", shortcuts: [.sequence(",o")], supportedModes: [.normal]) { self.jumpToNextOpeningGap() }
@@ -1391,6 +1392,16 @@ class ViewModel: ObservableObject {
 
     #endif
 
+    func copyFenToClipboard() {
+        let fen = displayFen
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(fen, forType: .string)
+        #else
+        UIPasteboard.general.string = fen
+        #endif
+    }
+
     func openYunku() {
         let fen = session.currentFen
         let yunkuFen = fen.split(separator: " - ")[0]
@@ -1490,6 +1501,20 @@ class ViewModel: ObservableObject {
     // MARK: - 计算属性
     
     // 从 Session 转发的计算属性
+    var currentFen: String { session.currentFen }
+    /// 用于显示和拷贝的 FEN：`r` → `w`，尾部 `1 1` → `0 1`
+    var displayFen: String {
+        var fen = session.currentFen
+        // r → w（红方用标准 FEN 的 w 表示）
+        if let range = fen.range(of: " r ", options: .backwards) {
+            fen.replaceSubrange(range, with: " w ")
+        }
+        // 尾部 - - 1 1 → - - 0 1
+        if fen.hasSuffix(" - - 1 1") {
+            fen = String(fen.dropLast(7)) + "- - 0 1"
+        }
+        return fen
+    }
     var currentFenId: Int { session.currentFenId }
     var displayScore: String { session.displayScore }
     var displayEngineScore: String { session.displayEngineScore }

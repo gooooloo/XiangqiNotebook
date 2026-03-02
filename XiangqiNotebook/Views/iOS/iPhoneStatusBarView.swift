@@ -37,6 +37,17 @@ struct iPhoneStatusBarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            Text("FEN: \(viewModel.displayFen)")
+                .font(fontStyle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.vertical, verticalPadding)
+                .padding(.horizontal)
+
+            Divider()
+            .background(Color.gray)
+
             HStack {
                 Text("下步走子: \(viewModel.isRedTurn ? "红方" : "黑方")")
                     .font(fontStyle)
