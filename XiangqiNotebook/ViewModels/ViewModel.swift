@@ -54,6 +54,7 @@ class ViewModel: ObservableObject {
     @Published var showRealGameListIOS = false
     @Published var showReviewListIOS = false
     @Published var showReviewModeIOS = false
+    @Published var showingBoardTextView = false
 
     // 复习模式状态
     @Published private(set) var reviewQueue: [(fenId: Int, srsData: SRSData)] = []
@@ -67,7 +68,8 @@ class ViewModel: ObservableObject {
                showingGameBrowserView ||
                showingPGNImportSheet ||
                showMarkPathView ||
-               showingReviewListView
+               showingReviewListView ||
+               showingBoardTextView
     }
 
     // Global alert state
@@ -308,7 +310,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", supportedModes: [.normal]) { self.exportPGNCurrentGame() }
 
         actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
-        actionDefinitions.registerAction(.copyBoardText, text: "拷贝局面文本") { self.copyBoardTextToClipboard() }
+        actionDefinitions.registerAction(.copyBoardText, text: "生成详细局面文本") { self.showingBoardTextView = true }
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { self.session.recalculateGameStatistics() }
         actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", supportedModes: [.normal]) { self.performAutoAddToOpening() }
         actionDefinitions.registerAction(.jumpToNextOpeningGap, text: "跳转开局缺口", shortcuts: [.sequence(",o")], supportedModes: [.normal]) { self.jumpToNextOpeningGap() }
@@ -1404,34 +1406,41 @@ class ViewModel: ObservableObject {
         #endif
     }
 
-    func copyBoardTextToClipboard() {
+    func generateBoardText() -> String {
         let fen = session.currentFen
-        let boardPart = fen.split(separator: " ").first ?? Substring(fen)
+        let parts = fen.split(separator: " ")
+        let boardPart = parts.first ?? Substring(fen)
         let rows = boardPart.split(separator: "/")
 
-        let redMap: [Character: String] = [
-            "K": "帥", "A": "仕", "B": "相", "N": "傌", "R": "俥", "C": "炮", "P": "兵"
-        ]
-        let blackMap: [Character: String] = [
-            "k": "將", "a": "士", "b": "象", "n": "馬", "r": "車", "c": "砲", "p": "卒"
-        ]
+        let sideToMove = parts.count > 1 && parts[1] == "b" ? "black" : "red"
 
         var lines: [String] = []
-        for row in rows {
+        lines.append("side_to_move: \(sideToMove)")
+        lines.append("fen: \(boardPart)")
+        lines.append("")
+        lines.append("    a b c d e f g h i")
+
+        for (index, row) in rows.enumerated() {
+            let rowNum = 10 - index
             var cells: [String] = []
             for ch in row {
                 if let digit = ch.wholeNumberValue {
                     for _ in 0..<digit {
-                        cells.append("．")
+                        cells.append(".")
                     }
-                } else if let name = redMap[ch] ?? blackMap[ch] {
-                    cells.append(name)
+                } else {
+                    cells.append(String(ch))
                 }
             }
-            lines.append(cells.joined(separator: " "))
+            let rowLabel = String(format: "%2d", rowNum)
+            lines.append("\(rowLabel)  \(cells.joined(separator: " "))")
         }
 
-        let text = lines.joined(separator: "\n")
+        return lines.joined(separator: "\n")
+    }
+
+    func copyBoardTextToClipboard() {
+        let text = generateBoardText()
         #if os(macOS)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
