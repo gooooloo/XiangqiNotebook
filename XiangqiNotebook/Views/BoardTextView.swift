@@ -25,6 +25,6 @@ struct BoardTextView: View {
             }
         }
         .padding()
-        .frame(width: 350, height: 320)
+        .frame(width: 400, height: 450)
     }
 }
