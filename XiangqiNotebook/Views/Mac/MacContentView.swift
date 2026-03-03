@@ -134,6 +134,9 @@ struct MacContentView: View {
             ReviewListView(viewModel: viewModel)
                 .frame(minWidth: 400, minHeight: 300)
         }
+        .sheet(isPresented: $viewModel.showingBoardTextView) {
+            BoardTextView(viewModel: viewModel)
+        }
         .onChange(of: viewModel.isCommentEditing) { oldValue, newValue in
             // 当评论编辑状态从 true 变为 false 时，清除焦点
             if oldValue && !newValue {
@@ -249,6 +252,7 @@ struct MacMenuCommands: Commands {
             menuButton(.fix)
             Divider()
             menuButton(.copyFEN)
+            menuButton(.copyBoardText)
         }
 
         // 显示 menu

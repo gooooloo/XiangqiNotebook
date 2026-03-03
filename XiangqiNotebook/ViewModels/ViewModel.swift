@@ -54,6 +54,7 @@ class ViewModel: ObservableObject {
     @Published var showRealGameListIOS = false
     @Published var showReviewListIOS = false
     @Published var showReviewModeIOS = false
+    @Published var showingBoardTextView = false
 
     // 复习模式状态
     @Published private(set) var reviewQueue: [(fenId: Int, srsData: SRSData)] = []
@@ -67,7 +68,8 @@ class ViewModel: ObservableObject {
                showingGameBrowserView ||
                showingPGNImportSheet ||
                showMarkPathView ||
-               showingReviewListView
+               showingReviewListView ||
+               showingBoardTextView
     }
 
     // Global alert state
@@ -308,6 +310,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", supportedModes: [.normal]) { self.exportPGNCurrentGame() }
 
         actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
+        actionDefinitions.registerAction(.copyBoardText, text: "生成详细局面文本") { self.showingBoardTextView = true }
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { self.session.recalculateGameStatistics() }
         actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", supportedModes: [.normal]) { self.performAutoAddToOpening() }
         actionDefinitions.registerAction(.jumpToNextOpeningGap, text: "跳转开局缺口", shortcuts: [.sequence(",o")], supportedModes: [.normal]) { self.jumpToNextOpeningGap() }
@@ -1400,6 +1403,49 @@ class ViewModel: ObservableObject {
         NSPasteboard.general.setString(fen, forType: .string)
         #else
         UIPasteboard.general.string = fen
+        #endif
+    }
+
+    func generateBoardText() -> String {
+        let fen = session.currentFen
+        let parts = fen.split(separator: " ")
+        let boardPart = parts.first ?? Substring(fen)
+        let rows = boardPart.split(separator: "/")
+
+        let sideToMove = parts.count > 1 && parts[1] == "b" ? "black" : "red"
+
+        var lines: [String] = []
+        lines.append("side_to_move: \(sideToMove)")
+        lines.append("fen: \(boardPart)")
+        lines.append("")
+        lines.append("    a b c d e f g h i")
+
+        for (index, row) in rows.enumerated() {
+            let rowNum = 10 - index
+            var cells: [String] = []
+            for ch in row {
+                if let digit = ch.wholeNumberValue {
+                    for _ in 0..<digit {
+                        cells.append(".")
+                    }
+                } else {
+                    cells.append(String(ch))
+                }
+            }
+            let rowLabel = String(format: "%2d", rowNum)
+            lines.append("\(rowLabel)  \(cells.joined(separator: " "))")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    func copyBoardTextToClipboard() {
+        let text = generateBoardText()
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
         #endif
     }
 
