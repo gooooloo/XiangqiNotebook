@@ -8,7 +8,7 @@
 
 ## 项目概述
 
-象棋笔记本 (XiangqiNotebook) 是一个使用 SwiftUI 构建的跨平台中国象棋学习与笔记应用，支持 iPhone、iPad 和 macOS。功能包括路径标记、局面评分、书签、注释，以及练习模式，用于棋谱学习和复习。
+象棋笔记本 (XiangqiNotebook) 是一个使用 SwiftUI 构建的跨平台中国象棋学习与笔记应用，支持 iPhone、iPad 和 macOS。功能包括路径标记、局面评分、书签、注释、练习模式、间隔重复复习、引擎评估，以及课程视频关联，用于棋谱学习和复习。
 
 ## 构建与测试命令
 
@@ -33,11 +33,9 @@
 ```
 Views ↔ ViewModels ↔ Session ↔ DatabaseView ↔ Database
            ↕                         ↕
-    Platform Services          DatabaseData
+    Platform Services          DatabaseData / EngineScoreData
            ↕
-  Storage Layer (DatabaseStorage/SessionStorage)
-           ↕
-    iCloudFileCoordinator (singleton)
+  Storage Layer (DatabaseStorage/EngineScoreStorage → iCloud协调, SessionStorage/CourseVideoStorage → 仅本地)
 ```
 
 ### 核心组件
@@ -52,8 +50,9 @@ Views ↔ ViewModels ↔ Session ↔ DatabaseView ↔ Database
 - DatabaseData 中的核心数据结构：
   - `fenObjects2`: 字典，fenId → FenObject（棋局局面）
   - `moveObjects`: 字典，moveId → Move（着法）
-  - `gameObjects`: 字典，完整棋局
-  - `bookObjects`: 字典，棋书组织结构
+  - `gameObjects`: 字典，gameId → GameObject（完整棋局）
+  - `bookObjects`: 字典，bookId → BookObject（棋书，含 gameIds 和 subBookIds 的树形结构）
+  - `reviewItems`: 间隔重复复习项（SRSData）
 - 数据变更通知通过 `@Published dataChanged: Bool`
 
 **ViewModel.swift**:
@@ -68,6 +67,9 @@ Views ↔ ViewModels ↔ Session ↔ DatabaseView ↔ Database
 - 通过创建带有对应 DatabaseView 的新 Session 来处理筛选范围切换
 - 协调不同视图之间的切换（全库、先手开局、后手开局等）
 - 工厂方法：`.create(from:database:)` 从 SessionData 创建 SessionManager
+- 筛选切换：`setFilters()` 动态切换当前筛选范围
+- 专项练习：`startFocusedPractice()` / `exitFocusedPractice()` 进入/退出专项练习模式
+- 棋局/棋书加载：`loadGame()`、`loadBook()`、`loadBookmark()`
 - 确保会话切换时的数据一致性
 
 **DatabaseView**（数据筛选层）:
@@ -78,49 +80,66 @@ Views ↔ ViewModels ↔ Session ↔ DatabaseView ↔ Database
   - `containsFenId(_:)`: 检查 fenId 是否属于当前范围
   - `moves(from:)`: 返回起点和终点都在范围内的着法
   - `move(from:to:)`: 查找两个端点都在范围内的着法
+  - `move(id:)`: 按 moveId 查找着法（两端点都须在范围内）
+- 扩展功能：棋书/棋局管理、引擎评分查询、实战棋局索引等
 - 对不需要筛选的数据提供直接透传（fenToId、moveObjects、bookObjects 等）
-- 通过工厂方法构造（`.full()`、`.redOpening()`、`.blackOpening()` 等）
+- 工厂方法：`.full()`、`.redOpening()`、`.blackOpening()`、`.redRealGame()`、`.blackRealGame()`、`.focusedPractice(path:)`、`.specificGame(gameId:)`、`.specificBook(bookId:)`
+- 组合方法：`combined()`（合并多个视图）、`withStepLimit()`、`withLock()`
 - Session 持有并管理当前的 DatabaseView 实例
 
 **存储层**:
-- `DatabaseStorage`: 数据库文件读写的静态方法，处理数据库文件的 iCloud 协调
-- `SessionStorage`: 会话文件读写的静态方法，处理会话文件的 iCloud 协调
+- `DatabaseStorage`: 数据库文件读写的静态方法，通过 iCloudFileCoordinator 处理 iCloud 协调
+- `EngineScoreStorage`: 引擎评分文件读写，独立于 DatabaseData，通过 iCloudFileCoordinator 处理 iCloud 协调
+- `SessionStorage`: 会话文件读写的静态方法，仅本地存储（不使用 iCloud 协调）
+- `CourseVideoStorage`: 课程视频关联存储（gameId → 视频路径），使用 UserDefaults（仅本地）
 - `iCloudFileCoordinator`: 管理 iCloud 同步的文件协调单例
   - 提供 `coordinatedRead()` 和 `coordinatedWrite()` 实现安全的并发访问
   - 跟踪保存操作以防止自触发的文件变更通知
-  - 被 DatabaseStorage 和 SessionStorage 共同使用
+  - 被 DatabaseStorage 和 EngineScoreStorage 使用
 
 **平台服务**:
-- `iOSPlatformService.swift` 和 `MacOSPlatformService.swift`
-- 抽象平台特定功能（弹窗、文件操作等）
+- `iOSPlatformService.swift` 和 `MacOSPlatformService.swift`: 抽象平台特定功能（弹窗、文件操作等）
+- `PikafishService.swift`（仅 macOS）: 本地象棋引擎评估，支持批量评估与进度跟踪
+
+**外部 API**:
+- `IO.swift`: 查询 ChessDB API 获取局面评估，使用 async/await，含速率限制错误处理
 
 ### 文件组织
 - `Models/`: 核心数据模型与存储层
-  - 数据模型: `FenObject`、`Move`、`GameObject`、`DatabaseData`、`SessionData`
-  - 业务逻辑: `MoveRules`、`GameOperations`、`Database`、`SessionManager`
+  - 数据模型: `FenObject`、`Move`、`GameObject`、`BookObject`、`DatabaseData`、`SessionData`、`SRSData`、`EngineScoreData`
+  - 业务逻辑: `MoveRules`、`GameOperations`、`Database`、`SessionManager`、`IO`
   - 数据视图层: `DatabaseView`（筛选与范围化访问 Database）
-  - 存储: `DatabaseStorage`、`SessionStorage`、`iCloudFileCoordinator`
+  - 存储: `DatabaseStorage`、`EngineScoreStorage`、`SessionStorage`、`CourseVideoStorage`、`iCloudFileCoordinator`
 - `Views/`: UI 组件，按平台拆分（iOS/、Mac/、board/）
 - `ViewModels/`: 业务逻辑与视图状态管理
-- `Services/`: 平台抽象层
+- `Services/`: 平台抽象层（含 PikafishService 本地引擎）
 - `Resources/`: 棋谱资源（棋盘和棋子图片，PNG/SVG 格式）
 
 ### 主要系统功能
 - **练习模式**: 自动跟踪练习次数、限步扩展棋局、隐藏路径显示
+- **专项练习**: 针对特定棋局路径的专项训练模式
 - **筛选系统**: 先手/后手开局筛选，动态棋盘方向
 - **锁定机制**: 步骤锁定防止误操作，支持历史导航
 - **路径管理**: 使用 DFS 算法自动生成所有可能路径，路径计数统计
 - **书签系统**: 保存重要局面以便快速导航和分类管理
+- **间隔重复复习**: 基于 SM-2 算法的 SRS 系统，自动安排复习计划（SRSData）
+- **引擎评估**: 本地 Pikafish 引擎（macOS）和远程 ChessDB API 双通道局面评估
+- **课程视频**: 棋局与视频文件关联，支持带时间戳的视频播放
+- **PGN 导入/导出**: 完整的 PGN 格式棋谱导入解析和导出
 - **数据持久化**: 完整的 Codable 实现用于数据序列化/反序列化
 - **iCloud 同步**: 使用 NSFileCoordinator 实现自动文件协调和安全并发访问
 
 ### 测试覆盖
 测试位于 `XiangqiNotebookTests/`，覆盖以下内容：
-- 核心棋局逻辑（MoveRules、GameOperations）
-- 数据模型（FenObject、DatabaseData、SessionData）
-- 着法验证与棋盘状态管理
+- 核心棋局逻辑（MoveRules、GameOperations、XiangqiBoard）
+- 数据模型（FenObject、Move、GameObject、DatabaseData、SessionData）
 - DatabaseView 筛选与范围逻辑
-- 存储层操作
+- 存储层操作（Storage）
+- 引擎评估（EngineScore、PikafishService）
+- 间隔重复（SRSData）
+- PGN 导入/导出（PGNImport、PGNExport）
+- 集成测试（Database、Session、SessionManager、ViewModel）
+- 实战棋局与课程关联（RelatedRealGames、RelatedCourses）
 
 ### 测试命令速查
 
