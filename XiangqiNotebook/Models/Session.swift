@@ -24,7 +24,7 @@ class Session: ObservableObject {
     private var _cachedRealGames: [GameObject] = []
     private var _cachedHasMoreRealGames: Bool = false
     private var _cachedRealGamesFenId: Int = -1
-    private var _cachedRealGamesDataVersion: Bool = false
+    private var _cachedRealGamesDataVersion: Int = -1
 
     // databaseDirty 现在通过 databaseView.isDirty 访问
     var databaseDirty: Bool {
@@ -176,7 +176,7 @@ class Session: ObservableObject {
     /// 结果按 currentFenId 和 dataChanged 缓存，避免每次访问都重新计算
     var relatedRealGamesForCurrentFen: [GameObject] {
         let fenId = self.currentFenId
-        let dataVersion = self.dataChanged
+        let dataVersion = databaseView.dataVersion
 
         // 缓存命中：fenId 和数据版本都未变化
         if fenId == _cachedRealGamesFenId && dataVersion == _cachedRealGamesDataVersion {
