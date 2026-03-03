@@ -249,6 +249,7 @@ struct MacMenuCommands: Commands {
             menuButton(.fix)
             Divider()
             menuButton(.copyFEN)
+            menuButton(.copyBoardText)
         }
 
         // 显示 menu

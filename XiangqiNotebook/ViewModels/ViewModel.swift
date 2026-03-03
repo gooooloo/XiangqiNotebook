@@ -308,6 +308,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", supportedModes: [.normal]) { self.exportPGNCurrentGame() }
 
         actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
+        actionDefinitions.registerAction(.copyBoardText, text: "拷贝局面文本") { self.copyBoardTextToClipboard() }
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { self.session.recalculateGameStatistics() }
         actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", supportedModes: [.normal]) { self.performAutoAddToOpening() }
         actionDefinitions.registerAction(.jumpToNextOpeningGap, text: "跳转开局缺口", shortcuts: [.sequence(",o")], supportedModes: [.normal]) { self.jumpToNextOpeningGap() }
@@ -1400,6 +1401,42 @@ class ViewModel: ObservableObject {
         NSPasteboard.general.setString(fen, forType: .string)
         #else
         UIPasteboard.general.string = fen
+        #endif
+    }
+
+    func copyBoardTextToClipboard() {
+        let fen = session.currentFen
+        let boardPart = fen.split(separator: " ").first ?? Substring(fen)
+        let rows = boardPart.split(separator: "/")
+
+        let redMap: [Character: String] = [
+            "K": "帥", "A": "仕", "B": "相", "N": "傌", "R": "俥", "C": "炮", "P": "兵"
+        ]
+        let blackMap: [Character: String] = [
+            "k": "將", "a": "士", "b": "象", "n": "馬", "r": "車", "c": "砲", "p": "卒"
+        ]
+
+        var lines: [String] = []
+        for row in rows {
+            var cells: [String] = []
+            for ch in row {
+                if let digit = ch.wholeNumberValue {
+                    for _ in 0..<digit {
+                        cells.append("．")
+                    }
+                } else if let name = redMap[ch] ?? blackMap[ch] {
+                    cells.append(name)
+                }
+            }
+            lines.append(cells.joined(separator: " "))
+        }
+
+        let text = lines.joined(separator: "\n")
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
         #endif
     }
 
