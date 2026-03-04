@@ -58,6 +58,7 @@ class ActionDefinitions {
         case queryEngineScore  // 手动触发引擎深度评估
         case quickEngineScore  // 快速估分（3秒限时）
         case queryAllEngineScores  // 搜索本对局每一步的引擎分数
+        case quickAllEngineScores  // 快速估分本局所有局面
 
         // toggles
         case setFilterNone
