@@ -310,6 +310,7 @@ struct MacMenuCommands: Commands {
         // 分析 menu
         CommandMenu("分析") {
             menuButton(.queryScore)
+            menuButton(.quickEngineScore)
             menuButton(.queryEngineScore)
             menuButton(.queryAllEngineScores)
             Divider()

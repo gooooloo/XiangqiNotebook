@@ -22,8 +22,11 @@ class PikafishService: @unchecked Sendable {
     /// 搜索深度
     static let searchDepth = 34
 
-    /// 引擎 key，用于引擎分数独立存储的文件名
+    /// 引擎 key，用于引擎分数独立存储的文件名（深度评分）
     static let engineKey = "Pikafish_dev-20260213-391d491a_d34"
+
+    /// 快速估分 key，用于 3 秒限时评分的独立存储
+    static let quickEngineKey = "Pikafish_dev-20260213-391d491a_t3s"
 
     // MARK: - FEN Conversion
 
@@ -172,7 +175,7 @@ class PikafishService: @unchecked Sendable {
         evaluationLock.unlock()
     }
 
-    func evaluatePosition(fen: String) async throws -> EvaluationResult? {
+    func evaluatePosition(fen: String, movetime: Int? = nil) async throws -> EvaluationResult? {
         // 如果已有评估在进行中，直接返回 nil（不阻塞等待）
         guard tryAcquireEvaluationLock() else { return nil }
         defer { releaseEvaluationLock() }
@@ -194,7 +197,11 @@ class PikafishService: @unchecked Sendable {
         outputBuffer = ""
 
         sendCommand("position fen \(uciFen)")
-        sendCommand("go depth \(Self.searchDepth)")
+        if let movetime = movetime {
+            sendCommand("go movetime \(movetime)")
+        } else {
+            sendCommand("go depth \(Self.searchDepth)")
+        }
 
         var response: String
         var timedOut = false
