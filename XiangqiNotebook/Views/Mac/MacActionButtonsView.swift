@@ -19,7 +19,7 @@ struct MacActionButtonsView: View {
                     .practiceRedOpening, .practiceBlackOpening,
                 ],
                 [
-                    .queryScore, .queryEngineScore, .queryAllEngineScores,
+                    .queryScore, .quickEngineScore, .queryEngineScore, .queryAllEngineScores,
                     .openYunku, .markPath, .referenceBoard, .browseGames, .importPGN,
                     .addToReview, .save,
                 ],

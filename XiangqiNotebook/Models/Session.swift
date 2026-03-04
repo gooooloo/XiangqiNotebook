@@ -389,12 +389,26 @@ class Session: ObservableObject {
     }
 
     func getEngineScoreByFenId(_ fenId: Int) -> Int? {
+        #if os(macOS)
+        if let score = databaseView.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) {
+            return score
+        }
+        return databaseView.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey)
+        #else
         return databaseView.getEngineScoreByFenId(fenId)
+        #endif
     }
 
-    // TODO: 后续统一分数 API
+    // 优先显示深度评分，无深度评分时显示快速估分
     var currentEngineScore: Int? {
+        #if os(macOS)
+        if let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.engineKey) {
+            return score
+        }
+        return databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.quickEngineKey)
+        #else
         return databaseView.getEngineScoreByFenId(currentFenId)
+        #endif
     }
 
 
@@ -514,6 +528,28 @@ class Session: ObservableObject {
         let nextIsRed = currentFen.split(separator: " ")[1] == "r"
         guard let score = currentEngineScore else { return "" }
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
+    }
+
+    /// 深度评分显示文本，空字符串表示无深度评分
+    var displayDeepEngineScore: String {
+        #if os(macOS)
+        guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.engineKey) else { return "" }
+        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        return "\(adjustScore(score, nextIsRed: nextIsRed))"
+        #else
+        return ""
+        #endif
+    }
+
+    /// 快速估分显示文本，空字符串表示无快速估分
+    var displayQuickEngineScore: String {
+        #if os(macOS)
+        guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.quickEngineKey) else { return "" }
+        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        return "\(adjustScore(score, nextIsRed: nextIsRed))"
+        #else
+        return ""
+        #endif
     }
 
     func getDisplayScoreForMove(_ move: Move) -> String {

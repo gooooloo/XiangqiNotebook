@@ -288,7 +288,8 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.queryScore, text: "查分", shortcuts: [.single("s")], supportedModes: [.normal]) { Task { await self.queryFenScore() } }
         #if os(macOS) && arch(arm64)
-        actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼查分", supportedModes: [.normal]) { Task { await self.queryEngineScore() } }
+        actionDefinitions.registerAction(.quickEngineScore, text: "皮卡鱼快速估分", supportedModes: [.normal]) { Task { await self.quickEngineScore() } }
+        actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼深度评分", supportedModes: [.normal]) { Task { await self.queryEngineScore() } }
         actionDefinitions.registerAction(.queryAllEngineScores, text: "本局查皮卡鱼", supportedModes: [.normal]) { Task { await self.queryAllEngineScores() } }
         #endif
         actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal]) { self.updateFenScore(self.currentFenId, score: nil) }
@@ -1285,6 +1286,45 @@ class ViewModel: ObservableObject {
     }
 
 
+    func quickEngineScore() async {
+        let fenId = session.currentFenId
+        guard let fen = session.getFenForId(fenId) else { return }
+        guard let service = ensurePikafishService() else { return }
+
+        isBatchEvaluating = true
+        batchEvalCancelled = false
+        defer { isBatchEvaluating = false }
+
+        let startTime = Date()
+        await MainActor.run {
+            self.batchEvalProgress = BatchEvalProgress(current: 0, total: 1, evaluatedCount: 0, lastDetail: nil, elapsedSeconds: nil, isCompleted: false)
+        }
+
+        do {
+            if batchEvalCancelled { return }
+
+            if let result = try await service.evaluatePosition(fen: fen, movetime: 3000) {
+                if batchEvalCancelled { return }
+                let detail = Self.formatEvalDetail(result)
+                let elapsed = Date().timeIntervalSince(startTime)
+                await MainActor.run {
+                    session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
+                    self.batchEvalProgress = BatchEvalProgress(current: 1, total: 1, evaluatedCount: 1, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: true)
+                }
+            } else {
+                await MainActor.run {
+                    self.batchEvalProgress = nil
+                }
+            }
+        } catch {
+            await MainActor.run { self.batchEvalProgress = nil }
+            platformService.showWarningAlert(
+                title: "皮卡鱼快速估分失败",
+                message: error.localizedDescription
+            )
+        }
+    }
+
     private static func formatEvalDetail(_ result: PikafishService.EvaluationResult) -> String {
         var parts: [String] = []
         if let depth = result.depth {
@@ -1565,6 +1605,8 @@ class ViewModel: ObservableObject {
     var currentFenId: Int { session.currentFenId }
     var displayScore: String { session.displayScore }
     var displayEngineScore: String { session.displayEngineScore }
+    var displayDeepEngineScore: String { session.displayDeepEngineScore }
+    var displayQuickEngineScore: String { session.displayQuickEngineScore }
     var currentGameStepDisplay: Int { session.currentGameStepDisplay }
     var maxGameStepDisplay: Int { session.maxGameStepDisplay }
     var currentFenComment: String? { session.currentFenComment }
