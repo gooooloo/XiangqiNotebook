@@ -17,11 +17,12 @@ struct MacActionButtonsView: View {
                     .nextVariant, .playRandomNextMove, .random,
                     .practiceNewGame, .reviewThisGame, .focusedPractice,
                     .practiceRedOpening, .practiceBlackOpening,
+                    .addToReview,
                 ],
                 [
-                    .queryScore, .quickEngineScore, .queryEngineScore, .quickAllEngineScores, .queryAllEngineScores,
-                    .openYunku, .markPath, .referenceBoard, .browseGames, .importPGN,
-                    .addToReview, .save,
+                    .queryScore, .openYunku, .pikafishQuickMove, .quickEngineScore, .queryEngineScore, .quickAllEngineScores, .queryAllEngineScores,
+                    .markPath, .referenceBoard, .browseGames, .importPGN,
+                    .save,
                 ],
             ]
         case .practice:

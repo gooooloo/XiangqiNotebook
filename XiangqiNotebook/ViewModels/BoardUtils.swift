@@ -86,6 +86,16 @@ enum XiangqiBoardUtils {
         return pieceCode.hasPrefix("b") ? piece.lowercased() : piece
     }
     
+    /// 将 UCI 着法（如 "h2e2"）应用到给定 FEN，返回新 FEN
+    static func getNewFenAfterUCIMove(uciMove: String, fen: String) -> String? {
+        guard uciMove.count == 4 else { return nil }
+        let chars = Array(uciMove)
+        let from = String(chars[0...1])
+        let to = String(chars[2...3])
+        let pieces = fenToPiecesBySquare(fen)
+        return getNewFenAfterMove(from: from, to: to, currentPieces: pieces)
+    }
+
     static func getNewFenAfterMove(from: String, to: String, currentPieces: [String: String]) -> String? {
         guard let movingPiece = currentPieces[from] else { return nil }
         
