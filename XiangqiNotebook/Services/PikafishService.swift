@@ -158,6 +158,25 @@ class PikafishService: @unchecked Sendable {
         let timeMs: Int?
         let hashfull: Int?
         let timedOut: Bool
+        let bestMove: String?
+    }
+
+    // MARK: - Best Move Parsing
+
+    /// 从 bestmove 响应行解析 UCI 着法
+    /// 解析 "bestmove h2e2 ponder ..." → "h2e2"
+    /// "bestmove (none)" → nil
+    static func parseBestMove(from response: String) -> String? {
+        for line in response.split(separator: "\n") {
+            let lineStr = String(line).trimmingCharacters(in: .whitespaces)
+            guard lineStr.hasPrefix("bestmove") else { continue }
+            let parts = lineStr.split(separator: " ")
+            guard parts.count >= 2 else { return nil }
+            let move = String(parts[1])
+            if move == "(none)" { return nil }
+            return move
+        }
+        return nil
     }
 
     // MARK: - Evaluation
@@ -252,7 +271,8 @@ class PikafishService: @unchecked Sendable {
         print("[Pikafish] depth=\(lastDepth ?? "?") hashfull=\(lastHashfull ?? "?")/1000 time=\(timeStr) score=\(lastScore.map { String($0) } ?? "nil")\(timedOut ? " (timeout)" : "")")
 
         guard let score = lastScore else { return nil }
-        return EvaluationResult(score: score, depth: lastDepth, timeMs: timeMsInt, hashfull: hashfullInt, timedOut: timedOut)
+        let bestMove = Self.parseBestMove(from: response)
+        return EvaluationResult(score: score, depth: lastDepth, timeMs: timeMsInt, hashfull: hashfullInt, timedOut: timedOut, bestMove: bestMove)
     }
 
     // MARK: - UCI Communication

@@ -310,12 +310,14 @@ struct MacMenuCommands: Commands {
         // 分析 menu
         CommandMenu("分析") {
             menuButton(.queryScore)
+            menuButton(.openYunku)
+            menuButton(.pikafishQuickMove)
             menuButton(.quickEngineScore)
             menuButton(.queryEngineScore)
+            menuButton(.quickAllEngineScores)
             menuButton(.queryAllEngineScores)
             Divider()
             menuButton(.referenceBoard)
-            menuButton(.openYunku)
             menuButton(.searchCurrentMove)
             Divider()
             menuButton(.markPath)

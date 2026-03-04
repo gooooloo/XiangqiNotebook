@@ -292,6 +292,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼深度评分", supportedModes: [.normal]) { Task { await self.queryEngineScore() } }
         actionDefinitions.registerAction(.queryAllEngineScores, text: "皮卡鱼深评本局", supportedModes: [.normal]) { Task { await self.queryAllEngineScores() } }
         actionDefinitions.registerAction(.quickAllEngineScores, text: "皮卡鱼快估本局", supportedModes: [.normal]) { Task { await self.quickAllEngineScores() } }
+        actionDefinitions.registerAction(.pikafishQuickMove, text: "皮卡鱼快速应招", supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
         #endif
         actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal]) { self.updateFenScore(self.currentFenId, score: nil) }
         actionDefinitions.registerAction(.openYunku, text: "打开云库", shortcuts: [.single("y")], supportedModes: [.normal]) { self.openYunku() }
@@ -1334,6 +1335,62 @@ class ViewModel: ObservableObject {
             await MainActor.run { self.batchEvalProgress = nil }
             platformService.showWarningAlert(
                 title: "皮卡鱼快速估分失败",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func pikafishQuickMove() async {
+        guard session.allowAddingNewMoves else {
+            platformService.showWarningAlert(
+                title: "不允许增加新走法",
+                message: "请先打开【允许增加新走法】选项。"
+            )
+            return
+        }
+        let fenId = session.currentFenId
+        guard let fen = session.getFenForId(fenId) else { return }
+        guard let service = ensurePikafishService() else { return }
+
+        isBatchEvaluating = true
+        batchEvalCancelled = false
+        defer { isBatchEvaluating = false }
+
+        let startTime = Date()
+        await MainActor.run {
+            self.batchEvalProgress = BatchEvalProgress(current: 0, total: 1, evaluatedCount: 0, lastDetail: nil, elapsedSeconds: nil, isCompleted: false)
+        }
+
+        do {
+            if batchEvalCancelled { return }
+
+            if let result = try await service.evaluatePosition(fen: fen, movetime: 3000) {
+                if batchEvalCancelled { return }
+                let detail = Self.formatEvalDetail(result)
+                let elapsed = Date().timeIntervalSince(startTime)
+
+                await MainActor.run {
+                    // 保存评分
+                    session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
+
+                    // 走出推荐着法，并保存新局面的估分（取反）
+                    if let uciMove = result.bestMove,
+                       let newFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) {
+                        _ = session.playNewBoardFen(newFen)
+                        session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishService.quickEngineKey)
+                    }
+
+                    self.batchEvalProgress = BatchEvalProgress(current: 1, total: 1, evaluatedCount: 1, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: true)
+                }
+            } else {
+                await MainActor.run {
+                    self.batchEvalProgress = nil
+                }
+            }
+        } catch {
+            await MainActor.run { self.batchEvalProgress = nil }
+            platformService.showWarningAlert(
+                title: "皮卡鱼应招失败",
                 message: error.localizedDescription
             )
         }
