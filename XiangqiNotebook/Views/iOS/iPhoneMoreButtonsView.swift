@@ -56,7 +56,7 @@ struct iPhoneMoreOptionsView: View {
                         }
                         .frame(maxWidth: .infinity)
 
-                        if viewModel.currentAppMode == .normal {
+                        if viewModel.currentAppMode == .normal && viewModel.showRealGameList {
                             HStack(spacing: 15) {
                                 iPhoneButton(viewModel: viewModel, actionKey: .showRealGameListIOS)
                             }

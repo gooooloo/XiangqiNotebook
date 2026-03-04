@@ -13,6 +13,7 @@ class SessionData: Codable {
     var currentMode: AppMode = .normal
     var showPath: Bool = true
     var showAllNextMoves: Bool = false
+    var showRealGameList: Bool = false
     var autoExtendGameWhenPlayingBoardFen: Bool = true
     var isCommentEditing: Bool = false
     var focusedPracticeGamePath: [Int]? = nil
@@ -45,6 +46,7 @@ class SessionData: Codable {
         case currentMode = "current_mode"
         case showPath = "show_path"
         case showAllNextMoves = "show_all_next_moves"
+        case showRealGameList = "show_real_game_list"
         case autoExtendGameWhenPlayingBoardFen = "auto_extend_game_when_playing_board_fen"
         case isCommentEditing = "is_comment_editing"
         case focusedPracticeGamePath = "focused_practice_game_path"
@@ -70,6 +72,7 @@ class SessionData: Codable {
         canNavigateBeforeLockedStep = try container.decode(Bool.self, forKey: .canNavigateBeforeLockedStep)
         showPath = try container.decode(Bool.self, forKey: .showPath)
         showAllNextMoves = try container.decodeIfPresent(Bool.self, forKey: .showAllNextMoves) ?? false
+        showRealGameList = try container.decodeIfPresent(Bool.self, forKey: .showRealGameList) ?? false
         autoExtendGameWhenPlayingBoardFen = try container.decode(Bool.self, forKey: .autoExtendGameWhenPlayingBoardFen)
         isCommentEditing = try container.decode(Bool.self, forKey: .isCommentEditing)
         focusedPracticeGamePath = try container.decodeIfPresent([Int].self, forKey: .focusedPracticeGamePath)
@@ -102,6 +105,7 @@ class SessionData: Codable {
         try container.encode(canNavigateBeforeLockedStep, forKey: .canNavigateBeforeLockedStep)
         try container.encode(showPath, forKey: .showPath)
         try container.encode(showAllNextMoves, forKey: .showAllNextMoves)
+        try container.encode(showRealGameList, forKey: .showRealGameList)
         try container.encode(autoExtendGameWhenPlayingBoardFen, forKey: .autoExtendGameWhenPlayingBoardFen)
         try container.encode(isCommentEditing, forKey: .isCommentEditing)
         try container.encodeIfPresent(focusedPracticeGamePath, forKey: .focusedPracticeGamePath)

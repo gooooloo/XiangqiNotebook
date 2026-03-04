@@ -78,6 +78,7 @@ class ActionDefinitions {
         case togglePracticeMode  // 新增：练习模式按钮
         case toggleShowPath  // 新增：显示路径按钮
         case toggleShowAllNextMoves  // 新增：显示所有下一步按钮
+        case toggleShowRealGameList  // 新增：显示实战列表按钮
         case toggleBookmark  // 新增：显示路径按钮
         case toggleIsCommentEditing
         case toggleAllowAddingNewMoves  // 新增：允许增加新走法
