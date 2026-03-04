@@ -76,7 +76,7 @@ struct MacContentView: View {
                                 ModeSelectorView(viewModel: viewModel)
                                 TogglesView(viewModel: viewModel)
                                 BookmarkListView(viewModel: viewModel)
-                                if viewModel.currentAppMode == .normal {
+                                if viewModel.currentAppMode == .normal && viewModel.showRealGameList {
                                     RealGameListView(viewModel: viewModel)
                                 }
                             }

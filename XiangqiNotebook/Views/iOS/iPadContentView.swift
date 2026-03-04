@@ -68,7 +68,7 @@ struct iPadContentView: View {
                             TogglesView(viewModel: viewModel)
                             BookmarkListView(viewModel: viewModel)
                                 .frame(maxHeight: .infinity)
-                            if viewModel.currentAppMode == .normal {
+                            if viewModel.currentAppMode == .normal && viewModel.showRealGameList {
                                 RealGameListView(viewModel: viewModel)
                             }
                         }

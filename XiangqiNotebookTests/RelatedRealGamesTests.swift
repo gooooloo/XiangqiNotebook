@@ -65,6 +65,7 @@ struct RelatedRealGamesTests {
     /// 创建测试用的 Session
     private func createTestSession(database: Database) throws -> Session {
         let sessionData = SessionData()
+        sessionData.showRealGameList = true
         let databaseView = DatabaseView.full(database: database)
         return try Session(sessionData: sessionData, databaseView: databaseView)
     }
