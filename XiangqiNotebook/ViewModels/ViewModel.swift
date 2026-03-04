@@ -286,7 +286,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.playRandomNextMove, text: "随机走子", textIPhone: "随机", shortcuts: [.sequence(",r")], supportedModes: [.practice]) { self.playRandomNextMove() }
         actionDefinitions.registerAction(.hintNextMove, text: "提示", textIPhone: "提示", supportedModes: [.practice]) { self.playRandomNextMove() }
 
-        actionDefinitions.registerAction(.queryScore, text: "查分", shortcuts: [.single("s")], supportedModes: [.normal]) { Task { await self.queryFenScore() } }
+        actionDefinitions.registerAction(.queryScore, text: "云库查分", shortcuts: [.single("s")], supportedModes: [.normal]) { Task { await self.queryFenScore() } }
         #if os(macOS) && arch(arm64)
         actionDefinitions.registerAction(.quickEngineScore, text: "皮卡鱼快速估分", supportedModes: [.normal]) { Task { await self.quickEngineScore() } }
         actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼深度评分", supportedModes: [.normal]) { Task { await self.queryEngineScore() } }
@@ -294,7 +294,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.quickAllEngineScores, text: "皮卡鱼快估本局", supportedModes: [.normal]) { Task { await self.quickAllEngineScores() } }
         #endif
         actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal]) { self.updateFenScore(self.currentFenId, score: nil) }
-        actionDefinitions.registerAction(.openYunku, text: "云库", shortcuts: [.single("y")], supportedModes: [.normal]) { self.openYunku() }
+        actionDefinitions.registerAction(.openYunku, text: "打开云库", shortcuts: [.single("y")], supportedModes: [.normal]) { self.openYunku() }
         actionDefinitions.registerAction(.deleteMove, text: "删招", shortcuts: [.sequence(",d")], supportedModes: [.normal]) { self.removeCurrentStep() }
         actionDefinitions.registerAction(.removeMoveFromGame, text: "从局中删除此招", supportedModes: [.normal]) { self.removeMoveFromGame() }
         actionDefinitions.registerAction(.markPath, text: "标记路径", shortcuts: [.single("a")], supportedModes: [.normal]) { self.showMarkPathView = true }
@@ -1458,8 +1458,9 @@ class ViewModel: ObservableObject {
 
             let fenId = game[i]
 
-            // 跳过已有快速引擎分数的局面
-            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey) != nil {
+            // 跳过已有快速引擎分数或深度引擎分数的局面
+            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey) != nil ||
+               Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) != nil {
                 let elapsed = Date().timeIntervalSince(startTime)
                 let count = evaluatedCount
                 let detail = lastDetail

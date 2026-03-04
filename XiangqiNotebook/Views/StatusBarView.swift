@@ -58,7 +58,7 @@ struct StatusBarView: View {
                 Text("下步走子: \(viewModel.isRedTurn ? "红方" : "黑方")")
                     .font(fontStyle)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("分数: \(viewModel.displayScore)")
+                Text("云库分数: \(viewModel.displayScore)")
                     .font(fontStyle)
                     .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
                     .frame(maxWidth: .infinity, alignment: .leading)
