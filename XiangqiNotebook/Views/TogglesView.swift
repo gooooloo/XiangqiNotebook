@@ -50,6 +50,7 @@ struct BoardOperationTogglesView: View {
             MyToggle(viewModel: viewModel, actionKey: .toggleCanNavigateBeforeLockedStep)
             MyToggle(viewModel: viewModel, actionKey: .toggleShowPath)
             MyToggle(viewModel: viewModel, actionKey: .toggleShowAllNextMoves)
+            MyToggle(viewModel: viewModel, actionKey: .toggleShowRealGameList)
             MyToggle(viewModel: viewModel, actionKey: .togglePracticeMode)
             MyToggle(viewModel: viewModel, actionKey: .toggleIsCommentEditing)
             MyToggle(viewModel: viewModel, actionKey: .toggleAllowAddingNewMoves)

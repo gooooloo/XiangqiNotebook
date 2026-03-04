@@ -175,6 +175,8 @@ class Session: ObservableObject {
     /// 获取包含当前局面的实战对局列表，按日期降序排列
     /// 结果按 currentFenId 和 dataChanged 缓存，避免每次访问都重新计算
     var relatedRealGamesForCurrentFen: [GameObject] {
+        guard sessionData.showRealGameList else { return [] }
+
         let fenId = self.currentFenId
         let dataVersion = databaseView.dataVersion
 
@@ -193,6 +195,7 @@ class Session: ObservableObject {
 
     /// 是否有更多相关实战（超过显示限制）
     var hasMoreRelatedRealGames: Bool {
+        guard sessionData.showRealGameList else { return false }
         // 确保缓存已计算
         _ = relatedRealGamesForCurrentFen
         return _cachedHasMoreRealGames
@@ -498,6 +501,10 @@ class Session: ObservableObject {
 
     var showAllNextMoves: Bool {
         sessionData.showAllNextMoves
+    }
+
+    var showRealGameList: Bool {
+        sessionData.showRealGameList
     }
 
     var isCommentEditing: Bool {
@@ -1026,6 +1033,11 @@ extension Session {
 
     func toggleShowAllNextMoves() {
         sessionData.showAllNextMoves.toggle()
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
+    }
+
+    func toggleShowRealGameList() {
+        sessionData.showRealGameList.toggle()
         notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
     }
 

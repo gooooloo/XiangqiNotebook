@@ -539,6 +539,19 @@ class ViewModel: ObservableObject {
           }
         )
 
+        // 显示实战列表 - 只在常规模式可用
+        actionDefinitions.registerToggleAction(
+          .toggleShowRealGameList,
+          text: "显示实战列表",
+          shortcuts: [.sequence(",t")],
+          supportedModes: [.normal],
+          isEnabled: { true },
+          isOn: { self.showRealGameList },
+          action: { newValue in
+            self.toggleShowRealGameList()
+          }
+        )
+
         // 书签功能 - 只在常规模式可用
         actionDefinitions.registerToggleAction(
           .toggleBookmark,
@@ -1890,6 +1903,7 @@ class ViewModel: ObservableObject {
     var currentAppMode: AppMode { session.currentAppMode }
     var showPath: Bool { session.showPath }
     var showAllNextMoves: Bool { session.showAllNextMoves }
+    var showRealGameList: Bool { session.showRealGameList }
     var isCommentEditing: Bool { session.isCommentEditing }
     var currentDataVersion: Int { session.currentDataVersion }
     var currentDataDirty: Bool { session.currentDataDirty }
@@ -2093,6 +2107,10 @@ class ViewModel: ObservableObject {
 
     func toggleShowAllNextMoves() {
         session.toggleShowAllNextMoves()
+    }
+
+    func toggleShowRealGameList() {
+        session.toggleShowRealGameList()
     }
 
     func setDataClean() {
