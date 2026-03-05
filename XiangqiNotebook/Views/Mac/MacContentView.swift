@@ -56,7 +56,20 @@ struct MacContentView: View {
                     .frame(width: geometry.size.width * 0.2)
 
                     // 右侧区域
-                    if viewModel.isInReviewMode {
+                    if viewModel.isInVerificationMode {
+                        // 检验模式：检验面板 + 单项列表 + 棋盘操作（底部）
+                        VStack(spacing: 0) {
+                            ModeSelectorView(viewModel: viewModel)
+                            ReviewModeView(viewModel: viewModel)
+                            ScrollView {
+                                ReviewListView(viewModel: viewModel)
+                            }
+                            .border(Color.gray)
+                            .frame(maxHeight: .infinity)
+                            BoardOperationTogglesView(viewModel: viewModel)
+                        }
+                        .frame(width: geometry.size.width * 0.2)
+                    } else if viewModel.isInReviewMode {
                         // 复习模式：复习面板 + 复习库列表（填满） + 棋盘操作（底部）
                         VStack(spacing: 0) {
                             ModeSelectorView(viewModel: viewModel)

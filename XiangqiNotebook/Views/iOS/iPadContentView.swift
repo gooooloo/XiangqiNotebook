@@ -54,7 +54,16 @@ struct iPadContentView: View {
                         // 模式选择器
                         ModeSelectorView(viewModel: viewModel)
 
-                        if viewModel.isInReviewMode {
+                        if viewModel.isInVerificationMode {
+                            // 检验模式：检验面板 + 单项列表 + 棋盘操作（底部）
+                            ReviewModeView(viewModel: viewModel)
+                            ScrollView {
+                                ReviewListView(viewModel: viewModel)
+                            }
+                            .border(Color.gray)
+                            .frame(maxHeight: .infinity)
+                            BoardOperationTogglesView(viewModel: viewModel)
+                        } else if viewModel.isInReviewMode {
                             // 复习模式：复习面板 + 复习库列表（填满） + 棋盘操作（底部）
                             ReviewModeView(viewModel: viewModel)
                             ScrollView {
