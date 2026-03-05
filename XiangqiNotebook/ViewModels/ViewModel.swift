@@ -1755,6 +1755,12 @@ class ViewModel: ObservableObject {
         }
         return fen
     }
+    var currentMoveUCCI: String {
+        guard let move = session.currentMove,
+              let pieceMove = session.databaseView.parsePieceMove(move, isHorizontalFlipped: false)
+        else { return "" }
+        return PGNParser.pieceMoveToCoord(pieceMove)
+    }
     var currentFenId: Int { session.currentFenId }
     var displayScore: String { session.displayScore }
     var displayEngineScore: String { session.displayEngineScore }

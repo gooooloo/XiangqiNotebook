@@ -37,13 +37,19 @@ struct iPhoneStatusBarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("FEN: \(viewModel.displayFen)")
-                .font(fontStyle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .padding(.vertical, verticalPadding)
-                .padding(.horizontal)
+            HStack {
+                Text("FEN: \(viewModel.displayFen)")
+                    .font(fontStyle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                if !viewModel.currentMoveUCCI.isEmpty {
+                    Text("UCCI: \(viewModel.currentMoveUCCI)")
+                        .font(fontStyle)
+                }
+            }
+            .padding(.vertical, verticalPadding)
+            .padding(.horizontal)
 
             Divider()
             .background(Color.gray)

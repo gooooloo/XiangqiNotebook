@@ -45,14 +45,20 @@ struct StatusBarView: View {
 
     var body: some View {
         VStack {
-            Text("FEN: \(viewModel.displayFen)")
-                .font(fontStyle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .padding(.vertical, verticalPadding)
-                .padding(.horizontal)
-                .border(Color.gray)
+            HStack {
+                Text("FEN: \(viewModel.displayFen)")
+                    .font(fontStyle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                if !viewModel.currentMoveUCCI.isEmpty {
+                    Text("UCCI: \(viewModel.currentMoveUCCI)")
+                        .font(fontStyle)
+                }
+            }
+            .padding(.vertical, verticalPadding)
+            .padding(.horizontal)
+            .border(Color.gray)
 
             HStack {
                 Text("下步走子: \(viewModel.isRedTurn ? "红方" : "黑方")")
