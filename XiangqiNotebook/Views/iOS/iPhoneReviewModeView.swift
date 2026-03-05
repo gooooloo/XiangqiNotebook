@@ -6,11 +6,21 @@ import SwiftUI
 struct iPhoneReviewModeView: View {
     @ObservedObject var viewModel: ViewModel
     @Binding var isPresented: Bool
+    @State private var selectedFenId: Int?
+
+    private var displayItems: [(fenId: Int, srsData: SRSData)] {
+        if let item = viewModel.verificationItem {
+            return [(fenId: item.fenId, srsData: item.srsData)]
+        }
+        return viewModel.reviewItemList
+    }
 
     var body: some View {
         NavigationView {
             VStack(alignment: .leading, spacing: 12) {
-                if viewModel.isReviewingInProgress {
+                if viewModel.isInVerificationMode {
+                    verificationView
+                } else if viewModel.isReviewingInProgress {
                     reviewInProgressView
                 } else if viewModel.isReviewComplete {
                     reviewCompleteView
@@ -25,7 +35,7 @@ struct iPhoneReviewModeView: View {
                     .font(.headline)
                     .padding(.horizontal)
 
-                if viewModel.reviewItemList.isEmpty {
+                if displayItems.isEmpty {
                     Text("暂无复习项")
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
@@ -33,7 +43,7 @@ struct iPhoneReviewModeView: View {
                 } else {
                     ScrollView(showsIndicators: true) {
                         VStack(alignment: .leading, spacing: 0) {
-                            ForEach(viewModel.reviewItemList, id: \.fenId) { item in
+                            ForEach(displayItems, id: \.fenId) { item in
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(viewModel.reviewItemDescription(fenId: item.fenId))
@@ -51,9 +61,10 @@ struct iPhoneReviewModeView: View {
                                 }
                                 .padding(.vertical, 8)
                                 .padding(.horizontal)
-                                .background(item.fenId == viewModel.currentFenId ? Color.blue.opacity(0.1) : Color.clear)
+                                .background(item.fenId == selectedFenId ? Color.blue.opacity(0.1) : Color.clear)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
+                                    selectedFenId = item.fenId
                                     if let gamePath = item.srsData.gamePath {
                                         viewModel.loadReviewItem(gamePath)
                                     }
@@ -64,7 +75,7 @@ struct iPhoneReviewModeView: View {
                     }
                 }
             }
-            .navigationTitle("复习模式")
+            .navigationTitle(viewModel.isInVerificationMode ? "检验模式" : "复习模式")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -75,6 +86,27 @@ struct iPhoneReviewModeView: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .onAppear { selectedFenId = viewModel.lockedFenId ?? displayItems.first?.fenId }
+        .onChange(of: viewModel.lockedFenId) { _, newValue in
+            if let newValue { selectedFenId = newValue }
+        }
+    }
+
+    // MARK: - 检验中
+
+    private var verificationView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let item = viewModel.verificationItem {
+                Text(viewModel.reviewItemDescription(fenId: item.fenId))
+                    .lineLimit(2)
+                    .padding(.horizontal)
+            }
+            Button("隐藏答案") {
+                viewModel.exitVerificationMode()
+                isPresented = false
+            }
+            .padding(.horizontal)
+        }
     }
 
     // MARK: - 复习进行中

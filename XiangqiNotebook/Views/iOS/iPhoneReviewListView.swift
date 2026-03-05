@@ -5,6 +5,7 @@ import SwiftUI
 struct iPhoneReviewListView: View {
     @ObservedObject var viewModel: ViewModel
     @Binding var isPresented: Bool
+    @State private var selectedFenId: Int?
     @State private var renamingFenId: Int?
     @State private var renameText: String = ""
 
@@ -38,9 +39,10 @@ struct iPhoneReviewListView: View {
                                 .padding(.vertical, 8)
                                 .padding(.horizontal, 4)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(item.fenId == viewModel.currentFenId ? Color.blue.opacity(0.1) : Color.clear)
+                                .background(item.fenId == selectedFenId ? Color.blue.opacity(0.1) : Color.clear)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
+                                    selectedFenId = item.fenId
                                     if let gamePath = item.srsData.gamePath {
                                         viewModel.loadReviewItem(gamePath)
                                         isPresented = false
@@ -48,18 +50,30 @@ struct iPhoneReviewListView: View {
                                 }
                                 .contextMenu {
                                     Button {
+                                        selectedFenId = item.fenId
                                         renameText = viewModel.reviewItemDescription(fenId: item.fenId)
                                         renamingFenId = item.fenId
                                     } label: {
                                         Label("重命名", systemImage: "pencil")
                                     }
                                     Button {
+                                        selectedFenId = item.fenId
                                         viewModel.reviewAgain(fenId: item.fenId)
                                     } label: {
                                         Label("再次复习", systemImage: "arrow.counterclockwise")
                                     }
+                                    if let gamePath = item.srsData.gamePath {
+                                        Button {
+                                            selectedFenId = item.fenId
+                                            viewModel.enterVerificationMode(fenId: item.fenId, srsData: item.srsData, gamePath: gamePath)
+                                            isPresented = false
+                                        } label: {
+                                            Label("核对答案", systemImage: "checkmark.circle")
+                                        }
+                                    }
                                     Divider()
                                     Button(role: .destructive) {
+                                        selectedFenId = item.fenId
                                         viewModel.removeReviewItem(fenId: item.fenId)
                                     } label: {
                                         Label("删除", systemImage: "trash")
@@ -98,6 +112,10 @@ struct iPhoneReviewListView: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .onAppear { selectedFenId = viewModel.lockedFenId ?? viewModel.reviewItemList.first?.fenId }
+        .onChange(of: viewModel.lockedFenId) { _, newValue in
+            if let newValue { selectedFenId = newValue }
+        }
     }
 
     private func dueStatusText(_ srsData: SRSData) -> String {

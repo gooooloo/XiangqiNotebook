@@ -60,6 +60,10 @@ class ViewModel: ObservableObject {
     @Published private(set) var reviewQueue: [(fenId: Int, srsData: SRSData)] = []
     @Published private(set) var currentReviewIndex = 0
 
+    // 检验模式状态
+    @Published private(set) var verificationItem: (fenId: Int, srsData: SRSData)?
+    var isInVerificationMode: Bool { verificationItem != nil }
+
     // 检查是否有任何 sheet 正在显示（用于禁用快捷键）
     var isAnySheetPresented: Bool {
         return showingBookmarkAlert ||
@@ -850,6 +854,7 @@ class ViewModel: ObservableObject {
         // 每次进入新条目时重置为隐藏，避免上一条目的手动开启影响下一条目
         session.sessionData.showPath = false
         session.sessionData.showAllNextMoves = false
+        session.sessionData.allowAddingNewMoves = false
     }
 
     /// 加载棋局（总是先切换到 Full 视图）
@@ -1788,13 +1793,9 @@ class ViewModel: ObservableObject {
            let customName = srsData.customName, !customName.isEmpty {
             return customName
         }
-        if let fenObj = session.databaseView.getFenObject(fenId),
+        if let fenObj = session.databaseView.getFenObjectUnfiltered(fenId),
            let comment = fenObj.comment, !comment.isEmpty {
             return comment
-        }
-        if let fenObj = session.databaseView.getFenObject(fenId) {
-            let fen = fenObj.fen
-            return String(fen.prefix(20))
         }
         return "fenId: \(fenId)"
     }
@@ -1825,11 +1826,32 @@ class ViewModel: ObservableObject {
         currentReviewIndex = 0
         if let first = dueItems.first, let gamePath = first.srsData.gamePath {
             loadReviewItem(gamePath)
+        } else if let first = reviewItemList.first, let gamePath = first.srsData.gamePath {
+            // 没有到期项时，加载第一个复习项以锁定
+            loadReviewItem(gamePath)
         }
     }
 
     /// 提交复习评分，前进到下一项
     func submitReviewRating(_ quality: ReviewQuality) {
+        if isInVerificationMode {
+            // 核对答案模式：提交评分后退出核对，继续复习流程
+            if let item = verificationItem {
+                session.submitReviewRating(fenId: item.fenId, quality: quality)
+            }
+            exitVerificationMode()
+            // 前进到下一项
+            if isReviewingInProgress {
+                currentReviewIndex += 1
+                if isReviewingInProgress {
+                    let nextItem = reviewQueue[currentReviewIndex]
+                    if let gamePath = nextItem.srsData.gamePath {
+                        loadReviewItem(gamePath)
+                    }
+                }
+            }
+            return
+        }
         guard isReviewingInProgress else { return }
         let item = reviewQueue[currentReviewIndex]
         session.submitReviewRating(fenId: item.fenId, quality: quality)
@@ -1860,6 +1882,31 @@ class ViewModel: ObservableObject {
         currentReviewIndex = 0
         setMode(.normal)
     }
+
+    // MARK: - 检验模式
+
+    /// 进入检验模式：导航到复习项，锁定但显示路径和着法，不更新 SRS 数据
+    func enterVerificationMode(fenId: Int, srsData: SRSData, gamePath: [Int]) {
+        verificationItem = (fenId: fenId, srsData: srsData)
+        session.unlockIfNeeded()
+        sessionManager.loadBookmark(gamePath)
+        session.lockAndHideAfterCurrentStep()
+        session.sessionData.showPath = true
+        session.sessionData.showAllNextMoves = true
+        session.sessionData.autoExtendGameWhenPlayingBoardFen = true
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            showReviewModeIOS = true
+        }
+        #endif
+    }
+
+    /// 退出检验模式
+    func exitVerificationMode() {
+        verificationItem = nil
+        session.unlockIfNeeded()
+    }
+
     var currentGameMoveListDisplay: [MoveListItem] { session.currentGameMoveList }
     var currentGameVariantListDisplay: [(moveString: String, move: Move)] {
         session.currentGameVariantList.sorted { $0.moveString < $1.moveString }
@@ -1957,6 +2004,11 @@ class ViewModel: ObservableObject {
     var autoExtendGameWhenPlayingBoardFen: Bool { session.autoExtendGameWhenPlayingBoardFen }
     var gameStepLimitation: Int? { session.gameStepLimitation }
     var currentLockedStep: Int? { session.sessionData.lockedStep }
+    var lockedFenId: Int? {
+        guard let step = session.sessionData.lockedStep,
+              step < session.sessionData.currentGame2.count else { return nil }
+        return session.sessionData.currentGame2[step]
+    }
     func setGameStepLimitation(_ limit: Int?) { session.setGameStepLimitation(limit) }
 
     func isBadMove(_ move: Move) -> Bool { session.isBadMove(move) }
@@ -2139,6 +2191,9 @@ class ViewModel: ObservableObject {
     }
 
     func setMode(_ mode: AppMode) {
+        if isInVerificationMode {
+            exitVerificationMode()
+        }
         session.setMode(mode)
         if mode == .review {
             startReview()
