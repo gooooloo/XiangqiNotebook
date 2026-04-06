@@ -91,9 +91,6 @@ struct StatusBarView: View {
                         .font(fontStyle)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Text("数据: \(String(viewModel.currentDataVersion))\(viewModel.currentDatabaseDirty ? "*" : " ")")
-                    .font(fontStyle)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.vertical, verticalPadding)
             .padding(.horizontal)
@@ -108,6 +105,9 @@ struct StatusBarView: View {
                 gameStatRow("执黑实战:", total: viewModel.currentFenInRealBlackGameTotalCount, wins: viewModel.currentFenInRealBlackGameWinCount, draws: viewModel.currentFenInRealBlackGameDrawCount, losses: viewModel.currentFenInRealBlackGameLossCount)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("练习次数: \(viewModel.currentFenPracticeCount)")
+                    .font(fontStyle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("数据: \(String(viewModel.currentDataVersion))\(viewModel.currentDatabaseDirty ? "*" : " ")")
                     .font(fontStyle)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
