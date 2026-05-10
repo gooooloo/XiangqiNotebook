@@ -1840,11 +1840,13 @@ class ViewModel: ObservableObject {
            let customName = srsData.customName, !customName.isEmpty {
             return customName
         }
-        if let fenObj = session.databaseView.getFenObjectUnfiltered(fenId),
-           let comment = fenObj.comment, !comment.isEmpty {
+        guard let fenObj = session.databaseView.getFenObjectUnfiltered(fenId) else {
+            return "fenId: \(fenId)"
+        }
+        if let comment = fenObj.comment, !comment.isEmpty {
             return comment
         }
-        return "fenId: \(fenId)"
+        return String(fenObj.fen.prefix(20))
     }
 
     // MARK: - 复习模式
