@@ -9,10 +9,12 @@ class DatabaseData: Codable {
     var bookObjects: [UUID: BookObject] = [:]
     var bookmarks: [[Int]: String] = [:]
     var reviewItems: [Int: SRSData] = [:]
+    /// 练习模式走错统计：fenId → 该局面下出现过的所有错招记录
+    var practiceMistakes: [Int: [PracticeMistakeRecord]] = [:]
     var myRealRedGameStatisticsByFenId: [Int: GameResultStatistics] = [:]
     var myRealBlackGameStatisticsByFenId: [Int: GameResultStatistics] = [:]
     var dataVersion: Int = 0
-    
+
     enum CodingKeys: String, CodingKey {
         case fenObjects2 = "fenObjects2"
         case moveObjects = "MoveObjects"
@@ -20,6 +22,7 @@ class DatabaseData: Codable {
         case bookObjects = "book_objects"
         case bookmarks
         case reviewItems = "review_items"
+        case practiceMistakes = "practice_mistakes"
         case myRealRedGameStatisticsByFenId = "my_real_red_game_statistics_by_fen_id"
         case myRealBlackGameStatisticsByFenId = "my_real_black_game_statistics_by_fen_id"
         case dataVersion = "data_version"
@@ -42,6 +45,7 @@ class DatabaseData: Codable {
         bookObjects = try container.decode([UUID: BookObject].self, forKey: .bookObjects)
         bookmarks = try container.decode([[Int]: String].self, forKey: .bookmarks)
         reviewItems = try container.decodeIfPresent([Int: SRSData].self, forKey: .reviewItems) ?? [:]
+        practiceMistakes = try container.decodeIfPresent([Int: [PracticeMistakeRecord]].self, forKey: .practiceMistakes) ?? [:]
         myRealRedGameStatisticsByFenId = try container.decode([Int: GameResultStatistics].self, forKey: .myRealRedGameStatisticsByFenId)
         myRealBlackGameStatisticsByFenId = try container.decode([Int: GameResultStatistics].self, forKey: .myRealBlackGameStatisticsByFenId)
         dataVersion = try container.decode(Int.self, forKey: .dataVersion)

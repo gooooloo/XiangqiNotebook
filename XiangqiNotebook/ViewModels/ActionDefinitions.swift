@@ -94,6 +94,7 @@ class ActionDefinitions {
         case showBookmarkListIOS
         case showMoreActionsIOS
         case showEditCommentIOS
+        case showPracticeMistakeStats  // 练习模式走错统计视图
     }
     
     // MARK: - 快捷键类型定义

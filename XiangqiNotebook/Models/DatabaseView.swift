@@ -180,6 +180,16 @@ final class DatabaseView {
         database.databaseData.reviewItems
     }
 
+    /// 练习模式走错统计（按 DatabaseView 当前筛选范围过滤）
+    var practiceMistakes: [Int: [PracticeMistakeRecord]] {
+        database.databaseData.practiceMistakes.filter { containsFenId($0.key) }
+    }
+
+    /// 练习模式走错统计（不过滤，访问全量底层数据）
+    var practiceMistakesUnfiltered: [Int: [PracticeMistakeRecord]] {
+        database.databaseData.practiceMistakes
+    }
+
     var dataVersion: Int {
         database.databaseData.dataVersion
     }
@@ -499,6 +509,31 @@ final class DatabaseView {
     /// 更新复习项（nil 表示删除）
     func updateReviewItem(for fenId: Int, srsData: SRSData?) {
         database.databaseData.reviewItems[fenId] = srsData
+        markDirty()
+    }
+
+    /// 记录一次练习走错：在 fenId 处走出了 wrongFen
+    /// 同一 (fenId, wrongFen) 组合会累加 count，不会重复创建条目
+    func recordPracticeMistake(at fenId: Int, wrongFen: String, at date: Date = Date()) {
+        var records = database.databaseData.practiceMistakes[fenId] ?? []
+        if let idx = records.firstIndex(where: { $0.wrongFen == wrongFen }) {
+            records[idx].count += 1
+            records[idx].lastWrongAt = date
+        } else {
+            records.append(PracticeMistakeRecord(
+                wrongFen: wrongFen,
+                count: 1,
+                firstWrongAt: date,
+                lastWrongAt: date
+            ))
+        }
+        database.databaseData.practiceMistakes[fenId] = records
+        markDirty()
+    }
+
+    /// 清空所有练习错误统计
+    func resetPracticeMistakes() {
+        database.databaseData.practiceMistakes = [:]
         markDirty()
     }
 
