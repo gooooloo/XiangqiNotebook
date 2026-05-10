@@ -330,7 +330,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.showBookmarkListIOS, text: "书签", shortcuts: [.sequence(",m")]) { self.showIOSBookMarkListView = true }
         actionDefinitions.registerAction(.showMoreActionsIOS, text: "更多", shortcuts: [.sequence(",a")]) { self.showIOSMoreActionsView = true }
 
-        actionDefinitions.registerAction(.addToReview, text: "加入复习库", textIPhone: "复习+", shortcuts: [.single("R")]) {
+        actionDefinitions.registerAction(.addToReview, text: "加入复习库", textIPhone: "复习+", shortcuts: [.single("v")]) {
             if self.session.isCurrentFenInReview {
                 self.session.removeReviewItem(fenId: self.session.currentFenId)
             } else {
