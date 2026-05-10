@@ -171,12 +171,16 @@ class ActionDefinitions {
     }
     
     // MARK: - 序列模式状态
-    
+
     var isInSequenceMode = false
     var pendingSequence: String = ""
-    
+
     private var sequenceTimer: Timer?
     private let sequenceTimeout: TimeInterval = 1.5
+    /// 当短匹配命中但仍有更长可能时暂存的候选；超时后执行
+    private var pendingMatchedActionKey: ActionKey?
+    /// 歧义匹配的等待时间，给用户输入后续字符的窗口
+    private let ambiguousMatchTimeout: TimeInterval = 0.3
     
     /// 定义操作和对应的快捷键 - 统一版本支持所有快捷键类型
     struct ActionInfo {
@@ -431,33 +435,45 @@ class ActionDefinitions {
     
     private func handleSequenceInput(_ character: Character) -> Bool {
         pendingSequence.append(character)
-        
-        // 检查是否有匹配的序列
-        let shortcutKey = ShortcutKey.sequence(pendingSequence)
-        if let actionKey = shortcutLookup[shortcutKey] {
-            // 完全匹配，执行动作
-            let success = executeAction(actionKey)
-            exitSequenceMode()
-            return success
-        }
-        
-        // 检查是否有以当前序列开头的更长序列
+
+        let exactKey = ShortcutKey.sequence(pendingSequence)
+        let exactMatch = shortcutLookup[exactKey]
+
         let hasLongerSequence = shortcutLookup.keys.contains { key in
             if case .sequence(let sequence) = key {
                 return sequence.hasPrefix(pendingSequence) && sequence.count > pendingSequence.count
             }
             return false
         }
-        
-        if hasLongerSequence {
-            // 重启超时计时器
-            resetSequenceTimer()
-            return true
-        } else {
-            // 没有匹配的序列，退出序列模式
+
+        if let actionKey = exactMatch {
+            if hasLongerSequence {
+                // 歧义：当前序列既能完全匹配又有更长可能，暂存候选并等待
+                pendingMatchedActionKey = actionKey
+                resetSequenceTimer(ambiguous: true)
+                return true
+            }
+            // 唯一匹配，立即执行
+            let success = executeAction(actionKey)
             exitSequenceMode()
-            return false
+            return success
         }
+
+        if hasLongerSequence {
+            // 当前不匹配但还有更长可能，继续等待
+            resetSequenceTimer(ambiguous: pendingMatchedActionKey != nil)
+            return true
+        }
+
+        // 当前序列不匹配且无更长可能：若有暂存的短匹配候选，则执行它
+        if let actionKey = pendingMatchedActionKey {
+            let success = executeAction(actionKey)
+            exitSequenceMode()
+            return success
+        }
+
+        exitSequenceMode()
+        return false
     }
     
     private func startSequenceMode(with character: Character) -> Bool {
@@ -479,16 +495,23 @@ class ActionDefinitions {
         return false
     }
     
-    private func resetSequenceTimer() {
+    private func resetSequenceTimer(ambiguous: Bool = false) {
         sequenceTimer?.invalidate()
-        sequenceTimer = Timer.scheduledTimer(withTimeInterval: sequenceTimeout, repeats: false) { [weak self] _ in
-            self?.exitSequenceMode()
+        let timeout = ambiguous ? ambiguousMatchTimeout : sequenceTimeout
+        sequenceTimer = Timer.scheduledTimer(withTimeInterval: timeout, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            // 超时时若存在暂存候选，执行之
+            if let actionKey = self.pendingMatchedActionKey {
+                _ = self.executeAction(actionKey)
+            }
+            self.exitSequenceMode()
         }
     }
-    
+
     private func exitSequenceMode() {
         isInSequenceMode = false
         pendingSequence = ""
+        pendingMatchedActionKey = nil
         sequenceTimer?.invalidate()
         sequenceTimer = nil
     }

@@ -278,30 +278,34 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.previousPath, text: "上局", textIPhone: "上局", shortcuts: [.single("p")], supportedModes: [.normal]) { self.goToPreviousPath() }
         actionDefinitions.registerAction(.nextPath, text: "下局", textIPhone: "下局", shortcuts: [.single("n")], supportedModes: [.normal]) { self.goToNextPath() }
+        #if os(macOS)
         actionDefinitions.registerAction(.random, text: "随机一局", shortcuts: [.sequence(",g")], supportedModes: [.normal]) { _ = self.makeRandomGame() }
+        #else
+        actionDefinitions.registerAction(.random, text: "随机一局", supportedModes: [.normal]) { _ = self.makeRandomGame() }
+        #endif
         actionDefinitions.registerAction(.reviewThisGame, text: "回顾本局", textIPhone: "回顾", shortcuts: [.single("R")], supportedModes: [.practice]) { self.reviewThisGame() }
         actionDefinitions.registerAction(.searchCurrentMove, text: "搜索此步", shortcuts: [.sequence(",/")], supportedModes: [.normal]) { self.showSearchResultsWindow() }
         actionDefinitions.registerAction(.referenceBoard, text: "参考棋谱", shortcuts: [.modified([.command], "x")], supportedModes: [.normal]) { self.showReferenceBoard() }
 
         actionDefinitions.registerAction(.practiceNewGame, text: "练习新局", textIPhone: "练习", shortcuts: [.single("P")], supportedModes: [.normal, .practice]) { self.practiceNewGame() }
         actionDefinitions.registerAction(.focusedPractice, text: "练习本局", textIPhone: "专练", shortcuts: [.single("Z")], supportedModes: [.normal, .practice]) { self.startFocusedPractice() }
-        actionDefinitions.registerAction(.practiceRedOpening, text: "练习红方开局", supportedModes: [.normal, .practice]) { self.practiceRedOpening() }
-        actionDefinitions.registerAction(.practiceBlackOpening, text: "练习黑方开局", supportedModes: [.normal, .practice]) { self.practiceBlackOpening() }
-        actionDefinitions.registerAction(.playRandomNextMove, text: "随机走子", textIPhone: "随机", shortcuts: [.sequence(",r")], supportedModes: [.practice]) { self.playRandomNextMove() }
-        actionDefinitions.registerAction(.hintNextMove, text: "提示", textIPhone: "提示", supportedModes: [.practice]) { self.playRandomNextMove() }
+        actionDefinitions.registerAction(.practiceRedOpening, text: "练习红方开局", shortcuts: [.sequence(",1")], supportedModes: [.normal, .practice]) { self.practiceRedOpening() }
+        actionDefinitions.registerAction(.practiceBlackOpening, text: "练习黑方开局", shortcuts: [.sequence(",2")], supportedModes: [.normal, .practice]) { self.practiceBlackOpening() }
+        actionDefinitions.registerAction(.playRandomNextMove, text: "随机走子", textIPhone: "随机", supportedModes: [.practice]) { self.playRandomNextMove() }
+        actionDefinitions.registerAction(.hintNextMove, text: "提示", textIPhone: "提示", shortcuts: [.single("?")], supportedModes: [.practice]) { self.playRandomNextMove() }
 
         actionDefinitions.registerAction(.queryScore, text: "云库查分", shortcuts: [.single("s")], supportedModes: [.normal]) { Task { await self.queryFenScore() } }
         #if os(macOS) && arch(arm64)
-        actionDefinitions.registerAction(.quickEngineScore, text: "皮卡鱼快速估分", supportedModes: [.normal]) { Task { await self.quickEngineScore() } }
-        actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼深度评分", supportedModes: [.normal]) { Task { await self.queryEngineScore() } }
-        actionDefinitions.registerAction(.queryAllEngineScores, text: "皮卡鱼深评本局", supportedModes: [.normal]) { Task { await self.queryAllEngineScores() } }
-        actionDefinitions.registerAction(.quickAllEngineScores, text: "皮卡鱼快估本局", supportedModes: [.normal]) { Task { await self.quickAllEngineScores() } }
-        actionDefinitions.registerAction(.pikafishQuickMove, text: "皮卡鱼快速应招", supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
+        actionDefinitions.registerAction(.quickEngineScore, text: "皮卡鱼快速估分", shortcuts: [.sequence(",qs")], supportedModes: [.normal]) { Task { await self.quickEngineScore() } }
+        actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼深度评分", shortcuts: [.sequence(",Qs")], supportedModes: [.normal]) { Task { await self.queryEngineScore() } }
+        actionDefinitions.registerAction(.queryAllEngineScores, text: "皮卡鱼深评本局", shortcuts: [.sequence(",Qa")], supportedModes: [.normal]) { Task { await self.queryAllEngineScores() } }
+        actionDefinitions.registerAction(.quickAllEngineScores, text: "皮卡鱼快估本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { Task { await self.quickAllEngineScores() } }
+        actionDefinitions.registerAction(.pikafishQuickMove, text: "皮卡鱼快速应招", shortcuts: [.single("M")], supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
         #endif
         actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal]) { self.updateFenScore(self.currentFenId, score: nil) }
         actionDefinitions.registerAction(.openYunku, text: "打开云库", shortcuts: [.single("y")], supportedModes: [.normal]) { self.openYunku() }
         actionDefinitions.registerAction(.deleteMove, text: "删招", shortcuts: [.sequence(",d")], supportedModes: [.normal]) { self.removeCurrentStep() }
-        actionDefinitions.registerAction(.removeMoveFromGame, text: "从局中删除此招", supportedModes: [.normal]) { self.removeMoveFromGame() }
+        actionDefinitions.registerAction(.removeMoveFromGame, text: "从局中删除此招", shortcuts: [.sequence(",k")], supportedModes: [.normal]) { self.removeMoveFromGame() }
         actionDefinitions.registerAction(.markPath, text: "标记路径", shortcuts: [.single("a")], supportedModes: [.normal]) { self.showMarkPathView = true }
 
         actionDefinitions.registerAction(.save, text: "保存", shortcuts: [.single("w")], supportedModes: ActionDefinitions.allModes) { self.saveToDefault() }
@@ -313,13 +317,13 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcuts: [.sequence(",i")], supportedModes: [.normal]) { self.showingGameInputView = true }
         actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",fff")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
         actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",p")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
-        actionDefinitions.registerAction(.exportPGNCurrentDatabaseView, text: "导出所有变着PGN...", supportedModes: [.normal]) { self.exportPGNCurrentDatabaseView() }
-        actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", supportedModes: [.normal]) { self.exportPGNCurrentGame() }
+        actionDefinitions.registerAction(.exportPGNCurrentDatabaseView, text: "导出所有变着PGN...", shortcuts: [.sequence(",X")], supportedModes: [.normal]) { self.exportPGNCurrentDatabaseView() }
+        actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", shortcuts: [.sequence(",W")], supportedModes: [.normal]) { self.exportPGNCurrentGame() }
 
         actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
-        actionDefinitions.registerAction(.copyBoardText, text: "生成详细局面文本") { self.showingBoardTextView = true }
+        actionDefinitions.registerAction(.copyBoardText, text: "生成详细局面文本", shortcuts: [.sequence(",c")]) { self.showingBoardTextView = true }
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { self.session.recalculateGameStatistics() }
-        actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", supportedModes: [.normal]) { self.performAutoAddToOpening() }
+        actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", shortcuts: [.sequence(",O")], supportedModes: [.normal]) { self.performAutoAddToOpening() }
         actionDefinitions.registerAction(.jumpToNextOpeningGap, text: "跳转开局缺口", shortcuts: [.sequence(",o")], supportedModes: [.normal]) { self.jumpToNextOpeningGap() }
 
         actionDefinitions.registerAction(.showEditCommentIOS, text: "编辑评论", shortcuts: [.sequence(",e")], supportedModes: [.normal]) { self.showEditCommentIOS = true }
@@ -333,9 +337,15 @@ class ViewModel: ObservableObject {
                 self.session.addCurrentFenToReview()
             }
         }
+        #if os(macOS)
         actionDefinitions.registerAction(.showReviewList, text: "复习库列表", shortcuts: [.sequence(",v")]) { self.showingReviewListView = true }
+        actionDefinitions.registerAction(.showReviewListIOS, text: "复习库") { self.showReviewListIOS = true }
+        actionDefinitions.registerAction(.showRealGameListIOS, text: "实战") { self.showRealGameListIOS = true }
+        #else
+        actionDefinitions.registerAction(.showReviewList, text: "复习库列表") { self.showingReviewListView = true }
         actionDefinitions.registerAction(.showReviewListIOS, text: "复习库", shortcuts: [.sequence(",v")]) { self.showReviewListIOS = true }
         actionDefinitions.registerAction(.showRealGameListIOS, text: "实战", shortcuts: [.sequence(",g")]) { self.showRealGameListIOS = true }
+        #endif
       
         actionDefinitions.registerToggleAction(
           .setFilterNone,
@@ -396,6 +406,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleFilterSpecificGame,
           text: "只筛选特定棋局",
+          shortcuts: [.single("5")],
           isEnabled: { self.session.sessionData.specificGameId != nil },
           isOn: { self.currentFilters.contains(Session.filterSpecificGame) },
           action: { _ in self.toggleFilterSpecificGame() }
@@ -404,6 +415,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleFilterSpecificBook,
           text: "只筛选特定棋书",
+          shortcuts: [.single("6")],
           isEnabled: { self.session.sessionData.specificBookId != nil },
           isOn: { self.currentFilters.contains(Session.filterSpecificBook) },
           action: { _ in self.toggleFilterSpecificBook() }
@@ -464,7 +476,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleCanNavigateBeforeLockedStep,
           text: "锁定区域可以前进后退",
-          shortcuts: [.sequence(",n")],
+          shortcuts: [.sequence(",N")],
           isEnabled: { self.isAnyMoveLocked },
           isOn: { self.canNavigateBeforeLockedStep },
           action: { newValue in
@@ -510,7 +522,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .togglePracticeMode,
           text: "练习模式",
-          shortcuts: [.sequence(",p")],
+          shortcuts: [.sequence(",P")],
           isEnabled: { true },
           isOn: { self.session.sessionData.currentMode == .practice },
           action: { newValue in
@@ -591,6 +603,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleAllowAddingNewMoves,
           text: "允许增加新走法",
+          shortcuts: [.single("A")],
           isEnabled: { self.session.canToggleAllowAddingNewMoves },
           isOn: { self.session.allowAddingNewMoves },
           action: { _ in self.session.toggleAllowAddingNewMoves() }
