@@ -753,6 +753,76 @@ struct ViewModelTests {
         #expect(vm.showAllNextMoves == false)
     }
 
+    // MARK: - 模式切换 Action
+
+    @Test func testSetNormalModeAction_SwitchesToNormal() {
+        let (vm, _) = createViewModel()
+        vm.session.togglePracticeMode()
+        #expect(vm.currentAppMode == .practice)
+
+        let info = vm.actionDefinitions.getToggleActionInfo(.setNormalMode)!
+        info.action(true)
+        #expect(vm.currentAppMode == .normal)
+    }
+
+    @Test func testSetPracticeModeAction_SwitchesToPractice() {
+        let (vm, _) = createViewModel()
+        #expect(vm.currentAppMode == .normal)
+
+        let info = vm.actionDefinitions.getToggleActionInfo(.setPracticeMode)!
+        info.action(true)
+        #expect(vm.currentAppMode == .practice)
+    }
+
+    @Test func testSetReviewModeAction_SwitchesToReviewAndStartsReview() {
+        let database = createTestDatabase()
+        let srs = SRSData(gamePath: [1, 2], nextReviewDate: Date.distantPast)
+        database.databaseData.reviewItems[1] = srs
+
+        let (vm, _) = createViewModel(database: database)
+        let info = vm.actionDefinitions.getToggleActionInfo(.setReviewMode)!
+        info.action(true)
+        #expect(vm.currentAppMode == .review)
+        #expect(!vm.reviewQueue.isEmpty)
+    }
+
+    @Test func testSetModeAction_IsOnReflectsCurrentMode() {
+        let (vm, _) = createViewModel()
+        let normalInfo = vm.actionDefinitions.getToggleActionInfo(.setNormalMode)!
+        let practiceInfo = vm.actionDefinitions.getToggleActionInfo(.setPracticeMode)!
+        let reviewInfo = vm.actionDefinitions.getToggleActionInfo(.setReviewMode)!
+
+        #expect(normalInfo.isOn() == true)
+        #expect(practiceInfo.isOn() == false)
+        #expect(reviewInfo.isOn() == false)
+
+        vm.session.togglePracticeMode()
+        #expect(normalInfo.isOn() == false)
+        #expect(practiceInfo.isOn() == true)
+        #expect(reviewInfo.isOn() == false)
+    }
+
+    @Test func testSetModeAction_ActionFalseDoesNotChangeMode() {
+        let (vm, _) = createViewModel()
+        #expect(vm.currentAppMode == .normal)
+
+        // toggle 设为 false 时不应触发模式切换（radio-button 语义）
+        let practiceInfo = vm.actionDefinitions.getToggleActionInfo(.setPracticeMode)!
+        practiceInfo.action(false)
+        #expect(vm.currentAppMode == .normal)
+    }
+
+    @Test func testSetModeAction_HasShortcutDisplay() {
+        let (vm, _) = createViewModel()
+        let normalInfo = vm.actionDefinitions.getToggleActionInfo(.setNormalMode)!
+        let practiceInfo = vm.actionDefinitions.getToggleActionInfo(.setPracticeMode)!
+        let reviewInfo = vm.actionDefinitions.getToggleActionInfo(.setReviewMode)!
+
+        #expect(normalInfo.shortcutsDisplayText == ",Mn")
+        #expect(practiceInfo.shortcutsDisplayText == ",Mp")
+        #expect(reviewInfo.shortcutsDisplayText == ",Mr")
+    }
+
     // MARK: - Navigation
 
     @Test func testStepForward_AdvancesPosition() {

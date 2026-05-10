@@ -5,24 +5,18 @@ import SwiftUI
 struct ModeSelectorView: View {
     @ObservedObject var viewModel: ViewModel
 
+    private static let modeActionKeys: [ActionDefinitions.ActionKey] = [
+        .setNormalMode,
+        .setPracticeMode,
+        .setReviewMode,
+    ]
+
     var body: some View {
         VStack(alignment: .leading) {
             Text("应用模式")
 
-            ForEach(AppMode.allCases, id: \.self) { mode in
-                HStack {
-                    Toggle(isOn: Binding(
-                        get: { viewModel.currentAppMode == mode },
-                        set: { isOn in
-                            if isOn {
-                                viewModel.setMode(mode)
-                            }
-                        }
-                    )) {
-                        Text(mode.displayName)
-                    }
-                    Spacer()
-                }
+            ForEach(Self.modeActionKeys, id: \.self) { key in
+                MyToggle(viewModel: viewModel, actionKey: key)
             }
         }
         .padding(8)

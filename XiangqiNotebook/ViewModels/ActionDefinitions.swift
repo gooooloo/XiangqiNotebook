@@ -77,6 +77,9 @@ class ActionDefinitions {
         case toggleCanNavigateBeforeLockedStep  // 新增：导航锁定按钮
         case toggleAutoExtendGameWhenPlayingBoardFen  // 新增：自动拓展按钮
         case togglePracticeMode  // 新增：练习模式按钮
+        case setNormalMode  // 切换到常规模式
+        case setPracticeMode  // 切换到练习模式
+        case setReviewMode  // 切换到复习模式
         case toggleShowPath  // 新增：显示路径按钮
         case toggleShowAllNextMoves  // 新增：显示所有下一步按钮
         case toggleShowRealGameList  // 新增：显示实战列表按钮

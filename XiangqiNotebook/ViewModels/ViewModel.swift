@@ -530,6 +530,40 @@ class ViewModel: ObservableObject {
           }
         )
 
+        // 直接切换到指定模式（radio-button 语义）
+        actionDefinitions.registerToggleAction(
+          .setNormalMode,
+          text: "常规模式",
+          shortcuts: [.sequence(",Mn")],
+          isEnabled: { true },
+          isOn: { self.currentAppMode == .normal },
+          action: { newValue in
+            if newValue { self.setMode(.normal) }
+          }
+        )
+
+        actionDefinitions.registerToggleAction(
+          .setPracticeMode,
+          text: "练习模式",
+          shortcuts: [.sequence(",Mp")],
+          isEnabled: { true },
+          isOn: { self.currentAppMode == .practice },
+          action: { newValue in
+            if newValue { self.setMode(.practice) }
+          }
+        )
+
+        actionDefinitions.registerToggleAction(
+          .setReviewMode,
+          text: "复习模式",
+          shortcuts: [.sequence(",Mr")],
+          isEnabled: { true },
+          isOn: { self.currentAppMode == .review },
+          action: { newValue in
+            if newValue { self.setMode(.review) }
+          }
+        )
+
         // 路径相关 - 常规模式和复习模式可用
         actionDefinitions.registerToggleAction(
           .toggleShowPath,
