@@ -283,7 +283,7 @@ class ViewModel: ObservableObject {
         #else
         actionDefinitions.registerAction(.random, text: "随机一局", supportedModes: [.normal]) { _ = self.makeRandomGame() }
         #endif
-        actionDefinitions.registerAction(.reviewThisGame, text: "回顾本局", textIPhone: "回顾", shortcuts: [.single("R")], supportedModes: [.practice]) { self.reviewThisGame() }
+        actionDefinitions.registerAction(.reviewThisGame, text: "回顾本局", textIPhone: "回顾", shortcuts: [.sequence(",r")], supportedModes: [.practice]) { self.reviewThisGame() }
         actionDefinitions.registerAction(.searchCurrentMove, text: "搜索此步", shortcuts: [.sequence(",/")], supportedModes: [.normal]) { self.showSearchResultsWindow() }
         actionDefinitions.registerAction(.referenceBoard, text: "参考棋谱", shortcuts: [.modified([.command], "x")], supportedModes: [.normal]) { self.showReferenceBoard() }
 
@@ -330,7 +330,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.showBookmarkListIOS, text: "书签", shortcuts: [.sequence(",m")]) { self.showIOSBookMarkListView = true }
         actionDefinitions.registerAction(.showMoreActionsIOS, text: "更多", shortcuts: [.sequence(",a")]) { self.showIOSMoreActionsView = true }
 
-        actionDefinitions.registerAction(.addToReview, text: "加入复习库", textIPhone: "复习+", shortcuts: [.sequence(",r")]) {
+        actionDefinitions.registerAction(.addToReview, text: "加入复习库", textIPhone: "复习+", shortcuts: [.single("R")]) {
             if self.session.isCurrentFenInReview {
                 self.session.removeReviewItem(fenId: self.session.currentFenId)
             } else {
