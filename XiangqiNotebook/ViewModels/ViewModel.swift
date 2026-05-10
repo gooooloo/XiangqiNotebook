@@ -279,7 +279,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.previousPath, text: "上局", textIPhone: "上局", shortcuts: [.single("p")], supportedModes: [.normal]) { self.goToPreviousPath() }
         actionDefinitions.registerAction(.nextPath, text: "下局", textIPhone: "下局", shortcuts: [.single("n")], supportedModes: [.normal]) { self.goToNextPath() }
         #if os(macOS)
-        actionDefinitions.registerAction(.random, text: "随机一局", shortcuts: [.sequence(",g")], supportedModes: [.normal]) { _ = self.makeRandomGame() }
+        actionDefinitions.registerAction(.random, text: "随机一局", shortcuts: [.sequence(",gr")], supportedModes: [.normal]) { _ = self.makeRandomGame() }
         #else
         actionDefinitions.registerAction(.random, text: "随机一局", supportedModes: [.normal]) { _ = self.makeRandomGame() }
         #endif
@@ -311,14 +311,14 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.save, text: "保存", shortcuts: [.single("w")], supportedModes: ActionDefinitions.allModes) { self.saveToDefault() }
         actionDefinitions.registerAction(.checkDataVersion, text: "更新数据", textIPhone: "更新", shortcuts: [.sequence(",u")], supportedModes: ActionDefinitions.allModes) { self.checkDataVersion() }
         actionDefinitions.registerAction(.backup, text: "备份", shortcuts: [.sequence(",b")], supportedModes: [.normal]) { self.backup() }
-        actionDefinitions.registerAction(.restore, text: "恢复", shortcuts: [.sequence(",R")], supportedModes: [.normal]) { Task { await self.recoverFromUserChoice() } }
+        actionDefinitions.registerAction(.restore, text: "恢复", shortcuts: [.sequence(",br")], supportedModes: [.normal]) { Task { await self.recoverFromUserChoice() } }
 
         actionDefinitions.registerAction(.stepLimitation, text: "步数限制", supportedModes: [.normal]) { self.showingStepLimitationDialog = true }
         actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcuts: [.sequence(",i")], supportedModes: [.normal]) { self.showingGameInputView = true }
-        actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",fff")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
-        actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",p")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
-        actionDefinitions.registerAction(.exportPGNCurrentDatabaseView, text: "导出所有变着PGN...", shortcuts: [.sequence(",X")], supportedModes: [.normal]) { self.exportPGNCurrentDatabaseView() }
-        actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", shortcuts: [.sequence(",W")], supportedModes: [.normal]) { self.exportPGNCurrentGame() }
+        actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",gb")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
+        actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",pi")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
+        actionDefinitions.registerAction(.exportPGNCurrentDatabaseView, text: "导出所有变着PGN...", shortcuts: [.sequence(",pa")], supportedModes: [.normal]) { self.exportPGNCurrentDatabaseView() }
+        actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", shortcuts: [.sequence(",pc")], supportedModes: [.normal]) { self.exportPGNCurrentGame() }
 
         actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
         actionDefinitions.registerAction(.copyBoardText, text: "生成详细局面文本", shortcuts: [.sequence(",c")]) { self.showingBoardTextView = true }
