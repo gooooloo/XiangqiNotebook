@@ -192,13 +192,20 @@ class DatabaseStorage {
 
     // MARK: - Database Creation
 
-    /// 创建空的数据库（包含起始局面）
+    /// 创建空的数据库（包含标准开局和虚拟根局面）
+    /// fenId=1 为标准开局（与 SessionData.currentGame2 默认值 [1] 保持兼容）
+    /// fenId=2 为虚拟根 origin；其后新增局面从 3 开始分配
     static func createEmptyDatabase() -> DatabaseData {
         let db = DatabaseData()
+        // 1. 标准开局（fenId=1 与默认 SessionData 兼容）
         let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
-        let fenObject = FenObject(fen: startFen, fenId: 1)
-        db.fenObjects2[1] = fenObject
+        let startObj = FenObject(fen: startFen, fenId: 1)
+        db.fenObjects2[1] = startObj
         db.fenToId[startFen] = 1
+        // 2. 虚拟根局面
+        let origin = FenObject(fen: DatabaseData.originFen, fenId: 2)
+        db.fenObjects2[2] = origin
+        db.fenToId[DatabaseData.originFen] = 2
         return db
     }
 }

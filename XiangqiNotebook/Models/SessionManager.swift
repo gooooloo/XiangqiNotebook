@@ -133,6 +133,16 @@ class SessionManager: ObservableObject {
         let databaseView = Self.createDatabaseView(for: filters, focusedPath: focusedPath, specificGameId: specificGameId, specificBookId: specificBookId, database: database)
 
         // 3. 按视图裁剪 currentGame2/currentGameStep（移除不在视图范围的 fenId）
+        // 若当前棋谱的起始局面 (currentGame2[0]) 不在新视图 scope 内（典型场景：从中局题/残局题切换到红/黑方开局），
+        // 回退到虚拟根 origin。origin 始终在所有视图的 scope 内，避免 Session 进入不一致状态。
+        if !newSessionData.currentGame2.isEmpty,
+           !databaseView.containsFenId(newSessionData.currentGame2[0]),
+           let originFenId = database.originFenId {
+            newSessionData.currentGame2 = [originFenId]
+            newSessionData.currentGameStep = 0
+            newSessionData.lockedStep = nil
+        }
+
         let oldGame = Array(newSessionData.currentGame2[0...newSessionData.currentGameStep])
         let lockedFens = newSessionData.lockedStep.map { Array(newSessionData.currentGame2[0...$0]) }
 

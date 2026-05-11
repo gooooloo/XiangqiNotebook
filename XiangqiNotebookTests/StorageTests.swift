@@ -37,9 +37,12 @@ struct StorageTests {
         let db = DatabaseStorage.createEmptyDatabase()
         let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
 
-        #expect(db.fenObjects2.count == 1)
+        // 包含两个 FenObject：fenId=1 标准开局 + fenId=2 虚拟根 origin
+        #expect(db.fenObjects2.count == 2)
         #expect(db.fenObjects2[1]?.fen == startFen)
         #expect(db.fenToId[startFen] == 1)
+        #expect(db.fenObjects2[2]?.fen == DatabaseData.originFen)
+        #expect(db.originFenId == 2)
     }
 
     @Test func testCreateEmptyDatabase_HasEmptyCollections() {
@@ -125,7 +128,8 @@ struct StorageTests {
         let loaded = try DatabaseStorage.loadDatabaseFromURL(dbURL)
 
         #expect(loaded.dataVersion == 55)
-        #expect(loaded.fenObjects2.count == 1)
+        // 标准开局 + 虚拟根 origin
+        #expect(loaded.fenObjects2.count == 2)
     }
 
     @Test func testLoadDatabaseFromURL_InvalidJSON_Throws() throws {

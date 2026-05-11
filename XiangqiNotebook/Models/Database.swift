@@ -40,18 +40,60 @@ internal class Database: ObservableObject {
             print("⚠️ Database: 创建新数据库")
         }
 
+        // 确保虚拟根局面 origin 存在，并把所有棋谱的起始局面挂载到 origin 之下
+        Self.ensureVirtualOriginAndMoves(in: databaseData)
+
         // 加载所有引擎分数文件
         loadAllEngineScores()
     }
 
     #if DEBUG
     /// 测试专用构造器：直接用提供的 DatabaseData 创建实例
-    /// 这样可以避免测试之间的相互影响，以及与UI线程的并发访问问题
+    /// 注意：不自动调用 ensureVirtualOriginAndMoves，因为测试通常在 init 后才填充 fenObjects2。
+    /// 测试需要 origin 时请在数据填充完毕后手动调用 Database.ensureVirtualOriginAndMoves(in:)
     init(testDatabaseData: DatabaseData) {
         self.databaseData = testDatabaseData
         print("✅ Database: 创建测试数据库实例")
     }
     #endif
+
+    /// 当前数据库中虚拟根局面的 fenId
+    /// 生产代码中 init 已确保存在；测试代码若未调用 ensureVirtualOriginAndMoves 可能返回 nil
+    var originFenId: Int? {
+        databaseData.originFenId
+    }
+
+    /// 确保数据库中存在虚拟根局面 origin，并把所有 gameObjects 的起始局面挂载到 origin 之下（创建虚拟着法）
+    /// 此操作幂等：origin 已存在则复用，虚拟着法已存在则跳过
+    static func ensureVirtualOriginAndMoves(in data: DatabaseData) {
+        // 1. 确保 origin FenObject 存在
+        let originFenId: Int
+        if let existing = data.originFenId {
+            originFenId = existing
+        } else {
+            // 分配下一个可用 fenId
+            let maxId = data.fenObjects2.keys.max() ?? 0
+            originFenId = maxId + 1
+            let origin = FenObject(fen: DatabaseData.originFen, fenId: originFenId)
+            data.fenObjects2[originFenId] = origin
+            data.fenToId[DatabaseData.originFen] = originFenId
+        }
+
+        // 2. 为每个 gameObject 的起始局面创建虚拟着法 origin → startingFenId
+        guard let originFenObject = data.fenObjects2[originFenId] else { return }
+        for (_, game) in data.gameObjects {
+            guard let startFenId = game.startingFenId else { continue }
+            guard startFenId != originFenId else { continue }
+            // 检查是否已存在 origin → startFenId 的着法
+            if data.moveToId[[originFenId, startFenId]] != nil { continue }
+            // 创建新的虚拟着法
+            let newMove = Move(sourceFenId: originFenId, targetFenId: startFenId)
+            let newMoveId = (data.moveObjects.keys.max() ?? 0) + 1
+            data.moveObjects[newMoveId] = newMove
+            data.moveToId[[originFenId, startFenId]] = newMoveId
+            _ = originFenObject.addMoveIfNeeded(move: newMove)
+        }
+    }
 
     // MARK: - Data Mutation
 

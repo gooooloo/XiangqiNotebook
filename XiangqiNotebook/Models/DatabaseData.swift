@@ -1,6 +1,10 @@
 import Foundation
 
 class DatabaseData: Codable {
+    /// 虚拟根局面的 fen 字符串（哨兵字符串，非合法局面）
+    /// 用作棋谱森林的统一根节点：所有棋谱的起始局面都通过虚拟着法挂载到该节点之下
+    static let originFen = "__origin__"
+
     var fenObjects2: [Int: FenObject] = [:]
     var fenToId: [String: Int] = [:]
     var moveObjects: [Int: Move] = [:]
@@ -29,6 +33,11 @@ class DatabaseData: Codable {
 
     init() {
         // 默认初始化器，用于创建空的 DatabaseData
+    }
+
+    /// 当前数据库中虚拟根局面的 fenId（如不存在返回 nil）
+    var originFenId: Int? {
+        fenToId[Self.originFen]
     }
 
     // MARK: - Codable Implementation

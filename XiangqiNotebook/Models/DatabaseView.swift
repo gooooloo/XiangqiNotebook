@@ -45,7 +45,9 @@ final class DatabaseView {
     }
 
     /// 检查 fenId 是否属于当前视图 scope
+    /// 注意：虚拟根局面 origin 始终在所有视图的 scope 内，作为森林统一根
     func containsFenId(_ fenId: Int) -> Bool {
+        if fenId == database.databaseData.originFenId { return true }
         return fenIdFilter(fenId)
     }
 
@@ -320,7 +322,10 @@ final class DatabaseView {
     }
 
     var allFenWithoutScore: [String] {
-        return database.databaseData.fenObjects2.values.filter { $0.score == nil }.map { $0.fen }
+        let originFen = DatabaseData.originFen
+        return database.databaseData.fenObjects2.values
+            .filter { $0.score == nil && $0.fen != originFen }
+            .map { $0.fen }
     }
 
     func getGamesInBookUnfiltered(_ bookId: UUID) -> [GameObject] {
