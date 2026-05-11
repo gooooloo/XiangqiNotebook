@@ -1829,6 +1829,7 @@ class ViewModel: ObservableObject {
     var maxGameStepDisplay: Int { session.maxGameStepDisplay }
     var currentFenComment: String? { session.currentFenComment }
     var currentMoveComment: String? { session.currentMoveComment }
+    var hasCurrentMove: Bool { session.currentMove != nil }
     var currentMoveBadReason: String? { session.currentMoveBadReason }
     var currentCombinedComment: String? { session.currentCombinedComment }
     var bookmarkList: [(game: [Int], name: String)] { session.bookmarkList }
