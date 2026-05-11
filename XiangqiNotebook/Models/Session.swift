@@ -479,6 +479,16 @@ class Session: ObservableObject {
         dataChanged.toggle()
     }
 
+    // MARK: - 练习错误统计
+
+    /// 记录一次练习模式走错（基于 currentFenId）
+    /// - Parameter wrongBoardFen: 用户走出的局面 FEN（任意格式，会被标准化）
+    func recordPracticeMistakeAtCurrentFen(wrongBoardFen: String) {
+        let normalized = normalizeFen(wrongBoardFen)
+        databaseView.recordPracticeMistake(at: currentFenId, wrongFen: normalized)
+        dataChanged.toggle()
+    }
+
     var isCurrentBlackOrientation: Bool {
         sessionData.isBlackOrientation
     }

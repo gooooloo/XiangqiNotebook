@@ -56,6 +56,7 @@ class ViewModel: ObservableObject {
     @Published var showReviewModeIOS = false
     @Published var showingBoardTextView = false
     @Published var showingShortcutUsageStatsView = false
+    @Published var showingPracticeMistakeStatsView = false
 
     // 复习模式状态
     @Published private(set) var reviewQueue: [(fenId: Int, srsData: SRSData)] = []
@@ -75,7 +76,8 @@ class ViewModel: ObservableObject {
                showMarkPathView ||
                showingReviewListView ||
                showingBoardTextView ||
-               showingShortcutUsageStatsView
+               showingShortcutUsageStatsView ||
+               showingPracticeMistakeStatsView
     }
 
     // Global alert state
@@ -353,6 +355,7 @@ class ViewModel: ObservableObject {
         #endif
 
         actionDefinitions.registerAction(.showShortcutUsageStats, text: "快捷键统计") { self.showingShortcutUsageStatsView = true }
+        actionDefinitions.registerAction(.showPracticeMistakeStats, text: "练习错误统计", shortcuts: [.sequence(",ws")]) { self.showingPracticeMistakeStatsView = true }
       
         actionDefinitions.registerToggleAction(
           .setFilterNone,
@@ -662,6 +665,7 @@ class ViewModel: ObservableObject {
                     message: "棋谱结束"
                 )
             } else if !session.checkBoardFenInNextMoveList(newFen) {
+                session.recordPracticeMistakeAtCurrentFen(wrongBoardFen: newFen)
                 platformService.showWarningAlert(
                     title: "没有着法",
                     message: "没有着法，请检查棋谱是否正确。"

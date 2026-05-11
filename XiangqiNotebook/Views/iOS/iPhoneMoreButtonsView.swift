@@ -58,6 +58,7 @@ struct iPhoneMoreOptionsView: View {
 
                         HStack(spacing: 15) {
                             iPhoneButton(viewModel: viewModel, actionKey: .showShortcutUsageStats)
+                            iPhoneButton(viewModel: viewModel, actionKey: .showPracticeMistakeStats)
                         }
                         .frame(maxWidth: .infinity)
 

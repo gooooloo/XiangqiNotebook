@@ -153,6 +153,9 @@ struct MacContentView: View {
         .sheet(isPresented: $viewModel.showingShortcutUsageStatsView) {
             ShortcutUsageStatsView(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showingPracticeMistakeStatsView) {
+            PracticeMistakeStatsView(viewModel: viewModel)
+        }
         .onChange(of: viewModel.isCommentEditing) { oldValue, newValue in
             // 当评论编辑状态从 true 变为 false 时，清除焦点
             if oldValue && !newValue {
@@ -367,6 +370,8 @@ struct MacMenuCommands: Commands {
             Divider()
             menuButton(.addToReview)
             menuButton(.showReviewList)
+            Divider()
+            menuButton(.showPracticeMistakeStats)
         }
     }
 

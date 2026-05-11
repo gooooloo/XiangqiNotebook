@@ -82,6 +82,9 @@ struct iPhoneContentView: View {
         .sheet(isPresented: $viewModel.showingShortcutUsageStatsView) {
             ShortcutUsageStatsView(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showingPracticeMistakeStatsView) {
+            PracticeMistakeStatsView(viewModel: viewModel)
+        }
         .alert(viewModel.globalAlertTitle, isPresented: $viewModel.showingGlobalAlert) {
             Button("确定") { }
         } message: {

@@ -95,6 +95,7 @@ class ActionDefinitions {
         case showMoreActionsIOS
         case showEditCommentIOS
         case showShortcutUsageStats  // 快捷键使用统计视图
+        case showPracticeMistakeStats  // 练习模式走错统计视图
     }
     
     // MARK: - 快捷键类型定义
