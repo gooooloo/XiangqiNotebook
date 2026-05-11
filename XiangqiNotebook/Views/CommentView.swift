@@ -35,6 +35,7 @@ struct CommentView: View {
                             viewModel.updateCurrentMoveComment(newValue)
                         }
                     ))
+                    .disabled(!viewModel.hasCurrentMove)
                     .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
                 } else {
                     Text(viewModel.currentMoveComment ?? "")
