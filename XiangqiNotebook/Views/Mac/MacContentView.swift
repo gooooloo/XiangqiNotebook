@@ -150,6 +150,9 @@ struct MacContentView: View {
         .sheet(isPresented: $viewModel.showingBoardTextView) {
             BoardTextView(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showingShortcutUsageStatsView) {
+            ShortcutUsageStatsView(viewModel: viewModel)
+        }
         .sheet(isPresented: $viewModel.showingPracticeMistakeStatsView) {
             PracticeMistakeStatsView(viewModel: viewModel)
         }
@@ -185,10 +188,16 @@ struct MacContentView: View {
 
             // 检查焦点是否在文本输入控件上
             if let firstResponder = NSApp.keyWindow?.firstResponder {
+                // NSTextField 的 first responder 实际是其 field editor（NSTextView, isFieldEditor=true），
+                // 例如 NSAlert 中的输入框。和 NSTextField 一视同仁：直接放行。
+                if let textView = firstResponder as? NSTextView, textView.isFieldEditor {
+                    return event
+                }
+
                 // 如果焦点在 TextField 上，不处理快捷键
                 if firstResponder is NSTextField { return event }
 
-                // 如果焦点在 TextEditor (NSTextView) 上
+                // 如果焦点在 TextEditor (NSTextView, 非 field editor) 上
                 if firstResponder is NSTextView {
                     if !viewModel.isCommentEditing {
                         // 评论编辑已关闭但焦点仍在 TextEditor，强制清除焦点
@@ -340,6 +349,11 @@ struct MacMenuCommands: Commands {
             Divider()
             menuButton(.autoAddToOpening)
             menuButton(.jumpToNextOpeningGap)
+        }
+
+        // 帮助/诊断 menu 项
+        CommandGroup(after: .help) {
+            menuButton(.showShortcutUsageStats)
         }
 
         // 练习 menu

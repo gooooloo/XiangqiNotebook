@@ -55,6 +55,7 @@ class ViewModel: ObservableObject {
     @Published var showReviewListIOS = false
     @Published var showReviewModeIOS = false
     @Published var showingBoardTextView = false
+    @Published var showingShortcutUsageStatsView = false
     @Published var showingPracticeMistakeStatsView = false
 
     // 复习模式状态
@@ -75,6 +76,7 @@ class ViewModel: ObservableObject {
                showMarkPathView ||
                showingReviewListView ||
                showingBoardTextView ||
+               showingShortcutUsageStatsView ||
                showingPracticeMistakeStatsView
     }
 
@@ -148,6 +150,9 @@ class ViewModel: ObservableObject {
         actionDefinitions.currentMode = { [weak self] in
             self?.currentAppMode ?? .normal
         }
+
+        // 7b. 记录快捷键使用次数（按钮点击不会触发）
+        actionDefinitions.usageRecorder = { ShortcutUsageStats.shared.record($0) }
 
         // 8. 异步构建实战反查表索引
         DispatchQueue.global(qos: .utility).async { [weak self] in
@@ -349,6 +354,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.showRealGameListIOS, text: "实战", shortcuts: [.sequence(",g")]) { self.showRealGameListIOS = true }
         #endif
 
+        actionDefinitions.registerAction(.showShortcutUsageStats, text: "快捷键统计") { self.showingShortcutUsageStatsView = true }
         actionDefinitions.registerAction(.showPracticeMistakeStats, text: "练习错误统计", shortcuts: [.sequence(",ws")]) { self.showingPracticeMistakeStatsView = true }
       
         actionDefinitions.registerToggleAction(

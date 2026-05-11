@@ -94,6 +94,7 @@ class ActionDefinitions {
         case showBookmarkListIOS
         case showMoreActionsIOS
         case showEditCommentIOS
+        case showShortcutUsageStats  // 快捷键使用统计视图
         case showPracticeMistakeStats  // 练习模式走错统计视图
     }
     
@@ -175,6 +176,9 @@ class ActionDefinitions {
     }
     
     // MARK: - 序列模式状态
+
+    /// 快捷键触发动作时的记录回调；按钮点击不会触发此回调
+    var usageRecorder: ((ActionKey) -> Void)?
 
     var isInSequenceMode = false
     var pendingSequence: String = ""
@@ -552,6 +556,7 @@ class ActionDefinitions {
                 guard actionInfo.supportedModes.contains(currentMode) else { return false }
             }
             actionInfo.action()
+            usageRecorder?(actionKey)
             return true
         }
 
@@ -563,6 +568,7 @@ class ActionDefinitions {
             guard toggleInfo.isEnabled() else { return false }
             let currentState = toggleInfo.isOn()
             toggleInfo.action(!currentState)
+            usageRecorder?(actionKey)
             return true
         }
 

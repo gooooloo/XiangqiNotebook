@@ -79,6 +79,9 @@ struct iPhoneContentView: View {
         .sheet(isPresented: $viewModel.showReviewModeIOS) {
             iPhoneReviewModeView(viewModel: viewModel, isPresented: $viewModel.showReviewModeIOS)
         }
+        .sheet(isPresented: $viewModel.showingShortcutUsageStatsView) {
+            ShortcutUsageStatsView(viewModel: viewModel)
+        }
         .sheet(isPresented: $viewModel.showingPracticeMistakeStatsView) {
             PracticeMistakeStatsView(viewModel: viewModel)
         }
