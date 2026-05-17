@@ -42,6 +42,8 @@ internal class Database: ObservableObject {
 
         // 确保虚拟根局面 origin 存在，并把所有棋谱的起始局面挂载到 origin 之下
         Self.ensureVirtualOriginAndMoves(in: databaseData)
+        // 把所有 bookmark 的路径 key 加上 origin 前缀
+        Self.ensureBookmarksHaveOriginPrefix(in: databaseData)
 
         // 加载所有引擎分数文件
         loadAllEngineScores()
@@ -79,20 +81,47 @@ internal class Database: ObservableObject {
             data.fenToId[DatabaseData.originFen] = originFenId
         }
 
-        // 2. 为每个 gameObject 的起始局面创建虚拟着法 origin → startingFenId
+        // 2. 收集所有需要挂在 origin 下的起始 fenId：
+        //    a. 每个 gameObject 的 startingFenId（包含 nil 的视为标准开局）
+        //    b. 始终包含标准开局本身，确保即使没有任何带 startingFenId 的棋谱也能从 origin 走到棋谱
         guard let originFenObject = data.fenObjects2[originFenId] else { return }
+        var startFenIds: Set<Int> = []
+        // 加入标准开局（兜底）
+        let standardFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        if let standardFenId = data.fenToId[standardFen] {
+            startFenIds.insert(standardFenId)
+        }
+        // 加入每个棋谱的 startingFenId（nil 视作标准开局，已包含在上面）
         for (_, game) in data.gameObjects {
-            guard let startFenId = game.startingFenId else { continue }
-            guard startFenId != originFenId else { continue }
-            // 检查是否已存在 origin → startFenId 的着法
+            if let s = game.startingFenId, s != originFenId {
+                startFenIds.insert(s)
+            }
+        }
+
+        for startFenId in startFenIds {
             if data.moveToId[[originFenId, startFenId]] != nil { continue }
-            // 创建新的虚拟着法
             let newMove = Move(sourceFenId: originFenId, targetFenId: startFenId)
             let newMoveId = (data.moveObjects.keys.max() ?? 0) + 1
             data.moveObjects[newMoveId] = newMove
             data.moveToId[[originFenId, startFenId]] = newMoveId
             _ = originFenObject.addMoveIfNeeded(move: newMove)
         }
+    }
+
+    /// 确保所有 bookmarks 的 key（路径数组）以 origin 打头。
+    /// 老版本 bookmark 的 path 形如 [standardOpening, move1, ...]，
+    /// 新版本统一为 [origin, standardOpening, move1, ...]。幂等。
+    static func ensureBookmarksHaveOriginPrefix(in data: DatabaseData) {
+        guard let originFenId = data.originFenId else { return }
+        var migrated: [[Int]: String] = [:]
+        for (path, name) in data.bookmarks {
+            if path.first == originFenId {
+                migrated[path] = name
+            } else {
+                migrated[[originFenId] + path] = name
+            }
+        }
+        data.bookmarks = migrated
     }
 
     // MARK: - Data Mutation

@@ -39,7 +39,14 @@ class BoardViewModel: Equatable {
     }
 
     public var piecesBySquare: [String: String] {
+        // origin 不是合法 FEN，避免传给解析器导致越界崩溃
+        if self.fen == DatabaseData.originFen { return [:] }
         return XiangqiBoardUtils.fenToPiecesBySquare(self.fen)
+    }
+
+    /// 当前局面是否是虚拟根 origin
+    public var isOrigin: Bool {
+        return self.fen == DatabaseData.originFen
     }
 
     public func getOrientation() -> String {

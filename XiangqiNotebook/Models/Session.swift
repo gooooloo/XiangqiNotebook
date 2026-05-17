@@ -125,10 +125,17 @@ class Session: ObservableObject {
             return []
         }
 
+        // 父局面是虚拟根 origin 时，兄弟着法是"切换到其他棋谱起点"，对用户学习无直接价值，
+        // 且数量等于所有棋谱起始局面数，与 currentNextMovesList 在 origin 上的处理保持一致
+        if prevFenId == databaseView.originFenId { return [] }
+
         return databaseView.moves(from: prevFenId)
     }
 
     var currentNextMovesList: [(moveString: String, move: Move)] {
+        // 在虚拟根 origin 上不展示"下步变招"：origin 的虚拟着法数量等于所有棋谱起始局面数量，
+        // 渲染数千条 MoveItemView 会导致 UI 卡死，且这些虚拟着法对用户没有意义
+        if currentFenId == databaseView.originFenId { return [] }
         let moves = databaseView.moves(from: currentFenId)
         return moves.map { (databaseView.formatMove($0, isHorizontalFlipped: sessionData.isHorizontalFlipped), $0) }
     }
@@ -525,14 +532,21 @@ class Session: ObservableObject {
         return (nextIsRed != boardIsRed) ? -score : score
     }
 
+    /// 从 fen 字符串中安全解析"下一步该谁走"。非合法 fen（如 origin 哨兵）返回 nil。
+    private func nextIsRed(in fen: String) -> Bool? {
+        let parts = fen.split(separator: " ")
+        guard parts.count > 1 else { return nil }
+        return parts[1] == "r"
+    }
+
     var displayScore: String {
-        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        guard let nextIsRed = nextIsRed(in: currentFen) else { return "" }
         guard let score = currentFenScore else { return "" }
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
     }
 
     var displayEngineScore: String {
-        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        guard let nextIsRed = nextIsRed(in: currentFen) else { return "" }
         guard let score = currentEngineScore else { return "" }
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
     }
@@ -541,7 +555,7 @@ class Session: ObservableObject {
     var displayDeepEngineScore: String {
         #if os(macOS)
         guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.engineKey) else { return "" }
-        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        guard let nextIsRed = nextIsRed(in: currentFen) else { return "" }
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
         #else
         return ""
@@ -552,7 +566,7 @@ class Session: ObservableObject {
     var displayQuickEngineScore: String {
         #if os(macOS)
         guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.quickEngineKey) else { return "" }
-        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        guard let nextIsRed = nextIsRed(in: currentFen) else { return "" }
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
         #else
         return ""
@@ -564,13 +578,13 @@ class Session: ObservableObject {
               let score = getScoreByFenId(targetFenId) else {
             return ""
         }
-        
-        guard let targetFen = getFenForId(targetFenId) else {
+
+        guard let targetFen = getFenForId(targetFenId),
+              let nextIsRed = nextIsRed(in: targetFen) else {
             return ""
         }
-        let nextIsRed = targetFen.split(separator: " ")[1] == "r"
         let adjustedScore = adjustScore(score, nextIsRed: nextIsRed)
-        
+
         return String(adjustedScore)
     }
 
@@ -582,18 +596,18 @@ class Session: ObservableObject {
             return ""
         }
 
-        guard let sourceFen = getFenForId(sourceFenId) else {
+        guard let sourceFen = getFenForId(sourceFenId),
+              let sourceNextIsRed = nextIsRed(in: sourceFen) else {
             return ""
         }
-        let sourceNextIsRed = sourceFen.split(separator: " ")[1] == "r"
         let adjustedSourceScore = adjustScore(sourceFenScore, nextIsRed: sourceNextIsRed)
-        
-        guard let targetFen = getFenForId(targetFenId) else {
+
+        guard let targetFen = getFenForId(targetFenId),
+              let targetNextIsRed = nextIsRed(in: targetFen) else {
             return ""
         }
-        let targetNextIsRed = targetFen.split(separator: " ")[1] == "r"
         let adjustedTargetScore = adjustScore(targetFenScore, nextIsRed: targetNextIsRed)
-        
+
         return String(adjustedTargetScore - adjustedSourceScore)
     }
 
@@ -1596,6 +1610,8 @@ extension Session {
     /// 获取当前局面所有可能走法的路径组
     /// 显示轮到走棋方的所有可能走法，每个走法使用不同的颜色
     func getNextMovesPathGroups() -> [PathGroup] {
+        // origin 上的虚拟着法不应该作为"下一步路径"渲染在棋盘上（数量极大且无棋盘坐标）
+        if currentFenId == databaseView.originFenId { return [] }
         let moves = currentFenObject.getMoves(fenIdFilter: databaseView.containsFenId)
         guard moves.count > 1 else { return [] }
 
@@ -1663,7 +1679,21 @@ extension Session {
             }
         }
 
-        let initialPath = Array(sessionData.currentGame2[0...(sessionData.lockedStep ?? 0)])
+        // DFS 从 currentGame2 的"真实起点"开始（跳过 step 0 的 origin），
+        // 避免从 origin 出发把所有棋谱的虚拟着法都展开。
+        // 当用户被锁定时，从锁定步开始；否则从 step 1 开始（origin 之后的第一个真实局面）。
+        let originFenId = databaseView.originFenId
+        let startIndex: Int
+        if let firstFen = sessionData.currentGame2.first, firstFen == originFenId {
+            startIndex = min(1, sessionData.currentGame2.count - 1)
+        } else {
+            startIndex = 0
+        }
+        let endIndex = max(startIndex, sessionData.lockedStep ?? startIndex)
+        guard endIndex < sessionData.currentGame2.count else {
+            return (allDFSPaths, fenIdToGamePathCount)
+        }
+        let initialPath = Array(sessionData.currentGame2[startIndex...endIndex])
         for fenId in initialPath {
             fenIdToGamePathCount[fenId] = 1
         }
@@ -1780,10 +1810,11 @@ extension Session {
             needsReset = true
         } else if let firstFenId = sessionData.currentGame2.first,
                   let firstFenObject = databaseView.getFenObject(firstFenId) {
-            // 检查第一个局面是否是起始局面
-            if firstFenObject.fen != startFen {
+            // 接受两种合法起点：origin（虚拟根）或标准开局
+            // 中局题等非标准起始局面会被截断到合法起点
+            if firstFenObject.fen != startFen && firstFenObject.fen != DatabaseData.originFen {
                 needsReset = true
-                print("currentGame2 不是从起始局面开始，将重置")
+                print("currentGame2 不是从合法起点开始（既非 origin 也非标准开局），将重置")
             }
         } else {
             // currentGame2[0] 指向的 fenId 不存在
@@ -1792,11 +1823,16 @@ extension Session {
         }
 
         if needsReset {
-            // 查找起始局面的 fenId - use getIdForFen since we're searching by fen
-            if let startFenId = databaseView.getIdForFen(startFen) {
+            // 重置为 [origin, 标准开局] 形态：step 0 = origin，step 1 = 标准开局
+            let originFenIdOpt = databaseView.originFenId
+            if let originFenId = originFenIdOpt, let startFenId = databaseView.getIdForFen(startFen) {
+                sessionData.currentGame2 = [originFenId, startFenId]
+                sessionData.currentGameStep = 1
+                print("已设置默认 currentGame2 为 [origin=\(originFenId), 标准开局=\(startFenId)]")
+            } else if let startFenId = databaseView.getIdForFen(startFen) {
                 sessionData.currentGame2 = [startFenId]
                 sessionData.currentGameStep = 0
-                print("已设置默认 currentGame2 为起始局面 fenId=\(startFenId)")
+                print("已设置默认 currentGame2 为起始局面 fenId=\(startFenId)（origin 缺失）")
             } else if let firstFenId = databaseView.getAllFenIds().min() {
                 // 后备方案：使用最小的 fenId
                 sessionData.currentGame2 = [firstFenId]
@@ -2029,10 +2065,15 @@ extension Session {
         rebuildDatabaseView()
         clearAllGamePaths()
 
-        // 设置起始局面
+        // 设置起始局面：始终以 origin 打头，保持"origin 永远是 step 0"的不变量
         let startingFenId = game.startingFenId ?? 1
-        sessionData.currentGame2 = [startingFenId]
-        sessionData.currentGameStep = 0
+        if let originFenId = databaseView.originFenId {
+            sessionData.currentGame2 = [originFenId, startingFenId]
+            sessionData.currentGameStep = 1
+        } else {
+            sessionData.currentGame2 = [startingFenId]
+            sessionData.currentGameStep = 0
+        }
 
         // 利用 DatabaseView 的 .specificGame() 过滤，auto-extension 会沿着唯一路径扩展
         autoExtendCurrentGame()
@@ -2060,10 +2101,15 @@ extension Session {
         rebuildDatabaseView()
         clearAllGamePaths()
 
-        // 设置起始局面（使用第一个棋局的起始位置）
+        // 设置起始局面：始终以 origin 打头，保持"origin 永远是 step 0"的不变量
         let startingFenId = firstGame.startingFenId ?? 1
-        sessionData.currentGame2 = [startingFenId]
-        sessionData.currentGameStep = 0
+        if let originFenId = databaseView.originFenId {
+            sessionData.currentGame2 = [originFenId, startingFenId]
+            sessionData.currentGameStep = 1
+        } else {
+            sessionData.currentGame2 = [startingFenId]
+            sessionData.currentGameStep = 0
+        }
 
         // 利用 DatabaseView 的 .specificBook() 过滤，auto-extension 可以探索棋谱中所有棋局的分支
         autoExtendCurrentGame()

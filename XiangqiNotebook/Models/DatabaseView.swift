@@ -186,6 +186,11 @@ final class DatabaseView {
         database.databaseData.dataVersion
     }
 
+    /// 当前数据库的虚拟根 origin 的 fenId（生产代码保证存在）
+    var originFenId: Int? {
+        database.databaseData.originFenId
+    }
+
     // MARK: - Book and Game Object Access
 
     /// 获取特定 BookObject（未过滤）

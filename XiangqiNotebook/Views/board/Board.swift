@@ -46,7 +46,15 @@ struct XiangqiBoard: View {
                     Color.gray.opacity(0.5)
                         .frame(width: boardSize, height: boardSize)
                 }
-                
+
+                // 虚拟根 origin：空棋盘上显示"起点"文字
+                if viewModel.isOrigin {
+                    Text("起点")
+                        .font(.system(size: boardSize * 0.18, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: boardSize, height: boardSize)
+                }
+
                 // 2. 棋子层
                 ForEach(
                     viewModel.getPieceViewModels(),

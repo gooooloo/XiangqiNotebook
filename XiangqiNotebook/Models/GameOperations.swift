@@ -203,13 +203,49 @@ class GameOperations {
         guard let firstFenObject = databaseView.getFenObject(currentGame[0]) else {
             return []
         }
-        let firstMoveIsRed = firstFenObject.fen.split(separator: " ")[1] == "r"
+        // 找到"真实起点"局面（跳过 step 0 的 origin）以判断红/黑先手
+        let realStartFenObject: FenObject? = {
+            if firstFenObject.fen == DatabaseData.originFen, currentGame.count > 1 {
+                return databaseView.getFenObject(currentGame[1])
+            }
+            return firstFenObject
+        }()
+        let firstMoveIsRed: Bool = {
+            guard let realStart = realStartFenObject else { return true }
+            let parts = realStart.fen.split(separator: " ")
+            guard parts.count > 1 else { return true }  // origin 等非合法 FEN 兜底
+            return parts[1] == "r"
+        }()
+        // origin 是否作为 step 0；影响后续 round 编号偏移
+        let hasOriginAtZero = (firstFenObject.fen == DatabaseData.originFen)
         var moveList: [MoveListItem] = []
 
         for i in 0..<currentGame.count {
             if i == 0 {
-                // 开始位置：空序号，"开始"作为招法，无标记
-                moveList.append(MoveListItem(number: "", notation: "开始",
+                // step 0：若是虚拟根 origin 则显示"起点"，否则根据真实起点局面给出标签
+                let startNotation: String
+                if hasOriginAtZero {
+                    startNotation = "起点"
+                } else if firstFenObject.fen == normalizeFen(XiangqiBoardUtils.startFEN) {
+                    startNotation = "标准局面"
+                } else {
+                    startNotation = "开始"
+                }
+                moveList.append(MoveListItem(number: "", notation: startNotation,
+                                            redOpeningMarker: "", blackOpeningMarker: "",
+                                            reviewMarker: "", markers: "", move: nil))
+                continue
+            }
+            // 当 origin 在 step 0 时，step 1 是真实起点（"标准局面"或"开始"），没有"招法"
+            if hasOriginAtZero, i == 1 {
+                let secondFen = realStartFenObject?.fen
+                let startNotation: String
+                if secondFen == normalizeFen(XiangqiBoardUtils.startFEN) {
+                    startNotation = "标准局面"
+                } else {
+                    startNotation = "开始"
+                }
+                moveList.append(MoveListItem(number: "", notation: startNotation,
                                             redOpeningMarker: "", blackOpeningMarker: "",
                                             reviewMarker: "", markers: "", move: nil))
                 continue
@@ -225,13 +261,15 @@ class GameOperations {
                 continue
             }
 
+            // 若 step 0 是虚拟根 origin，所有后续 index 偏移 1，需要在编号公式中减去
+            let effectiveIndex = hasOriginAtZero ? (i - 1) : i
             let roundOneBased: Int
             if firstMoveIsRed {
                 // 0.start 1.red 1.black 2.red 2.black ...
-                roundOneBased = (i - 1) / 2 + 1
+                roundOneBased = (effectiveIndex - 1) / 2 + 1
             } else {
                 // 0.start 1.black 2.red 2.black 3.red ...
-                roundOneBased = i / 2 + 1
+                roundOneBased = effectiveIndex / 2 + 1
             }
 
             // 分离为五个部分

@@ -1497,6 +1497,17 @@ class ViewModel: ObservableObject {
 
             let fenId = game[i]
 
+            // 跳过虚拟根 origin（无合法 FEN）
+            if fenId == session.databaseView.originFenId {
+                let elapsed = Date().timeIntervalSince(startTime)
+                let count = evaluatedCount
+                let detail = lastDetail
+                await MainActor.run {
+                    self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: count, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: false)
+                }
+                continue
+            }
+
             // 跳过已有引擎分数的局面
             if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) != nil {
                 let elapsed = Date().timeIntervalSince(startTime)
@@ -1579,6 +1590,17 @@ class ViewModel: ObservableObject {
             if batchEvalCancelled { break }
 
             let fenId = game[i]
+
+            // 跳过虚拟根 origin（无合法 FEN）
+            if fenId == session.databaseView.originFenId {
+                let elapsed = Date().timeIntervalSince(startTime)
+                let count = evaluatedCount
+                let detail = lastDetail
+                await MainActor.run {
+                    self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: count, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: false)
+                }
+                continue
+            }
 
             // 跳过已有快速引擎分数或深度引擎分数的局面
             if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey) != nil ||
@@ -2174,12 +2196,26 @@ class ViewModel: ObservableObject {
     }
 
     func exportPGNCurrentDatabaseViewContent() -> String {
-        let rootFenId = session.sessionData.currentGame2[0]
+        // 跳过 currentGame2[0] 的虚拟根 origin，使用真实起点 currentGame2[1] 作为 PGN 的根
+        let game = session.sessionData.currentGame2
+        let originFenId = session.databaseView.originFenId
+        let rootFenId: Int
+        if game.first == originFenId, game.count > 1 {
+            rootFenId = game[1]
+        } else if let first = game.first {
+            rootFenId = first
+        } else {
+            return ""
+        }
         return PGNExportService.exportCurrentDatabaseView(databaseView: session.databaseView, rootFenId: rootFenId)
     }
 
     func exportPGNCurrentGameContent() -> String {
-        let path = session.sessionData.currentGame2
+        // 跳过 currentGame2[0] 的虚拟根 origin，让 PGN 路径从真实起点开始
+        var path = session.sessionData.currentGame2
+        if path.first == session.databaseView.originFenId {
+            path.removeFirst()
+        }
         return PGNExportService.exportCurrentGame(path: path, databaseView: session.databaseView)
     }
 

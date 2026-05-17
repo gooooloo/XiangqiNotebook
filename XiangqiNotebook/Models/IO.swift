@@ -22,6 +22,9 @@ class IO {
     }
     
     static func queryFenScore(_ fen: String, silentMode: Bool = false) async throws -> Int? {
+        // 虚拟根局面（哨兵 FEN，详见 DatabaseData.originFen）不是合法局面，不查云库
+        if fen == DatabaseData.originFen { return nil }
+
         let baseUrl = "http://api.chessdb.cn:81/chessdb.php"
         var components = URLComponents(string: baseUrl)!
         

@@ -30,6 +30,9 @@ class SessionManager: ObservableObject {
     ///   - database: 数据库实例（默认为共享实例）
     /// - Returns: 创建的 SessionManager 实例（保证成功）
     static func create(from sessionData: SessionData, database: Database = .shared) -> SessionManager {
+        // 0. 确保 currentGame2 以虚拟根 origin 打头（origin 永远是 step 0）
+        prependOriginIfNeeded(to: sessionData, database: database)
+
         do {
             // 1. 创建 DatabaseView
             let databaseView = createDatabaseView(
@@ -58,9 +61,23 @@ class SessionManager: ObservableObject {
             let startFenId = fallbackDatabaseView.ensureFenId(for: startFen)
             fallbackSessionData.currentGame2 = [startFenId]
             fallbackSessionData.currentGameStep = 0
+            prependOriginIfNeeded(to: fallbackSessionData, database: database)
 
             let fallbackSession = try! Session(sessionData: fallbackSessionData, databaseView: fallbackDatabaseView)
             return SessionManager(mainSession: fallbackSession)
+        }
+    }
+
+    /// 若 sessionData.currentGame2 的第 0 个元素不是虚拟根 origin，则前补 origin
+    /// 并相应地把 currentGameStep / lockedStep 各 +1。幂等。
+    /// 用于加载历史会话数据时把数据模型升级到"origin 永远在 step 0"的统一形态。
+    static func prependOriginIfNeeded(to sessionData: SessionData, database: Database) {
+        guard let originFenId = database.originFenId else { return }
+        guard sessionData.currentGame2.first != originFenId else { return }
+        sessionData.currentGame2.insert(originFenId, at: 0)
+        sessionData.currentGameStep += 1
+        if let locked = sessionData.lockedStep {
+            sessionData.lockedStep = locked + 1
         }
     }
 

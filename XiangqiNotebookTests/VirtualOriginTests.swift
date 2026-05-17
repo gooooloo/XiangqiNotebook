@@ -202,6 +202,152 @@ struct VirtualOriginTests {
 
     /// 验证 setFilters 中的兜底前提：origin 在任何 view 中都可达
     /// 这是 setFilters 在 currentGame2[0] 不在 scope 时回退到 origin 的关键依据
+    // MARK: - 导航到 origin（step 0）不应崩溃
+
+    /// 用户点击招法列表的"起点"行（step 0 = origin）时，所有依赖 currentFen 的访问都不应崩溃。
+    /// 历史回归：origin 的 fen 是哨兵 "__origin__"，原来在 Session.displayScore 等多处直接用
+    /// `fen.split(" ")[1]` 解析下棋方，遇到 origin 越界崩溃。
+    @MainActor
+    @Test func navigatingToOriginStepDoesNotCrash() throws {
+        let data = DatabaseData()
+        let standardFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        let fen1 = FenObject(fen: standardFen, fenId: 1)
+        data.fenObjects2[1] = fen1
+        data.fenToId[standardFen] = 1
+        let db = Database(testDatabaseData: data)
+        Database.ensureVirtualOriginAndMoves(in: data)
+        let originFenId = db.originFenId!
+
+        let sessionData = SessionData()
+        sessionData.currentGame2 = [originFenId, 1]
+        sessionData.currentGameStep = 1
+        let session = try Session(sessionData: sessionData, databaseView: DatabaseView.full(database: db))
+
+        // 模拟点击"起点"行
+        session.toStepIndex(0)
+        #expect(session.sessionData.currentGameStep == 0)
+
+        // 在 origin 状态下访问所有显示属性都不应崩溃
+        _ = session.currentFen
+        _ = session.displayScore
+        _ = session.displayEngineScore
+        #if os(macOS)
+        _ = session.displayDeepEngineScore
+        _ = session.displayQuickEngineScore
+        #endif
+
+        // 招法列表生成不应崩溃，且首行应为"起点"
+        let moveList = session.currentGameMoveList
+        #expect(moveList.count == 2)
+        #expect(moveList[0].notation == "起点")
+        #expect(moveList[1].notation == "标准局面")
+    }
+
+    /// 中局题棋谱（startingFenId 不是标准开局）被点击加载后，currentGame2 应该实际更新到该棋谱
+    /// 而不是停留在 origin/原先的状态
+    @MainActor
+    @Test func loadingMiddleGamePuzzleUpdatesCurrentGame() throws {
+        let data = DatabaseData()
+        let standardFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        let fenStd = FenObject(fen: standardFen, fenId: 1)
+        data.fenObjects2[1] = fenStd
+        data.fenToId[standardFen] = 1
+        // 中局题的起始局面（任意 fen，关键是 turn=r/b 合法）
+        let middleFen = "5k3/9/9/9/9/9/9/9/9/4K4 r - - 1 1"
+        let fenMid = FenObject(fen: middleFen, fenId: 2)
+        data.fenObjects2[2] = fenMid
+        data.fenToId[middleFen] = 2
+        let book = BookObject(id: UUID(), name: "puzzles")
+        let game = GameObject(id: UUID())
+        game.startingFenId = 2
+        game.name = "puzzle"
+        book.gameIds.append(game.id)
+        data.bookObjects[book.id] = book
+        data.gameObjects[game.id] = game
+
+        let db = Database(testDatabaseData: data)
+        Database.ensureVirtualOriginAndMoves(in: data)
+        let originFenId = db.originFenId!
+
+        // 初始 SessionData：默认起步在标准开局（mainSession 状态）
+        let sessionData = SessionData()
+        sessionData.currentGame2 = [originFenId, 1]
+        sessionData.currentGameStep = 1
+        let manager = SessionManager.create(from: sessionData, database: db)
+
+        // 用户点击中局棋谱
+        manager.loadGame(game.id)
+
+        // 加载后，currentGame2 应该以该棋谱的起始 fenId 起步，而不是停在 origin/标准开局
+        let result = manager.mainSession.sessionData.currentGame2
+        #expect(result.contains(2), "currentGame2 should contain the puzzle's starting fen (2), got \(result)")
+        #expect(result.contains(1) == false, "currentGame2 should not contain the previous standard opening (1)")
+    }
+
+    /// 切换 不筛选 → 棋谱(specificBook) → 不筛选，移动列表不应该只剩"起点"
+    /// 复现：用户在 不筛选 状态下有完整 game path，切到一个不含当前 path 的 specificBook，
+    /// path 被截断到 [origin]；切回 不筛选 时 autoExtend 应能从 origin 重新延伸出某个棋谱
+    @MainActor
+    @Test func switchingBetweenBookAndNoFilterDoesNotLeaveOnlyOrigin() throws {
+        let data = DatabaseData()
+        let standardFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        let fenStd = FenObject(fen: standardFen, fenId: 1)
+        data.fenObjects2[1] = fenStd
+        data.fenToId[standardFen] = 1
+        // 中局题的局面（用于一个独立棋书）
+        let midFen = "5k3/9/9/9/9/9/9/9/9/4K4 r - - 1 1"
+        let fenMid = FenObject(fen: midFen, fenId: 2)
+        data.fenObjects2[2] = fenMid
+        data.fenToId[midFen] = 2
+
+        // 棋书 A：包含中局题（不含标准开局）
+        let bookA = BookObject(id: UUID(), name: "puzzle book")
+        let gameA = GameObject(id: UUID())
+        gameA.startingFenId = 2
+        gameA.name = "puzzle"
+        bookA.gameIds.append(gameA.id)
+        data.bookObjects[bookA.id] = bookA
+        data.gameObjects[gameA.id] = gameA
+
+        let db = Database(testDatabaseData: data)
+        Database.ensureVirtualOriginAndMoves(in: data)
+        let originFenId = db.originFenId!
+
+        // 初始：不筛选，currentGame2 = [origin, 1]（origin + 标准开局）
+        let sessionData = SessionData()
+        sessionData.currentGame2 = [originFenId, 1]
+        sessionData.currentGameStep = 1
+        let manager = SessionManager.create(from: sessionData, database: db)
+
+        // Step 1: 切到 specificBook（书 A 不含标准开局）
+        manager.setFilters([Session.filterSpecificBook], specificBookId: bookA.id)
+        // 此时 currentGame2 应被截断到 [origin]，move list 只有"起点"
+        #expect(manager.mainSession.sessionData.currentGame2.first == originFenId)
+
+        // Step 2: 切回 不筛选
+        manager.setFilters([])
+        let result = manager.mainSession.sessionData.currentGame2
+        print("DEBUG: after switch back, currentGame2=\(result)")
+        // 期望 autoExtend 能从 origin 延伸到某个棋谱（如标准开局或中局题）
+        #expect(result.count > 1, "expected autoExtend to extend from origin, got \(result)")
+    }
+
+    /// BoardViewModel 接受 origin 的 fen 时不应在解析 piecesBySquare 时崩溃
+    @Test func boardViewModelHandlesOriginFen() {
+        let bvm = BoardViewModel(
+            fen: DatabaseData.originFen,
+            orientation: "red",
+            isHorizontalFlipped: false,
+            showPath: false,
+            showAllNextMoves: false,
+            shouldAnimate: false,
+            currentFenPathGroups: []
+        )
+        #expect(bvm.isOrigin == true)
+        // 访问 piecesBySquare 不应崩溃（曾因 origin fen 不是合法 FEN 而越界）
+        #expect(bvm.piecesBySquare.isEmpty)
+    }
+
     @Test func originAlwaysReachableAcrossViews() {
         let data = DatabaseData()
         let middleFen = "middlegame_puzzle_fen"

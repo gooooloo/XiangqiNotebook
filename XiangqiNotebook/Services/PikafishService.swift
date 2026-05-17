@@ -195,6 +195,9 @@ class PikafishService: @unchecked Sendable {
     }
 
     func evaluatePosition(fen: String, movetime: Int? = nil) async throws -> EvaluationResult? {
+        // 虚拟根局面（哨兵 FEN，详见 DatabaseData.originFen）没有合法 FEN，喂给 pikafish 会 segfault
+        if fen == DatabaseData.originFen { return nil }
+
         // 如果已有评估在进行中，直接返回 nil（不阻塞等待）
         guard tryAcquireEvaluationLock() else { return nil }
         defer { releaseEvaluationLock() }
