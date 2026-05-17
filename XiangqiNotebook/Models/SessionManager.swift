@@ -235,6 +235,29 @@ class SessionManager: ObservableObject {
 
     // MARK: - 加载操作
 
+    /// Origin 枢纽切换：用户在 origin 上点击某个虚拟子节点（标准开局或某个棋谱起点），
+    /// 自动选择合适的 filter 切换到该起点。
+    /// - 目标是标准开局 → 清空 filter（Full view）+ 把 currentGame2 重置到标准开局
+    /// - 目标是某个棋谱的起始 fen → loadGame(对应棋谱)，进入 .specificGame 视图
+    /// - Parameter startingFenId: origin 的某个虚拟子节点的 fenId
+    func navigateToHubChild(startingFenId: Int) {
+        let standardId = database.databaseData.standardOpeningFenId
+        if startingFenId == standardId {
+            setFilters([])
+            mainSession.loadStartingFen(startingFenId)
+            return
+        }
+        if let game = database.databaseData.gameObjects.values.first(where: {
+            ($0.startingFenId ?? standardId) == startingFenId
+        }) {
+            loadGame(game.id)
+            return
+        }
+        // 兜底：找不到对应棋谱（数据异常），清 filter 后直接定位到该 fen
+        setFilters([])
+        mainSession.loadStartingFen(startingFenId)
+    }
+
     /// 加载棋局（切换到特定棋局视图再执行）
     /// - Parameter gameId: 要加载的棋局 ID
     func loadGame(_ gameId: UUID) {

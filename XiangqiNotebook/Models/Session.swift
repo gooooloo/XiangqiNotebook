@@ -115,9 +115,9 @@ class Session: ObservableObject {
     }
 
     var currentGameVariantList: [(moveString: String, move: Move)] {
-        currentGameVariantMoves.map { (databaseView.formatMove($0, isHorizontalFlipped: sessionData.isHorizontalFlipped), $0) }
+        currentGameVariantMoves.map { (formatMoveDisplay($0), $0) }
     }
-    
+
     var currentGameVariantMoves: [Move] {
         guard sessionData.currentGameStep != 0,
               let prevFenId = previousFenId,
@@ -125,19 +125,47 @@ class Session: ObservableObject {
             return []
         }
 
-        // 父局面是虚拟根 origin 时，兄弟着法是"切换到其他棋谱起点"，对用户学习无直接价值，
-        // 且数量等于所有棋谱起始局面数，与 currentNextMovesList 在 origin 上的处理保持一致
-        if prevFenId == databaseView.originFenId { return [] }
+        // 父局面是虚拟根 origin 时，兄弟着法即"切换到其他棋谱起点"——这是枢纽语义，
+        // 直接从底层 Database 取全部 origin 虚拟子节点，无视当前 filter。
+        if prevFenId == databaseView.originFenId {
+            return databaseView.originVirtualMoves()
+        }
 
         return databaseView.moves(from: prevFenId)
     }
 
     var currentNextMovesList: [(moveString: String, move: Move)] {
-        // 在虚拟根 origin 上不展示"下步变招"：origin 的虚拟着法数量等于所有棋谱起始局面数量，
-        // 渲染数千条 MoveItemView 会导致 UI 卡死，且这些虚拟着法对用户没有意义
-        if currentFenId == databaseView.originFenId { return [] }
+        // 在虚拟根 origin 上展示"下步变招" = 全库所有棋谱起点（枢纽 UI）。
+        // 这些虚拟着法绕过 filter，便于用户从任意 view 切换到其他棋谱或标准开局。
+        if currentFenId == databaseView.originFenId {
+            return databaseView.originVirtualMoves().map { (formatMoveDisplay($0), $0) }
+        }
         let moves = databaseView.moves(from: currentFenId)
-        return moves.map { (databaseView.formatMove($0, isHorizontalFlipped: sessionData.isHorizontalFlipped), $0) }
+        return moves.map { (formatMoveDisplay($0), $0) }
+    }
+
+    /// 格式化招法用于 UI 展示。Origin 的虚拟子着法返回 hub label（"标准开局" / 棋谱名），
+    /// 其他普通着法委托给 databaseView.formatMove。
+    func formatMoveDisplay(_ move: Move) -> String {
+        if move.sourceFenId == databaseView.originFenId,
+           let targetFenId = move.targetFenId {
+            return hubLabel(forStartingFenId: targetFenId)
+        }
+        return databaseView.formatMove(move, isHorizontalFlipped: sessionData.isHorizontalFlipped)
+    }
+
+    /// 用于 hub UI 的标签：标准开局 / 棋谱名 / 兜底占位
+    private func hubLabel(forStartingFenId fenId: Int) -> String {
+        if let standardId = databaseView.standardOpeningFenId, fenId == standardId {
+            return "标准开局"
+        }
+        if let game = databaseView.findGameByStartingFenId(fenId),
+           let name = game.name, !name.isEmpty {
+            return name
+        }
+        // 兜底：origin 的虚拟子节点正常都能匹配到 standard opening 或 game.name；
+        // 走到这里说明数据异常（孤立的 starting fen），给出可识别的占位
+        return "棋谱 #\(fenId)"
     }
 
     var currentFenComment: String? {
@@ -754,7 +782,7 @@ class Session: ObservableObject {
     }
   
     func getMoveString(move: Move) -> String {
-      return databaseView.formatMove(move, isHorizontalFlipped: sessionData.isHorizontalFlipped)
+      return formatMoveDisplay(move)
     }
 
     func getCombinedComment(fenObject: FenObject?, move: Move?) -> String? {
@@ -1801,7 +1829,7 @@ extension Session {
     /// 设置默认的 currentGame2（如果需要）
     /// 确保 currentGame2 从起始局面开始
     func setupDefaultCurrentGameIfNeeded() {
-        let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        let startFen = DatabaseData.standardOpeningFen
 
         // 检查 currentGame2 是否需要重置
         var needsReset = false
@@ -2079,6 +2107,28 @@ extension Session {
         autoExtendCurrentGame()
 
         // 移动到游戏末尾
+        sessionData.currentGameStep = sessionData.currentGame2.count - 1
+
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
+    }
+
+    /// 加载一个起始局面（不绑定具体棋谱）。供 SessionManager 在 hub 切换到"标准开局"等
+    /// 没有特定 game 关联的起点时使用。调用方应保证 filter 已经切换到合适的视图。
+    func loadStartingFen(_ startingFenId: Int) {
+        sessionData.gameHistory = nil
+        sessionData.lockedStep = nil
+        rebuildDatabaseView()
+        clearAllGamePaths()
+
+        if let originFenId = databaseView.originFenId {
+            sessionData.currentGame2 = [originFenId, startingFenId]
+            sessionData.currentGameStep = 1
+        } else {
+            sessionData.currentGame2 = [startingFenId]
+            sessionData.currentGameStep = 0
+        }
+
+        autoExtendCurrentGame()
         sessionData.currentGameStep = sessionData.currentGame2.count - 1
 
         notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)

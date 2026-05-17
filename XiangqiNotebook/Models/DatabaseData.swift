@@ -5,6 +5,11 @@ class DatabaseData: Codable {
     /// 用作棋谱森林的统一根节点：所有棋谱的起始局面都通过虚拟着法挂载到该节点之下
     static let originFen = "__origin__"
 
+    /// 标准开局（红方先手）的完整 fen 字符串
+    /// 与 XiangqiBoardUtils.startFEN 的短形式（仅含到 "r"）配合 normalizeFen 后才相等；
+    /// 这里存的是真正持久化在 fenObjects2 里的形式
+    static let standardOpeningFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+
     var fenObjects2: [Int: FenObject] = [:]
     var fenToId: [String: Int] = [:]
     var moveObjects: [Int: Move] = [:]
@@ -38,6 +43,11 @@ class DatabaseData: Codable {
     /// 当前数据库中虚拟根局面的 fenId（如不存在返回 nil）
     var originFenId: Int? {
         fenToId[Self.originFen]
+    }
+
+    /// 当前数据库中标准开局局面的 fenId（如不存在返回 nil）
+    var standardOpeningFenId: Int? {
+        fenToId[Self.standardOpeningFen]
     }
 
     // MARK: - Codable Implementation

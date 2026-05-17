@@ -191,6 +191,31 @@ final class DatabaseView {
         database.databaseData.originFenId
     }
 
+    /// 当前数据库的标准开局 fenId（生产代码保证存在）
+    var standardOpeningFenId: Int? {
+        database.databaseData.standardOpeningFenId
+    }
+
+    /// Origin 的所有虚拟子着法（绕过 filter，来自底层 Database）。
+    /// 这是"枢纽"语义：无论当前 view 多窄，origin 在 UI 上都能列出全库所有棋谱起点，
+    /// 让用户从任意棋谱跳到另一个棋谱或标准开局。
+    func originVirtualMoves() -> [Move] {
+        guard let originFenId = database.databaseData.originFenId,
+              let originFenObject = database.databaseData.fenObjects2[originFenId] else {
+            return []
+        }
+        return originFenObject.moves.filter { $0.targetFenId != nil }
+    }
+
+    /// 查找以指定 fenId 作为起始局面的第一个棋谱（绕过 filter）
+    /// 用于 hub 枢纽切换：用户点击 origin 子节点时，找到对应棋谱以便 loadGame
+    func findGameByStartingFenId(_ fenId: Int) -> GameObject? {
+        let standardId = database.databaseData.standardOpeningFenId
+        return database.databaseData.gameObjects.values.first { game in
+            (game.startingFenId ?? standardId) == fenId
+        }
+    }
+
     // MARK: - Book and Game Object Access
 
     /// 获取特定 BookObject（未过滤）

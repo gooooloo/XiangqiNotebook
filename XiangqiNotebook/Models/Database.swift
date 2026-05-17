@@ -87,8 +87,7 @@ internal class Database: ObservableObject {
         guard let originFenObject = data.fenObjects2[originFenId] else { return }
         var startFenIds: Set<Int> = []
         // 加入标准开局（兜底）
-        let standardFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
-        if let standardFenId = data.fenToId[standardFen] {
+        if let standardFenId = data.standardOpeningFenId {
             startFenIds.insert(standardFenId)
         }
         // 加入每个棋谱的 startingFenId（nil 视作标准开局，已包含在上面）

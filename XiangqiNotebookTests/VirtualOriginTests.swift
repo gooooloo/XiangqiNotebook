@@ -348,6 +348,152 @@ struct VirtualOriginTests {
         #expect(bvm.piecesBySquare.isEmpty)
     }
 
+    // MARK: - Origin 枢纽 (Hub) 行为
+
+    /// 在任何 view 中，origin 的虚拟子着法都应该是全库的所有起点（绕过 filter）。
+    /// 这是枢纽语义的基础：让用户在窄 view（例如 .specificGame）中也能从 origin 看到所有棋谱起点。
+    @Test func originVirtualMovesBypassFilter() {
+        let data = DatabaseData()
+        let standardFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        let fenStd = FenObject(fen: standardFen, fenId: 1)
+        data.fenObjects2[1] = fenStd
+        data.fenToId[standardFen] = 1
+        let midFen = "5k3/9/9/9/9/9/9/9/9/4K4 r - - 1 1"
+        let fenMid = FenObject(fen: midFen, fenId: 2)
+        data.fenObjects2[2] = fenMid
+        data.fenToId[midFen] = 2
+        let game = GameObject(id: UUID())
+        game.startingFenId = 2
+        game.name = "puzzle"
+        data.gameObjects[game.id] = game
+
+        let db = Database(testDatabaseData: data)
+        Database.ensureVirtualOriginAndMoves(in: data)
+
+        // 任何 view 中，originVirtualMoves 都返回所有 origin 子节点（标准开局 + 中局题）
+        let fullView = DatabaseView.full(database: db)
+        let specificView = DatabaseView.specificGame(database: db, gameId: game.id)
+        let fullMoves = fullView.originVirtualMoves()
+        let specificMoves = specificView.originVirtualMoves()
+        let fullTargets = Set(fullMoves.compactMap { $0.targetFenId })
+        let specificTargets = Set(specificMoves.compactMap { $0.targetFenId })
+        #expect(fullTargets == Set([1, 2]))
+        #expect(specificTargets == Set([1, 2]), "originVirtualMoves should bypass filter even in .specificGame")
+    }
+
+    /// 用户从终局棋谱通过 origin 枢纽切换到标准开局：清空 filter + currentGame2 复位
+    @MainActor
+    @Test func hubNavigateFromEndgameToStandardOpening() throws {
+        let data = DatabaseData()
+        let standardFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        data.fenObjects2[1] = FenObject(fen: standardFen, fenId: 1)
+        data.fenToId[standardFen] = 1
+        let midFen = "5k3/9/9/9/9/9/9/9/9/4K4 r - - 1 1"
+        data.fenObjects2[2] = FenObject(fen: midFen, fenId: 2)
+        data.fenToId[midFen] = 2
+        let game = GameObject(id: UUID())
+        game.startingFenId = 2
+        game.name = "puzzle"
+        data.gameObjects[game.id] = game
+
+        let db = Database(testDatabaseData: data)
+        Database.ensureVirtualOriginAndMoves(in: data)
+        let originId = db.originFenId!
+
+        // 初始：在终局棋谱
+        let sessionData = SessionData()
+        sessionData.currentGame2 = [originId, 2]
+        sessionData.currentGameStep = 1
+        sessionData.filters = [Session.filterSpecificGame]
+        sessionData.specificGameId = game.id
+        let manager = SessionManager.create(from: sessionData, database: db)
+        #expect(manager.mainSession.sessionData.filters.contains(Session.filterSpecificGame))
+
+        // 走枢纽：切到标准开局（fenId=1）
+        let standardId = db.databaseData.standardOpeningFenId!
+        manager.navigateToHubChild(startingFenId: standardId)
+
+        // 期望：filter 清空，currentGame2 起点定位到标准开局
+        #expect(manager.mainSession.sessionData.filters.isEmpty)
+        #expect(manager.mainSession.sessionData.currentGame2.first == originId)
+        #expect(manager.mainSession.sessionData.currentGame2[safe: 1] == standardId)
+    }
+
+    /// 用户从标准开局通过 origin 枢纽切换到某个终局棋谱：filter 切到 .specificGame + currentGame2 复位
+    @MainActor
+    @Test func hubNavigateFromStandardOpeningToEndgame() throws {
+        let data = DatabaseData()
+        let standardFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        data.fenObjects2[1] = FenObject(fen: standardFen, fenId: 1)
+        data.fenToId[standardFen] = 1
+        let midFen = "5k3/9/9/9/9/9/9/9/9/4K4 r - - 1 1"
+        data.fenObjects2[2] = FenObject(fen: midFen, fenId: 2)
+        data.fenToId[midFen] = 2
+        let game = GameObject(id: UUID())
+        game.startingFenId = 2
+        game.name = "puzzle"
+        data.gameObjects[game.id] = game
+
+        let db = Database(testDatabaseData: data)
+        Database.ensureVirtualOriginAndMoves(in: data)
+        let originId = db.originFenId!
+
+        // 初始：在标准开局，不筛选
+        let sessionData = SessionData()
+        sessionData.currentGame2 = [originId, 1]
+        sessionData.currentGameStep = 1
+        let manager = SessionManager.create(from: sessionData, database: db)
+        #expect(manager.mainSession.sessionData.filters.isEmpty)
+
+        // 走枢纽：切到中局题（fenId=2）
+        manager.navigateToHubChild(startingFenId: 2)
+
+        // 期望：filter 切到 .specificGame(game.id)，currentGame2 起点是中局题
+        #expect(manager.mainSession.sessionData.filters.contains(Session.filterSpecificGame))
+        #expect(manager.mainSession.sessionData.specificGameId == game.id)
+        #expect(manager.mainSession.sessionData.currentGame2.contains(2))
+        #expect(manager.mainSession.sessionData.currentGame2.contains(1) == false)
+    }
+
+    /// Origin 上的 currentNextMovesList 应显示所有 hub 项（带 hub label）
+    @MainActor
+    @Test func originStepShowsHubItemsInNextMovesList() throws {
+        let data = DatabaseData()
+        let standardFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+        data.fenObjects2[1] = FenObject(fen: standardFen, fenId: 1)
+        data.fenToId[standardFen] = 1
+        let midFen = "5k3/9/9/9/9/9/9/9/9/4K4 r - - 1 1"
+        data.fenObjects2[2] = FenObject(fen: midFen, fenId: 2)
+        data.fenToId[midFen] = 2
+        let game = GameObject(id: UUID())
+        game.startingFenId = 2
+        game.name = "我的终局题"
+        data.gameObjects[game.id] = game
+
+        let db = Database(testDatabaseData: data)
+        Database.ensureVirtualOriginAndMoves(in: data)
+        let originId = db.originFenId!
+
+        let sessionData = SessionData()
+        sessionData.currentGame2 = [originId, 1]
+        sessionData.currentGameStep = 0  // 在 origin step
+        // 注意：filter 是 .specificGame 也应该显示完整 hub（绕过 filter）
+        sessionData.filters = [Session.filterSpecificGame]
+        sessionData.specificGameId = game.id
+
+        // 通过 SessionManager.create 触发 setFilters 等正常流程
+        let manager = SessionManager.create(from: sessionData, database: db)
+        let session = manager.mainSession
+        // 把 step 强制回到 0（origin）
+        session.toStepIndex(0)
+
+        let hub = session.currentNextMovesList
+        let labels = hub.map { $0.moveString }
+        #expect(labels.contains("标准开局"))
+        #expect(labels.contains("我的终局题"))
+        #expect(hub.count == 2, "hub should have exactly 2 entries: standard opening + endgame")
+    }
+
     @Test func originAlwaysReachableAcrossViews() {
         let data = DatabaseData()
         let middleFen = "middlegame_puzzle_fen"

@@ -710,21 +710,34 @@ class ViewModel: ObservableObject {
     }
     
     func playNextVariant() {
-        session.playNextVariant()
-        queryFenScoreSilentlyIfNeeded()
+        // 走 ViewModel.playVariantMove 以触发 origin 枢纽路由
+        let sortedVariants = session.currentGameVariantList.sorted { $0.moveString < $1.moveString }
+        guard sortedVariants.count >= 2 else { return }
+        let currentIndex = sortedVariants.firstIndex(where: { $0.move.targetFenId == session.currentFenId })
+        let nextIndex = (currentIndex.map { ($0 + 1) % sortedVariants.count }) ?? 0
+        playVariantMove(sortedVariants[nextIndex].move)
     }
-    
+
     func toStepIndex(_ index: Int) {
         session.toStepIndex(index)
         queryFenScoreSilentlyIfNeeded()
     }
-    
+
     func playVariantIndex(_ index: Int) {
-        session.playVariantIndex(index)
-        queryFenScoreSilentlyIfNeeded()
+        // 走 ViewModel.playVariantMove 以触发 origin 枢纽路由
+        let moves = session.currentGameVariantMoves
+        guard index >= 0, index < moves.count else { return }
+        playVariantMove(moves[index])
     }
 
     func playVariantMove(_ move: Move) {
+        // Origin 枢纽：兄弟着法是切换到其他棋谱起点，走 SessionManager.navigateToHubChild
+        if move.sourceFenId == session.databaseView.originFenId,
+           let targetFenId = move.targetFenId {
+            sessionManager.navigateToHubChild(startingFenId: targetFenId)
+            queryFenScoreSilentlyIfNeeded()
+            return
+        }
         session.playVariantMove(move)
         queryFenScoreSilentlyIfNeeded()
     }
@@ -1988,6 +2001,13 @@ class ViewModel: ObservableObject {
     }
 
     func playNextMove(_ move: Move) {
+        // Origin 枢纽：从 origin 走出的"下一步"是切换到棋谱起点，走 SessionManager.navigateToHubChild
+        if move.sourceFenId == session.databaseView.originFenId,
+           let targetFenId = move.targetFenId {
+            sessionManager.navigateToHubChild(startingFenId: targetFenId)
+            queryFenScoreSilentlyIfNeeded()
+            return
+        }
         session.playNextMove(move)
         queryFenScoreSilentlyIfNeeded()
     }
