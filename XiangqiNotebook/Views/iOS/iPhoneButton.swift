@@ -8,6 +8,9 @@ struct iPhoneButton: View {
     private func getAction() -> () -> Void {
         return {
             self.viewModel.showIOSMoreActionsView = false
+            if let key = self.actionKey {
+                ShortcutUsageStats.shared.recordFromButton(key)
+            }
             self.getActionInfo()?.action()
         }
     }

@@ -152,7 +152,7 @@ class ViewModel: ObservableObject {
         }
 
         // 7b. 记录快捷键使用次数（按钮点击不会触发）
-        actionDefinitions.usageRecorder = { ShortcutUsageStats.shared.record($0) }
+        actionDefinitions.usageRecorder = { ShortcutUsageStats.shared.recordFromKeyboard($0) }
 
         // 8. 异步构建实战反查表索引
         DispatchQueue.global(qos: .utility).async { [weak self] in

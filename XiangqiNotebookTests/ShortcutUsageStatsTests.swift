@@ -15,14 +15,44 @@ struct ShortcutUsageStatsTests {
     }
 
     @Test
-    func recordIncrementsCount() {
+    func recordFromKeyboardIncrementsCount() {
         let (stats, _, _) = makeStats()
-        #expect(stats.count(for: .toStart) == 0)
-        stats.record(.toStart)
-        #expect(stats.count(for: .toStart) == 1)
-        stats.record(.toStart)
-        stats.record(.toStart)
-        #expect(stats.count(for: .toStart) == 3)
+        #expect(stats.getTotalCount(for: .toStart) == 0)
+        stats.recordFromKeyboard(.toStart)
+        #expect(stats.getTotalCount(for: .toStart) == 1)
+        stats.recordFromKeyboard(.toStart)
+        stats.recordFromKeyboard(.toStart)
+        #expect(stats.getTotalCount(for: .toStart) == 3)
+    }
+
+    @Test
+    func recordFromButtonIncrementsCount() {
+        let (stats, _, _) = makeStats()
+        #expect(stats.getTotalCount(for: .toStart) == 0)
+        stats.recordFromButton(.toStart)
+        #expect(stats.getTotalCount(for: .toStart) == 1)
+        stats.recordFromButton(.toStart)
+        #expect(stats.getTotalCount(for: .toStart) == 2)
+    }
+
+    @Test
+    func getTotalCountSumsAllSources() {
+        let (stats, _, _) = makeStats()
+        stats.recordFromKeyboard(.copyFEN)
+        stats.recordFromKeyboard(.copyFEN)
+        stats.recordFromButton(.copyFEN)
+        #expect(stats.getTotalCount(for: .copyFEN) == 3)
+    }
+
+    @Test
+    func getCountBySourceShowsBreakdown() {
+        let (stats, _, _) = makeStats()
+        stats.recordFromKeyboard(.copyFEN)
+        stats.recordFromKeyboard(.copyFEN)
+        stats.recordFromButton(.copyFEN)
+        let breakdown = stats.getCountBySource(for: .copyFEN)
+        #expect(breakdown["keyboard"] == 2)
+        #expect(breakdown["button"] == 1)
     }
 
     @Test
@@ -33,24 +63,24 @@ struct ShortcutUsageStatsTests {
         let key = "shortcutUsageStats"
 
         let stats1 = ShortcutUsageStats(userDefaults: defaults, key: key)
-        stats1.record(.copyFEN)
-        stats1.record(.copyFEN)
+        stats1.recordFromKeyboard(.copyFEN)
+        stats1.recordFromKeyboard(.copyFEN)
 
         // 用同样的 UserDefaults 创建新实例，应能读出旧数据
         let stats2 = ShortcutUsageStats(userDefaults: defaults, key: key)
-        #expect(stats2.count(for: .copyFEN) == 2)
+        #expect(stats2.getTotalCount(for: .copyFEN) == 2)
     }
 
     @Test
     func resetClearsAllCounts() {
         let (stats, _, _) = makeStats()
-        stats.record(.stepBack)
-        stats.record(.stepForward)
-        #expect(stats.count(for: .stepBack) == 1)
+        stats.recordFromKeyboard(.stepBack)
+        stats.recordFromButton(.stepForward)
+        #expect(stats.getTotalCount(for: .stepBack) == 1)
         stats.reset()
-        #expect(stats.count(for: .stepBack) == 0)
-        #expect(stats.count(for: .stepForward) == 0)
-        #expect(stats.counts.isEmpty)
+        #expect(stats.getTotalCount(for: .stepBack) == 0)
+        #expect(stats.getTotalCount(for: .stepForward) == 0)
+        #expect(stats.countsBySource.isEmpty)
     }
 
     @Test
@@ -94,8 +124,8 @@ struct ShortcutUsageStatsTests {
     }
 
     @Test
-    func directButtonClickDoesNotTriggerUsageRecorder() {
-        // 按钮点击通过 ActionInfo.action() 直接调用，不经过 executeAction，故不记录
+    func directButtonClickDoesNotTriggerUsageRecorderThroughAction() {
+        // 通过 action() 直接调用不会通过 usageRecorder 通知
         var recorded: [ActionDefinitions.ActionKey] = []
         let ad = ActionDefinitions()
         ad.usageRecorder = { recorded.append($0) }

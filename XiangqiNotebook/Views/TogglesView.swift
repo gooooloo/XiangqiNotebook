@@ -102,7 +102,10 @@ struct MyToggle: View {
         HStack {
             Toggle(isOn: Binding(
                 get: { toggleActionInfo.isOn() },
-                set: { toggleActionInfo.action($0) }
+                set: {
+                    ShortcutUsageStats.shared.recordFromButton(actionKey)
+                    toggleActionInfo.action($0)
+                }
             )) {
                 Text(displayText)
             }
