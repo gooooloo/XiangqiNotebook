@@ -316,13 +316,13 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼深度评分", shortcuts: [.sequence(",Qs")], supportedModes: [.normal]) { Task { await self.queryEngineScore() } }
         actionDefinitions.registerAction(.queryAllEngineScores, text: "皮卡鱼深评本局", shortcuts: [.sequence(",Qa")], supportedModes: [.normal]) { Task { await self.queryAllEngineScores() } }
         actionDefinitions.registerAction(.quickAllEngineScores, text: "皮卡鱼快估本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { Task { await self.quickAllEngineScores() } }
-        actionDefinitions.registerAction(.pikafishQuickMove, text: "皮卡鱼快速应招", shortcuts: [.single("M")], supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
+        actionDefinitions.registerAction(.pikafishQuickMove, text: "皮卡鱼快速应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
         #endif
         actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal]) { self.updateFenScore(self.currentFenId, score: nil) }
         actionDefinitions.registerAction(.openYunku, text: "打开云库", shortcuts: [.single("y")], supportedModes: [.normal]) { self.openYunku() }
         actionDefinitions.registerAction(.deleteMove, text: "删招", shortcuts: [.sequence(",d")], supportedModes: [.normal]) { self.removeCurrentStep() }
         actionDefinitions.registerAction(.removeMoveFromGame, text: "从局中删除此招", shortcuts: [.sequence(",k")], supportedModes: [.normal]) { self.removeMoveFromGame() }
-        actionDefinitions.registerAction(.markPath, text: "标记路径", shortcuts: [.single("a")], supportedModes: [.normal]) { self.showMarkPathView = true }
+        actionDefinitions.registerAction(.markPath, text: "标记路径", shortcuts: [.single("A")], supportedModes: [.normal]) { self.showMarkPathView = true }
 
         actionDefinitions.registerAction(.save, text: "保存", shortcuts: [.single("w")], supportedModes: ActionDefinitions.allModes) { self.saveToDefault() }
         actionDefinitions.registerAction(.checkDataVersion, text: "更新数据", textIPhone: "更新", shortcuts: [.sequence(",u")], supportedModes: ActionDefinitions.allModes) { self.checkDataVersion() }
@@ -639,7 +639,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleBookmark,
           text: "加入书签",
-          shortcuts: [.single("m")],
+          shortcuts: [.single("M")],
           supportedModes: [.normal],
           isEnabled: { true },
           isOn: { self.isBookmarked },
@@ -669,7 +669,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleAllowAddingNewMoves,
           text: "允许增加新走法",
-          shortcuts: [.single("A")],
+          shortcuts: [.single("a")],
           isEnabled: { self.session.canToggleAllowAddingNewMoves },
           isOn: { self.session.allowAddingNewMoves },
           action: { _ in self.session.toggleAllowAddingNewMoves() }
