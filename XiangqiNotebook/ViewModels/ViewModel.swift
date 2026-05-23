@@ -271,7 +271,14 @@ class ViewModel: ObservableObject {
         boardViewModel.updateNextMovesPathGroups(nextMovesPathGroups: session.getNextMovesPathGroups())
         boardViewModel.updateShowPath(showPath: showPath)
         boardViewModel.updateShowAllNextMoves(showAllNextMoves: showAllNextMoves)
-        boardViewModel.updateLastMoveSquares(showLastMove ? currentMoveSquares : nil)
+
+        // 延迟显示来源招法高亮，等待棋子动画完成
+        boardViewModel.updateLastMoveSquares(nil)
+        if showLastMove {
+            DispatchQueue.main.asyncAfter(deadline: .now() + BoardViewModel.pieceAnimationDuration) {
+                self.boardViewModel.updateLastMoveSquares(self.currentMoveSquares)
+            }
+        }
 
         // 通知 ViewModel 的观察者（View）
         objectWillChange.send()

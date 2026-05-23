@@ -1,6 +1,9 @@
 import SwiftUI
 
 class BoardViewModel: Equatable {
+    // 棋子动画时长常量（毫秒）
+    static let pieceAnimationDuration: Double = 0.3
+
     private var orientation: String
     private var isHorizontalFlipped: Bool
     private var showPath: Bool
