@@ -1,9 +1,6 @@
 import SwiftUI
 
 class BoardViewModel: Equatable {
-    // 棋子动画时长常量（毫秒）
-    static let pieceAnimationDuration: Double = 0.3
-
     private var orientation: String
     private var isHorizontalFlipped: Bool
     private var showPath: Bool
@@ -77,6 +74,11 @@ class BoardViewModel: Equatable {
 
     public func getLastMoveSquares() -> (from: String, to: String)? {
         return self.lastMoveSquares
+    }
+
+    public func getLastMoveKey() -> String {
+        guard let squares = lastMoveSquares else { return "" }
+        return "\(squares.from)-\(squares.to)"
     }
     
     public func getCurrentTurn() -> String {
