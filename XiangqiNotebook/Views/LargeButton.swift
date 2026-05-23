@@ -43,6 +43,9 @@ struct LargeButton: View {
         }()
 
         Button(action: {
+            if let actionKey = actionKey {
+                ShortcutUsageStats.shared.recordFromButton(actionKey)
+            }
             finalActionInfo?.action()
         }) {
             HStack(spacing: 4) {

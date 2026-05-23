@@ -384,7 +384,10 @@ struct MacMenuCommands: Commands {
     @ViewBuilder
     private func menuButton(_ key: ActionDefinitions.ActionKey) -> some View {
         if let vm = viewModel, let info = vm.actionDefinitions.getActionInfo(key) {
-            Button(menuLabel(info.text, shortcut: info.shortcutsDisplayText)) { info.action() }
+            Button(menuLabel(info.text, shortcut: info.shortcutsDisplayText)) {
+                ShortcutUsageStats.shared.recordFromButton(key)
+                info.action()
+            }
                 .disabled(!vm.isActionVisible(key))
         }
     }
@@ -394,7 +397,10 @@ struct MacMenuCommands: Commands {
         if let vm = viewModel, let info = vm.actionDefinitions.getToggleActionInfo(key) {
             Toggle(menuLabel(info.text, shortcut: info.shortcutsDisplayText), isOn: Binding(
                 get: { info.isOn() },
-                set: { info.action($0) }
+                set: {
+                    ShortcutUsageStats.shared.recordFromButton(key)
+                    info.action($0)
+                }
             ))
             .disabled(!vm.isActionVisible(key) || !info.isEnabled())
         }
