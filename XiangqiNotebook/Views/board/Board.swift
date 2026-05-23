@@ -17,6 +17,7 @@ struct XiangqiBoard: View {
     var onMove: ((String) -> Void)?  // 添加回调属性
     @State private var selectedGroupIndex: Int? = nil
     @State private var selectedPathIndex: Int? = nil
+    @State private var lastMoveOpacity: Double = 0
     
     // MARK: - 初始化
     init(viewModel: Binding<BoardViewModel> = .constant(.default), onMove: ((String) -> Void)? = nil) {
@@ -47,37 +48,55 @@ struct XiangqiBoard: View {
                         .frame(width: boardSize, height: boardSize)
                 }
                 
-                // 1.5 来源招法高亮层（棋子下方）
-                if let lastMove = viewModel.getLastMoveSquares() {
-                    let fromPosition = BoardViewModel.calculateDisplayPosition(
-                        square: lastMove.from,
-                        squareSizeWidth: squareSizeWidth,
-                        squareSizeHeight: squareSizeHeight,
-                        pieceDiffX: pieceDiffX,
-                        pieceDiffY: pieceDiffY,
-                        orientation: viewModel.getOrientation(),
-                        isHorizontalFlipped: viewModel.getIsHorizontalFlipped()
-                    )
-                    HighlightSquareView(
-                        squareSize: squareSize,
-                        position: fromPosition,
-                        color: .orange
-                    )
+                // 1.5 来源招法高亮层（棋子下方），延迟显示等待棋子动画完成
+                Group {
+                    if let lastMove = viewModel.getLastMoveSquares() {
+                        let fromPosition = BoardViewModel.calculateDisplayPosition(
+                            square: lastMove.from,
+                            squareSizeWidth: squareSizeWidth,
+                            squareSizeHeight: squareSizeHeight,
+                            pieceDiffX: pieceDiffX,
+                            pieceDiffY: pieceDiffY,
+                            orientation: viewModel.getOrientation(),
+                            isHorizontalFlipped: viewModel.getIsHorizontalFlipped()
+                        )
+                        HighlightSquareView(
+                            squareSize: squareSize,
+                            position: fromPosition,
+                            color: .orange
+                        )
 
-                    let toPosition = BoardViewModel.calculateDisplayPosition(
-                        square: lastMove.to,
-                        squareSizeWidth: squareSizeWidth,
-                        squareSizeHeight: squareSizeHeight,
-                        pieceDiffX: pieceDiffX,
-                        pieceDiffY: pieceDiffY,
-                        orientation: viewModel.getOrientation(),
-                        isHorizontalFlipped: viewModel.getIsHorizontalFlipped()
-                    )
-                    HighlightSquareView(
-                        squareSize: squareSize,
-                        position: toPosition,
-                        color: .orange
-                    )
+                        let toPosition = BoardViewModel.calculateDisplayPosition(
+                            square: lastMove.to,
+                            squareSizeWidth: squareSizeWidth,
+                            squareSizeHeight: squareSizeHeight,
+                            pieceDiffX: pieceDiffX,
+                            pieceDiffY: pieceDiffY,
+                            orientation: viewModel.getOrientation(),
+                            isHorizontalFlipped: viewModel.getIsHorizontalFlipped()
+                        )
+                        HighlightSquareView(
+                            squareSize: squareSize,
+                            position: toPosition,
+                            color: .orange
+                        )
+                    }
+                }
+                .opacity(lastMoveOpacity)
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + pieceAnimationDuration) {
+                        withAnimation(.easeIn(duration: pieceAnimationDuration)) {
+                            lastMoveOpacity = 1
+                        }
+                    }
+                }
+                .onChange(of: viewModel.getLastMoveKey()) {
+                    lastMoveOpacity = 0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + pieceAnimationDuration) {
+                        withAnimation(.easeIn(duration: pieceAnimationDuration)) {
+                            lastMoveOpacity = 1
+                        }
+                    }
                 }
 
                 // 2. 棋子层

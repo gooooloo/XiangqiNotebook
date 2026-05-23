@@ -75,6 +75,11 @@ class BoardViewModel: Equatable {
     public func getLastMoveSquares() -> (from: String, to: String)? {
         return self.lastMoveSquares
     }
+
+    public func getLastMoveKey() -> String {
+        guard let squares = lastMoveSquares else { return "" }
+        return "\(squares.from)-\(squares.to)"
+    }
     
     public func getCurrentTurn() -> String {
         let components = fen.split(separator: " ")

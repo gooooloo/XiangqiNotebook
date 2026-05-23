@@ -271,6 +271,7 @@ class ViewModel: ObservableObject {
         boardViewModel.updateNextMovesPathGroups(nextMovesPathGroups: session.getNextMovesPathGroups())
         boardViewModel.updateShowPath(showPath: showPath)
         boardViewModel.updateShowAllNextMoves(showAllNextMoves: showAllNextMoves)
+
         boardViewModel.updateLastMoveSquares(showLastMove ? currentMoveSquares : nil)
 
         // 通知 ViewModel 的观察者（View）
