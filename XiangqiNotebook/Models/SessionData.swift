@@ -13,6 +13,7 @@ class SessionData: Codable {
     var currentMode: AppMode = .normal
     var showPath: Bool = true
     var showAllNextMoves: Bool = false
+    var showLastMove: Bool = true
     var showRealGameList: Bool = false
     var autoExtendGameWhenPlayingBoardFen: Bool = true
     var isCommentEditing: Bool = false
@@ -46,6 +47,7 @@ class SessionData: Codable {
         case currentMode = "current_mode"
         case showPath = "show_path"
         case showAllNextMoves = "show_all_next_moves"
+        case showLastMove = "show_last_move"
         case showRealGameList = "show_real_game_list"
         case autoExtendGameWhenPlayingBoardFen = "auto_extend_game_when_playing_board_fen"
         case isCommentEditing = "is_comment_editing"
@@ -72,6 +74,7 @@ class SessionData: Codable {
         canNavigateBeforeLockedStep = try container.decode(Bool.self, forKey: .canNavigateBeforeLockedStep)
         showPath = try container.decode(Bool.self, forKey: .showPath)
         showAllNextMoves = try container.decodeIfPresent(Bool.self, forKey: .showAllNextMoves) ?? false
+        showLastMove = try container.decodeIfPresent(Bool.self, forKey: .showLastMove) ?? true
         showRealGameList = try container.decodeIfPresent(Bool.self, forKey: .showRealGameList) ?? false
         autoExtendGameWhenPlayingBoardFen = try container.decode(Bool.self, forKey: .autoExtendGameWhenPlayingBoardFen)
         isCommentEditing = try container.decode(Bool.self, forKey: .isCommentEditing)
@@ -105,6 +108,7 @@ class SessionData: Codable {
         try container.encode(canNavigateBeforeLockedStep, forKey: .canNavigateBeforeLockedStep)
         try container.encode(showPath, forKey: .showPath)
         try container.encode(showAllNextMoves, forKey: .showAllNextMoves)
+        try container.encode(showLastMove, forKey: .showLastMove)
         try container.encode(showRealGameList, forKey: .showRealGameList)
         try container.encode(autoExtendGameWhenPlayingBoardFen, forKey: .autoExtendGameWhenPlayingBoardFen)
         try container.encode(isCommentEditing, forKey: .isCommentEditing)

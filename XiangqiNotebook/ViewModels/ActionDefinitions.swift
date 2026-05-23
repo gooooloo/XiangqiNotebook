@@ -82,6 +82,7 @@ class ActionDefinitions {
         case setReviewMode  // 切换到复习模式
         case toggleShowPath  // 新增：显示路径按钮
         case toggleShowAllNextMoves  // 新增：显示所有下一步按钮
+        case toggleShowLastMove  // 新增：显示来源招法按钮
         case toggleShowRealGameList  // 新增：显示实战列表按钮
         case toggleBookmark  // 新增：显示路径按钮
         case toggleIsCommentEditing

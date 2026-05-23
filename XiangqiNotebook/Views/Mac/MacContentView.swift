@@ -288,6 +288,7 @@ struct MacMenuCommands: Commands {
             Divider()
             menuToggle(.toggleShowPath)
             menuToggle(.toggleShowAllNextMoves)
+            menuToggle(.toggleShowLastMove)
             Divider()
             menuToggle(.toggleIsCommentEditing)
             menuToggle(.toggleAllowAddingNewMoves)

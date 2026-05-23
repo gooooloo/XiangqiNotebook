@@ -47,6 +47,39 @@ struct XiangqiBoard: View {
                         .frame(width: boardSize, height: boardSize)
                 }
                 
+                // 1.5 来源招法高亮层（棋子下方）
+                if let lastMove = viewModel.getLastMoveSquares() {
+                    let fromPosition = BoardViewModel.calculateDisplayPosition(
+                        square: lastMove.from,
+                        squareSizeWidth: squareSizeWidth,
+                        squareSizeHeight: squareSizeHeight,
+                        pieceDiffX: pieceDiffX,
+                        pieceDiffY: pieceDiffY,
+                        orientation: viewModel.getOrientation(),
+                        isHorizontalFlipped: viewModel.getIsHorizontalFlipped()
+                    )
+                    HighlightSquareView(
+                        squareSize: squareSize,
+                        position: fromPosition,
+                        color: .orange
+                    )
+
+                    let toPosition = BoardViewModel.calculateDisplayPosition(
+                        square: lastMove.to,
+                        squareSizeWidth: squareSizeWidth,
+                        squareSizeHeight: squareSizeHeight,
+                        pieceDiffX: pieceDiffX,
+                        pieceDiffY: pieceDiffY,
+                        orientation: viewModel.getOrientation(),
+                        isHorizontalFlipped: viewModel.getIsHorizontalFlipped()
+                    )
+                    HighlightSquareView(
+                        squareSize: squareSize,
+                        position: toPosition,
+                        color: .orange
+                    )
+                }
+
                 // 2. 棋子层
                 ForEach(
                     viewModel.getPieceViewModels(),
