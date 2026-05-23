@@ -10,6 +10,7 @@ class BoardViewModel: Equatable {
     private var pieceViewModels: [PieceViewModel] = createPieceViewModels()
     private var currentFenPathGroups: [PathGroup]
     private var nextMovesPathGroups: [PathGroup]
+    private var lastMoveSquares: (from: String, to: String)?
 
     static func == (lhs: BoardViewModel, rhs: BoardViewModel) -> Bool {
         return lhs.pieceViewModels == rhs.pieceViewModels
@@ -26,7 +27,7 @@ class BoardViewModel: Equatable {
         nextMovesPathGroups: []
     )
 
-    init(fen: String, orientation: String, isHorizontalFlipped: Bool, showPath: Bool, showAllNextMoves: Bool, shouldAnimate: Bool, currentFenPathGroups: [PathGroup], nextMovesPathGroups: [PathGroup] = []) {
+    init(fen: String, orientation: String, isHorizontalFlipped: Bool, showPath: Bool, showAllNextMoves: Bool, shouldAnimate: Bool, currentFenPathGroups: [PathGroup], nextMovesPathGroups: [PathGroup] = [], lastMoveSquares: (from: String, to: String)? = nil) {
         self.fen = fen
         self.orientation = orientation
         self.isHorizontalFlipped = isHorizontalFlipped
@@ -35,6 +36,7 @@ class BoardViewModel: Equatable {
         self.shouldAnimate = shouldAnimate
         self.currentFenPathGroups = currentFenPathGroups
         self.nextMovesPathGroups = nextMovesPathGroups
+        self.lastMoveSquares = lastMoveSquares
         updatePieceViews(fen: fen, force: true)
     }
 
@@ -68,6 +70,10 @@ class BoardViewModel: Equatable {
 
     public func getNextMovesPathGroups() -> [PathGroup] {
         return self.nextMovesPathGroups
+    }
+
+    public func getLastMoveSquares() -> (from: String, to: String)? {
+        return self.lastMoveSquares
     }
     
     public func getCurrentTurn() -> String {
@@ -146,6 +152,10 @@ class BoardViewModel: Equatable {
 
     public func updateShowAllNextMoves(showAllNextMoves: Bool) {
         self.showAllNextMoves = showAllNextMoves
+    }
+
+    public func updateLastMoveSquares(_ squares: (from: String, to: String)?) {
+        self.lastMoveSquares = squares
     }
 
     public func updateShouldAnimate(_ shouldAnimate: Bool) {

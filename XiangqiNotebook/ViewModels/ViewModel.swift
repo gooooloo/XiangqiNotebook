@@ -253,6 +253,15 @@ class ViewModel: ObservableObject {
             }
     }
 
+    private var currentMoveSquares: (from: String, to: String)? {
+        guard let move = session.currentMove,
+              let pieceMove = session.databaseView.parsePieceMove(move, isHorizontalFlipped: false)
+        else { return nil }
+        let fromSquare = MoveRules.coordinateToSquare(col: pieceMove.fromColumn, row: 9 - pieceMove.fromRow)
+        let toSquare = MoveRules.coordinateToSquare(col: pieceMove.toColumn, row: 9 - pieceMove.toRow)
+        return (from: fromSquare, to: toSquare)
+    }
+
     /// 更新棋盘视图（数据变化时调用）
     private func updateBoardView() {
         boardViewModel.updatePieceViews(fen: session.currentFen)
@@ -262,7 +271,7 @@ class ViewModel: ObservableObject {
         boardViewModel.updateNextMovesPathGroups(nextMovesPathGroups: session.getNextMovesPathGroups())
         boardViewModel.updateShowPath(showPath: showPath)
         boardViewModel.updateShowAllNextMoves(showAllNextMoves: showAllNextMoves)
-
+        boardViewModel.updateLastMoveSquares(showLastMove ? currentMoveSquares : nil)
 
         // 通知 ViewModel 的观察者（View）
         objectWillChange.send()
@@ -597,6 +606,19 @@ class ViewModel: ObservableObject {
           isOn: { self.showAllNextMoves },
           action: { newValue in
             self.toggleShowAllNextMoves()
+          }
+        )
+
+        // 显示来源招法 - 所有模式可用
+        actionDefinitions.registerToggleAction(
+          .toggleShowLastMove,
+          text: "显示来源招法",
+          shortcuts: [.sequence(",l")],
+          supportedModes: ActionDefinitions.allModes,
+          isEnabled: { true },
+          isOn: { self.showLastMove },
+          action: { newValue in
+            self.toggleShowLastMove()
           }
         )
 
@@ -2079,6 +2101,7 @@ class ViewModel: ObservableObject {
     var currentAppMode: AppMode { session.currentAppMode }
     var showPath: Bool { session.showPath }
     var showAllNextMoves: Bool { session.showAllNextMoves }
+    var showLastMove: Bool { session.showLastMove }
     var showRealGameList: Bool { session.showRealGameList }
     var isCommentEditing: Bool { session.isCommentEditing }
     var currentDataVersion: Int { session.currentDataVersion }
@@ -2286,6 +2309,10 @@ class ViewModel: ObservableObject {
 
     func toggleShowAllNextMoves() {
         session.toggleShowAllNextMoves()
+    }
+
+    func toggleShowLastMove() {
+        session.toggleShowLastMove()
     }
 
     func toggleShowRealGameList() {

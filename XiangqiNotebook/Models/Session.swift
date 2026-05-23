@@ -513,6 +513,10 @@ class Session: ObservableObject {
         sessionData.showAllNextMoves
     }
 
+    var showLastMove: Bool {
+        sessionData.showLastMove
+    }
+
     var showRealGameList: Bool {
         sessionData.showRealGameList
     }
@@ -1043,6 +1047,11 @@ extension Session {
 
     func toggleShowAllNextMoves() {
         sessionData.showAllNextMoves.toggle()
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
+    }
+
+    func toggleShowLastMove() {
+        sessionData.showLastMove.toggle()
         notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
     }
 
