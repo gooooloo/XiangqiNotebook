@@ -521,10 +521,6 @@ class Session: ObservableObject {
         sessionData.showRealGameList
     }
 
-    var showGameBrowserSidebar: Bool {
-        sessionData.showGameBrowserSidebar
-    }
-
     var isCommentEditing: Bool {
         sessionData.isCommentEditing
     }
@@ -1061,11 +1057,6 @@ extension Session {
 
     func toggleShowRealGameList() {
         sessionData.showRealGameList.toggle()
-        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
-    }
-
-    func toggleShowGameBrowserSidebar() {
-        sessionData.showGameBrowserSidebar.toggle()
         notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
     }
 

@@ -40,7 +40,6 @@ class ActionDefinitions {
         case stepLimitation  // 新增：步数限制按钮
         case inputGame  // 新增：录入棋局按钮
         case browseGames  // 新增：棋局浏览器按钮
-        case toggleGameBrowserSidebar
         case playRandomNextMove  // 新增：随机走法按钮
         case hintNextMove       // 新增：提示按钮
         case reviewThisGame
