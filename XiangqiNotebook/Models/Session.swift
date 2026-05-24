@@ -43,6 +43,8 @@ class Session: ObservableObject {
     static let myRealRedGameBookId = UUID(uuidString: "2C3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F")!
     static let myRealBlackGameBookId = UUID(uuidString: "9D0E1F2A-3B4C-5D6E-7F8A-9B0C1D2E3F4A")!
     static let othersRealGameBookId = UUID(uuidString: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")!
+    static let courseBookId = UUID(uuidString: "19331DC6-67E9-419B-AA51-546C43669913")!
+    static let xiangqiyashiuBookId = UUID(uuidString: "E4A84131-DC52-437A-86BD-F318698F3439")!
 
     @Published public var dataChanged: Bool = false
 
@@ -1784,6 +1786,20 @@ extension Session {
 
         if databaseView.getBookObjectUnfiltered(Session.othersRealGameBookId) == nil {
             databaseView.updateBookObject(Session.othersRealGameBookId, bookObject: BookObject(id: Session.othersRealGameBookId, name: "他人实战"))
+        }
+
+        if databaseView.getBookObjectUnfiltered(Session.courseBookId) == nil {
+            databaseView.updateBookObject(Session.courseBookId, bookObject: BookObject(id: Session.courseBookId, name: "课程"))
+        }
+
+        if databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId) == nil {
+            databaseView.updateBookObject(Session.xiangqiyashiuBookId, bookObject: BookObject(id: Session.xiangqiyashiuBookId, name: "《适情雅趣》"))
+        }
+
+        if let courseBook = databaseView.getBookObjectUnfiltered(Session.courseBookId),
+           !courseBook.subBookIds.contains(Session.xiangqiyashiuBookId) {
+            courseBook.subBookIds.append(Session.xiangqiyashiuBookId)
+            databaseView.updateBookObject(Session.courseBookId, bookObject: courseBook)
         }
     }
 

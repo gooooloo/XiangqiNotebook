@@ -362,4 +362,45 @@ struct RelatedCoursesTests {
 
         #expect(relatedGames.isEmpty)
     }
+
+    // MARK: - Default Course Books Tests
+
+    @Test func testDefaultCourseBookCreation() throws {
+        let database = createTestDatabase()
+        let session = try createTestSession(database: database)
+
+        // 验证课程书籍被创建
+        let courseBook = session.databaseView.getBookObjectUnfiltered(Session.courseBookId)
+        #expect(courseBook != nil)
+        #expect(courseBook?.name == "课程")
+    }
+
+    @Test func testDefaultXiangqiyashiuBookCreation() throws {
+        let database = createTestDatabase()
+        let session = try createTestSession(database: database)
+
+        // 验证《适情雅趣》书籍被创建
+        let xiangqiyashiuBook = session.databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId)
+        #expect(xiangqiyashiuBook != nil)
+        #expect(xiangqiyashiuBook?.name == "《适情雅趣》")
+    }
+
+    @Test func testXiangqiyashiuAsSubBook() throws {
+        let database = createTestDatabase()
+        let session = try createTestSession(database: database)
+
+        // 验证《适情雅趣》是课程的子书籍
+        let courseBook = session.databaseView.getBookObjectUnfiltered(Session.courseBookId)
+        #expect(courseBook != nil)
+        #expect(courseBook?.subBookIds.contains(Session.xiangqiyashiuBookId) == true)
+    }
+
+    @Test func testCourseBookStructure() throws {
+        let database = createTestDatabase()
+        let session = try createTestSession(database: database)
+
+        // 获取课程中的所有游戏（目前应该是空的）
+        let allGames = session.databaseView.getGamesInBookRecursivelyUnfiltered(bookId: Session.courseBookId)
+        #expect(allGames.isEmpty)
+    }
 }
