@@ -1445,9 +1445,6 @@ private struct SidebarGameRowView: View {
                 .fill(isCurrentGame ? Color.accentColor.opacity(0.2) : (isSelected ? Color.secondary.opacity(0.1) : Color.clear))
         )
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            onLoad()
-        }
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.15)) {
                 selection.gameId = isSelected ? nil : game.id
