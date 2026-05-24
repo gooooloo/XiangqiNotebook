@@ -332,7 +332,7 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.stepLimitation, text: "步数限制", supportedModes: [.normal]) { self.showingStepLimitationDialog = true }
         actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcuts: [.sequence(",i")], supportedModes: [.normal]) { self.showingGameInputView = true }
-        actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",gb")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
+        actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",gB")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
         actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",pi")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
         actionDefinitions.registerAction(.exportPGNCurrentDatabaseView, text: "导出所有变着PGN...", shortcuts: [.sequence(",pa")], supportedModes: [.normal]) { self.exportPGNCurrentDatabaseView() }
         actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", shortcuts: [.sequence(",pc")], supportedModes: [.normal]) { self.exportPGNCurrentGame() }
@@ -635,6 +635,20 @@ class ViewModel: ObservableObject {
             self.toggleShowRealGameList()
           }
         )
+
+        #if os(macOS)
+        actionDefinitions.registerToggleAction(
+          .toggleGameBrowserSidebar,
+          text: "棋局浏览器侧栏",
+          shortcuts: [.sequence(",gb")],
+          supportedModes: [.normal],
+          isEnabled: { true },
+          isOn: { self.showGameBrowserSidebar },
+          action: { _ in
+            self.toggleShowGameBrowserSidebar()
+          }
+        )
+        #endif
 
         // 书签功能 - 只在常规模式可用
         actionDefinitions.registerToggleAction(
@@ -2104,6 +2118,7 @@ class ViewModel: ObservableObject {
     var showAllNextMoves: Bool { session.showAllNextMoves }
     var showLastMove: Bool { session.showLastMove }
     var showRealGameList: Bool { session.showRealGameList }
+    var showGameBrowserSidebar: Bool { session.showGameBrowserSidebar }
     var isCommentEditing: Bool { session.isCommentEditing }
     var currentDataVersion: Int { session.currentDataVersion }
     var currentDataDirty: Bool { session.currentDataDirty }
@@ -2318,6 +2333,10 @@ class ViewModel: ObservableObject {
 
     func toggleShowRealGameList() {
         session.toggleShowRealGameList()
+    }
+
+    func toggleShowGameBrowserSidebar() {
+        session.toggleShowGameBrowserSidebar()
     }
 
     func setDataClean() {
