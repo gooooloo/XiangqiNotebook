@@ -21,6 +21,7 @@ class SessionData: Codable {
     var specificGameId: UUID? = nil
     var specificBookId: UUID? = nil
     var allowAddingNewMoves: Bool = true
+    var showGameBrowserSidebar: Bool = false
     var gameBrowserExpandedBookIds: Set<UUID>? = nil
     var gameBrowserSelectedBookId: UUID? = nil
     var gameBrowserSelectedGameId: UUID? = nil
@@ -55,6 +56,7 @@ class SessionData: Codable {
         case specificGameId = "specific_game_id"
         case specificBookId = "specific_book_id"
         case allowAddingNewMoves = "allow_adding_new_moves"
+        case showGameBrowserSidebar = "show_game_browser_sidebar"
         case gameBrowserExpandedBookIds = "game_browser_expanded_book_ids"
         case gameBrowserSelectedBookId = "game_browser_selected_book_id"
         case gameBrowserSelectedGameId = "game_browser_selected_game_id"
@@ -89,6 +91,7 @@ class SessionData: Codable {
             currentMode = AppMode(rawValue: modeString) ?? .normal
         }
         allowAddingNewMoves = try container.decodeIfPresent(Bool.self, forKey: .allowAddingNewMoves) ?? true
+        showGameBrowserSidebar = try container.decodeIfPresent(Bool.self, forKey: .showGameBrowserSidebar) ?? false
         gameBrowserExpandedBookIds = try container.decodeIfPresent(Set<UUID>.self, forKey: .gameBrowserExpandedBookIds)
         gameBrowserSelectedBookId = try container.decodeIfPresent(UUID.self, forKey: .gameBrowserSelectedBookId)
         gameBrowserSelectedGameId = try container.decodeIfPresent(UUID.self, forKey: .gameBrowserSelectedGameId)
@@ -117,6 +120,7 @@ class SessionData: Codable {
         try container.encodeIfPresent(specificBookId, forKey: .specificBookId)
         try container.encode(currentMode, forKey: .currentMode)
         try container.encode(allowAddingNewMoves, forKey: .allowAddingNewMoves)
+        try container.encode(showGameBrowserSidebar, forKey: .showGameBrowserSidebar)
         try container.encodeIfPresent(gameBrowserExpandedBookIds, forKey: .gameBrowserExpandedBookIds)
         try container.encodeIfPresent(gameBrowserSelectedBookId, forKey: .gameBrowserSelectedBookId)
         try container.encodeIfPresent(gameBrowserSelectedGameId, forKey: .gameBrowserSelectedGameId)

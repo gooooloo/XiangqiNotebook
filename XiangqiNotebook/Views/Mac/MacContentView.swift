@@ -27,6 +27,13 @@ struct MacContentView: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
+                    // 棋局浏览器侧栏
+                    if viewModel.showGameBrowserSidebar {
+                        GameBrowserSidebarView(viewModel: viewModel)
+                            .frame(width: 250)
+                        Divider()
+                    }
+
                     // 左侧区域：棋盘
                     VStack(spacing: 0) {
                         // 棋盘 - 设置为屏幕高度的一半
@@ -306,6 +313,8 @@ struct MacMenuCommands: Commands {
 
         // 显示 menu
         CommandGroup(after: .toolbar) {
+            Divider()
+            menuToggle(.toggleGameBrowserSidebar)
             Divider()
             menuToggle(.flip)
             menuToggle(.flipHorizontal)
