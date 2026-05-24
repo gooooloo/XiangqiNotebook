@@ -122,7 +122,7 @@ class RemoteControlServer {
 
     private func handleScreenshot(connection: NWConnection) {
         DispatchQueue.main.sync {
-            guard let window = NSApplication.shared.windows.first(where: { $0.isKeyWindow })
+            guard let window = NSApp.keyWindow ?? NSApp.mainWindow
                     ?? NSApplication.shared.windows.first,
                   let view = window.contentView else {
                 sendJSONResponse(connection: connection, status: "503 Service Unavailable",
