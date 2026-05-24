@@ -136,7 +136,20 @@ class SessionManager: ObservableObject {
         // 2. 根据 filters 构造相应的 DatabaseView
         let databaseView = Self.createDatabaseView(for: filters, focusedPath: focusedPath, specificGameId: specificGameId, specificBookId: specificBookId, database: database)
 
-        // 3. 按视图裁剪 currentGame2/currentGameStep（移除不在视图范围的 fenId）
+        // 3. 切回全库视图时，如果当前路径的根节点不是标准起始局面（如从中局棋局切回），
+        //    则重置到标准起始局面，避免留在一个与开局库断开的孤立位置
+        if filters.isEmpty {
+            let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
+            if let startFenId = databaseView.getIdForFen(startFen),
+               let rootFenId = newSessionData.currentGame2.first,
+               rootFenId != startFenId {
+                newSessionData.currentGame2 = [startFenId]
+                newSessionData.currentGameStep = 0
+                newSessionData.lockedStep = nil
+            }
+        }
+
+        // 4. 按视图裁剪 currentGame2/currentGameStep（移除不在视图范围的 fenId）
         let oldGame = Array(newSessionData.currentGame2[0...newSessionData.currentGameStep])
         let lockedFens = newSessionData.lockedStep.map { Array(newSessionData.currentGame2[0...$0]) }
 
