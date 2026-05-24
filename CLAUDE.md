@@ -156,6 +156,41 @@ xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -dest
 xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName/testMethodName 2>&1 | grep -E "TEST (SUCCEEDED|FAILED)|error:|fatal:"
 ```
 
+## 远程操控与 UI 验证（仅 DEBUG 构建）
+
+DEBUG 构建下，app 启动后会自动在 `localhost:9214` 启动远程操控 HTTP 服务器（`RemoteControlServer`），提供截图、状态查询和操作执行接口。
+
+### API 接口
+
+```bash
+# 截图当前窗口（返回 PNG）
+curl http://localhost:9214/screenshot -o /tmp/screenshot.png
+
+# 获取当前应用状态（返回 JSON）
+curl http://localhost:9214/state
+
+# 执行操作（action 名称对应 ActionDefinitions.ActionKey）
+curl -X POST http://localhost:9214/action -d '{"action":"stepForward"}'
+
+# Toggle 操作可指定目标值
+curl -X POST http://localhost:9214/action -d '{"action":"toggleShowPath","value":true}'
+
+# 列出所有可用操作
+curl http://localhost:9214/actions
+```
+
+### UI 变更验证流程
+
+修改 View 层或 ViewModel 层代码后，除了运行单元测试，还应通过远程操控接口进行视觉验证：
+
+1. 构建并运行 app（DEBUG 配置）
+2. 用 `curl http://localhost:9214/screenshot -o $TMPDIR/screenshot.png` 获取截图
+3. 读取截图文件进行视觉检查（Claude 支持多模态图片理解）
+4. 用 `curl http://localhost:9214/state` 验证状态数据是否符合预期
+5. 需要时用 `/action` 接口触发操作后再截图对比
+
+这是对单元测试的补充，不替代测试。
+
 ## Git 提交禁止事项
 
 - **禁止提交 `DEVELOPMENT_TEAM`**: 绝不能将 `DEVELOPMENT_TEAM` 设置提交到 git。如果 `project.pbxproj` 中出现 `DEVELOPMENT_TEAM` 的改动，必须在提交前 revert 该行。
