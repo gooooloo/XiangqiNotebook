@@ -1134,10 +1134,14 @@ private enum SidebarRow: Identifiable {
     }
 }
 
+private class SidebarSelection: ObservableObject {
+    @Published var gameId: UUID?
+}
+
 struct GameBrowserSidebarView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var expandedBookIds: Set<UUID>?
-    @State private var selectedGameId: UUID?
+    @StateObject private var selection = SidebarSelection()
     @State private var cachedRows: [SidebarRow] = []
 
     private func isBookExpanded(_ bookId: UUID) -> Bool {
@@ -1273,13 +1277,8 @@ struct GameBrowserSidebarView: View {
                             SidebarGameRowView(
                                 game: game,
                                 level: level,
-                                isSelected: selectedGameId == game.id,
+                                selection: selection,
                                 isCurrentGame: viewModel.currentSpecificGameId == game.id,
-                                onSelect: {
-                                    withAnimation(.easeInOut(duration: 0.15)) {
-                                        selectedGameId = selectedGameId == game.id ? nil : game.id
-                                    }
-                                },
                                 onLoad: { viewModel.loadGame(game.id) }
                             )
                         }
@@ -1357,10 +1356,13 @@ private struct SidebarBookRowView: View {
 private struct SidebarGameRowView: View {
     let game: GameObject
     let level: Int
-    let isSelected: Bool
+    @ObservedObject var selection: SidebarSelection
     let isCurrentGame: Bool
-    let onSelect: () -> Void
     let onLoad: () -> Void
+
+    private var isSelected: Bool {
+        selection.gameId == game.id
+    }
 
     private let indentWidth: CGFloat = 16
 
@@ -1447,7 +1449,9 @@ private struct SidebarGameRowView: View {
             onLoad()
         }
         .onTapGesture {
-            onSelect()
+            withAnimation(.easeInOut(duration: 0.15)) {
+                selection.gameId = isSelected ? nil : game.id
+            }
         }
     }
 }
