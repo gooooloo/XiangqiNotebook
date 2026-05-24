@@ -1817,7 +1817,8 @@ extension Session {
               book.gameIds.isEmpty else { return }
 
         for puzzle in ShiQingYaQuData.puzzles {
-            let fenId = databaseView.ensureFenId(for: puzzle.fen)
+            let appFen = PGNParser.pgnFenToAppFen(puzzle.fen)
+            let fenId = databaseView.ensureFenId(for: appFen)
             _ = databaseView.addGame(
                 to: Session.xiangqiyashiuBookId,
                 name: puzzle.name,
