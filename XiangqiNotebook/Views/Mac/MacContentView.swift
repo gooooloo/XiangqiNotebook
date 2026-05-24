@@ -7,6 +7,9 @@ struct MacContentView: View {
     @StateObject private var viewModel: ViewModel
     @FocusState private var isViewFocused: Bool
     @State private var keyMonitor: Any?
+    #if DEBUG
+    @State private var remoteControlServer: RemoteControlServer?
+    #endif
     
     init() {
         _viewModel = StateObject(wrappedValue: ViewModel(
@@ -168,9 +171,16 @@ struct MacContentView: View {
         .onAppear {
             updateWindowTitle()
             installKeyMonitor()
+            #if DEBUG
+            startRemoteControlServer()
+            #endif
         }
         .onDisappear {
             removeKeyMonitor()
+            #if DEBUG
+            remoteControlServer?.stop()
+            remoteControlServer = nil
+            #endif
         }
         .onReceive(viewModel.objectWillChange) { _ in
             // 监听 ViewModel 的任何变化，及时更新窗口标题
@@ -236,6 +246,20 @@ struct MacContentView: View {
             keyMonitor = nil
         }
     }
+
+    #if DEBUG
+    private func startRemoteControlServer() {
+        let server = RemoteControlServer()
+        server.viewModel = viewModel
+        do {
+            try server.start()
+            remoteControlServer = server
+            print("RemoteControlServer started on port 9214")
+        } catch {
+            print("RemoteControlServer failed to start: \(error)")
+        }
+    }
+    #endif
 
     /// 更新窗口标题
     private func updateWindowTitle() {
