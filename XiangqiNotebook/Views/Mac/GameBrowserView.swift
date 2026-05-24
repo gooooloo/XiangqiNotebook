@@ -1124,6 +1124,7 @@ struct GameActionSection: View {
 struct GameBrowserSidebarView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var expandedBookIds: Set<UUID>?
+    @State private var selectedGameId: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1142,6 +1143,7 @@ struct GameBrowserSidebarView: View {
                             book: book,
                             viewModel: viewModel,
                             expandedBookIds: $expandedBookIds,
+                            selectedGameId: $selectedGameId,
                             level: 0
                         )
                     }
@@ -1163,6 +1165,7 @@ struct SidebarBookNodeView: View {
     let book: BookObject
     @ObservedObject var viewModel: ViewModel
     @Binding var expandedBookIds: Set<UUID>?
+    @Binding var selectedGameId: UUID?
     let level: Int
 
     private var isExpanded: Bool {
@@ -1255,12 +1258,13 @@ struct SidebarBookNodeView: View {
                         book: subBook,
                         viewModel: viewModel,
                         expandedBookIds: $expandedBookIds,
+                        selectedGameId: $selectedGameId,
                         level: level + 1
                     )
                 }
 
                 ForEach(games) { game in
-                    SidebarGameItemView(game: game, viewModel: viewModel, level: level + 1)
+                    SidebarGameItemView(game: game, viewModel: viewModel, level: level + 1, selectedGameId: $selectedGameId)
                         .id(game.id)
                 }
             }
@@ -1272,42 +1276,104 @@ struct SidebarGameItemView: View {
     let game: GameObject
     @ObservedObject var viewModel: ViewModel
     let level: Int
+    @Binding var selectedGameId: UUID?
 
     private var isCurrentGame: Bool {
         viewModel.currentSpecificGameId == game.id
     }
 
+    private var isSelected: Bool {
+        selectedGameId == game.id
+    }
+
+    private let indentWidth: CGFloat = 16
+
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(0..<level, id: \.self) { _ in
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(0..<level, id: \.self) { _ in
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: indentWidth)
+                }
+
                 Rectangle()
                     .fill(Color.clear)
-                    .frame(width: 16)
+                    .frame(width: indentWidth)
+
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 11))
+                    Text(game.displayTitle)
+                        .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                        .lineLimit(1)
+                    Spacer()
+                }
             }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 3)
 
-            Rectangle()
-                .fill(Color.clear)
-                .frame(width: 16)
+            if isSelected {
+                HStack(spacing: 0) {
+                    ForEach(0..<(level + 1), id: \.self) { _ in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(width: indentWidth)
+                    }
 
-            HStack(spacing: 6) {
-                Image(systemName: "doc.text")
-                    .foregroundColor(.orange)
-                    .font(.system(size: 11))
-                Text(game.displayTitle)
-                    .font(.system(size: 12))
-                    .lineLimit(1)
-                Spacer()
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: indentWidth)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        if !game.redPlayerName.isEmpty || !game.blackPlayerName.isEmpty {
+                            Text("\(game.redPlayerName.isEmpty ? "?" : game.redPlayerName) vs \(game.blackPlayerName.isEmpty ? "?" : game.blackPlayerName)")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack(spacing: 6) {
+                            if let date = game.gameDate {
+                                Text(date, style: .date)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            if game.gameResult != .unknown {
+                                Text(game.gameResult.rawValue)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Button(action: { viewModel.loadGame(game.id) }) {
+                            Text("加载棋局")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.accentColor)
+                        .padding(.top, 1)
+                    }
+                    .padding(.bottom, 4)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 4)
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(isCurrentGame ? Color.accentColor.opacity(0.2) : Color.clear)
+                .fill(isCurrentGame ? Color.accentColor.opacity(0.2) : (isSelected ? Color.secondary.opacity(0.1) : Color.clear))
         )
         .contentShape(Rectangle())
-        .onTapGesture {
+        .onTapGesture(count: 2) {
             viewModel.loadGame(game.id)
+        }
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                selectedGameId = isSelected ? nil : game.id
+            }
         }
     }
 }
