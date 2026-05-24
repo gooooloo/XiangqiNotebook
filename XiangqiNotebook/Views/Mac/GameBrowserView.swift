@@ -1138,6 +1138,7 @@ struct GameBrowserSidebarView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var expandedBookIds: Set<UUID>?
     @State private var selectedGameId: UUID?
+    @State private var cachedRows: [SidebarRow] = []
 
     private func isBookExpanded(_ bookId: UUID) -> Bool {
         guard let ids = expandedBookIds else { return true }
@@ -1169,7 +1170,7 @@ struct GameBrowserSidebarView: View {
         return allGames
     }
 
-    private var visibleRows: [SidebarRow] {
+    private func rebuildRows() {
         var rows: [SidebarRow] = []
         func walk(_ books: [BookObject], level: Int) {
             for book in books {
@@ -1188,7 +1189,7 @@ struct GameBrowserSidebarView: View {
             }
         }
         walk(viewModel.allTopLevelBookObjects, level: 0)
-        return rows
+        cachedRows = rows
     }
 
     var body: some View {
@@ -1203,7 +1204,7 @@ struct GameBrowserSidebarView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(visibleRows) { row in
+                    ForEach(cachedRows) { row in
                         switch row {
                         case .book(let book, let level, let isExpanded, let hasChildren):
                             SidebarBookRowView(
@@ -1216,7 +1217,6 @@ struct GameBrowserSidebarView: View {
                         case .game(let game, let level):
                             SidebarGameRowView(
                                 game: game,
-                                viewModel: viewModel,
                                 level: level,
                                 isSelected: selectedGameId == game.id,
                                 isCurrentGame: viewModel.currentSpecificGameId == game.id,
@@ -1236,9 +1236,14 @@ struct GameBrowserSidebarView: View {
         .background(Color.adaptiveBackground)
         .onAppear {
             expandedBookIds = viewModel.session.sessionData.gameBrowserExpandedBookIds
+            rebuildRows()
         }
         .onChange(of: expandedBookIds) {
             viewModel.session.sessionData.gameBrowserExpandedBookIds = expandedBookIds
+            rebuildRows()
+        }
+        .onReceive(viewModel.session.$dataChanged) { _ in
+            rebuildRows()
         }
     }
 }
@@ -1297,7 +1302,6 @@ private struct SidebarBookRowView: View {
 
 private struct SidebarGameRowView: View {
     let game: GameObject
-    @ObservedObject var viewModel: ViewModel
     let level: Int
     let isSelected: Bool
     let isCurrentGame: Bool
