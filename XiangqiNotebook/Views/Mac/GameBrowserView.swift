@@ -1123,33 +1123,35 @@ struct GameActionSection: View {
 #if os(macOS)
 struct GameBrowserSidebarView: View {
     @ObservedObject var viewModel: ViewModel
-    @State private var selectedBookId: UUID?
     @State private var expandedBookIds: Set<UUID>?
 
     var body: some View {
-        VStack(spacing: 0) {
-            BookTreeSidebarView(
-                viewModel: viewModel,
-                selectedBookId: $selectedBookId,
-                expandedBookIds: $expandedBookIds,
-                showingPGNImportSheet: .constant(false)
-            )
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("棋局浏览器")
+                    .font(.headline)
+                    .padding(.horizontal)
+                    .padding(.top)
+                Spacer()
+            }
 
-            Divider()
-
-            SidebarGameListView(
-                viewModel: viewModel,
-                selectedBookId: selectedBookId
-            )
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(viewModel.allTopLevelBookObjects) { book in
+                        SidebarBookNodeView(
+                            book: book,
+                            viewModel: viewModel,
+                            expandedBookIds: $expandedBookIds,
+                            level: 0
+                        )
+                    }
+                }
+                .padding(.horizontal)
+            }
         }
         .background(Color.adaptiveBackground)
         .onAppear {
-            let sessionData = viewModel.session.sessionData
-            expandedBookIds = sessionData.gameBrowserExpandedBookIds
-            selectedBookId = sessionData.gameBrowserSelectedBookId
-        }
-        .onChange(of: selectedBookId) {
-            viewModel.session.sessionData.gameBrowserSelectedBookId = selectedBookId
+            expandedBookIds = viewModel.session.sessionData.gameBrowserExpandedBookIds
         }
         .onChange(of: expandedBookIds) {
             viewModel.session.sessionData.gameBrowserExpandedBookIds = expandedBookIds
@@ -1157,18 +1159,37 @@ struct GameBrowserSidebarView: View {
     }
 }
 
-struct SidebarGameListView: View {
+struct SidebarBookNodeView: View {
+    let book: BookObject
     @ObservedObject var viewModel: ViewModel
-    let selectedBookId: UUID?
+    @Binding var expandedBookIds: Set<UUID>?
+    let level: Int
 
-    private var selectedBook: BookObject? {
-        guard let bookId = selectedBookId else { return nil }
-        return viewModel.allBookObjects.first { $0.id == bookId }
+    private var isExpanded: Bool {
+        guard let ids = expandedBookIds else { return true }
+        return ids.contains(book.id)
+    }
+
+    private func toggleExpanded() {
+        if expandedBookIds == nil {
+            var allIds = Set(viewModel.allBookObjects.map { $0.id })
+            allIds.remove(book.id)
+            expandedBookIds = allIds
+        } else if expandedBookIds!.contains(book.id) {
+            expandedBookIds!.remove(book.id)
+        } else {
+            expandedBookIds!.insert(book.id)
+        }
+    }
+
+    private var subBooks: [BookObject] {
+        book.subBookIds.compactMap { subBookId in
+            viewModel.allBookObjects.first { $0.id == subBookId }
+        }
     }
 
     private var games: [GameObject] {
-        guard let bookId = selectedBookId else { return [] }
-        let allGames = viewModel.getGamesInBook(bookId)
+        let allGames = viewModel.getGamesInBook(book.id)
         let hasRealGames = allGames.contains { $0.iAmRed || $0.iAmBlack }
         if hasRealGames {
             return allGames.sorted { g1, g2 in
@@ -1180,61 +1201,67 @@ struct SidebarGameListView: View {
         return allGames
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let book = selectedBook {
-                HStack {
-                    Text(book.name)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
-                    Spacer()
-                    Text("\(games.count)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+    private var hasChildren: Bool {
+        !subBooks.isEmpty || !games.isEmpty
+    }
 
-                Divider()
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                HStack(spacing: 0) {
+                    ForEach(0..<level, id: \.self) { _ in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(width: 16)
+                    }
+                }
+
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        toggleExpanded()
+                    }
+                }) {
+                    Image(systemName: !hasChildren ? "circle" : (isExpanded ? "chevron.down" : "chevron.right"))
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .frame(width: 16, height: 16)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!hasChildren)
+
+                Image(systemName: "folder.fill")
+                    .foregroundColor(.blue)
+                    .font(.system(size: 12))
+
+                Text(book.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+
+                Spacer()
+            }
+            .padding(.vertical, 3)
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    toggleExpanded()
+                }
             }
 
-            if games.isEmpty {
-                VStack {
-                    Spacer()
-                    Text(selectedBookId == nil ? "请选择棋谱" : "暂无棋局")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
+            if isExpanded {
+                ForEach(subBooks) { subBook in
+                    SidebarBookNodeView(
+                        book: subBook,
+                        viewModel: viewModel,
+                        expandedBookIds: $expandedBookIds,
+                        level: level + 1
+                    )
                 }
-                .frame(maxWidth: .infinity)
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 1) {
-                            ForEach(games) { game in
-                                SidebarGameItemView(game: game, viewModel: viewModel)
-                                    .id(game.id)
-                            }
-                        }
-                        .padding(.horizontal, 4)
-                    }
-                    .onAppear {
-                        if let gameId = viewModel.currentSpecificGameId {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation {
-                                    proxy.scrollTo(gameId, anchor: .center)
-                                }
-                            }
-                        }
-                    }
-                    .onChange(of: viewModel.currentSpecificGameId) {
-                        if let gameId = viewModel.currentSpecificGameId {
-                            withAnimation {
-                                proxy.scrollTo(gameId, anchor: .center)
-                            }
-                        }
-                    }
+
+                ForEach(games) { game in
+                    SidebarGameItemView(game: game, viewModel: viewModel, level: level + 1)
+                        .id(game.id)
                 }
             }
         }
@@ -1244,23 +1271,36 @@ struct SidebarGameListView: View {
 struct SidebarGameItemView: View {
     let game: GameObject
     @ObservedObject var viewModel: ViewModel
+    let level: Int
 
     private var isCurrentGame: Bool {
         viewModel.currentSpecificGameId == game.id
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "doc.text")
-                .foregroundColor(.orange)
-                .font(.system(size: 11))
-            Text(game.displayTitle)
-                .font(.system(size: 12))
-                .lineLimit(1)
-            Spacer()
+        HStack(spacing: 0) {
+            ForEach(0..<level, id: \.self) { _ in
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 16)
+            }
+
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: 16)
+
+            HStack(spacing: 6) {
+                Image(systemName: "doc.text")
+                    .foregroundColor(.orange)
+                    .font(.system(size: 11))
+                Text(game.displayTitle)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                Spacer()
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 4)
                 .fill(isCurrentGame ? Color.accentColor.opacity(0.2) : Color.clear)
