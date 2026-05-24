@@ -1205,7 +1205,7 @@ struct SidebarBookNodeView: View {
     }
 
     private var hasChildren: Bool {
-        !subBooks.isEmpty || !games.isEmpty
+        !book.subBookIds.isEmpty || !book.gameIds.isEmpty
     }
 
     var body: some View {
