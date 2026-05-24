@@ -68,9 +68,11 @@ class FenObject: Codable {
 
     // MARK: - Computed Properties
     var blackJustPlayed: Bool {
-        fen.split(separator: " ").count > 1 && fen.split(separator: " ")[1] == "r"
+        guard fen.split(separator: " ").count > 1 else { return false }
+        let turn = fen.split(separator: " ")[1]
+        return turn == "r" || turn == "w"
     }
-    
+
     var redJustPlayed: Bool {
         fen.split(separator: " ").count > 1 && fen.split(separator: " ")[1] == "b"
     }

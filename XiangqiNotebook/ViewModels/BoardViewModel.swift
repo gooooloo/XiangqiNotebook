@@ -88,7 +88,7 @@ class BoardViewModel: Equatable {
 
     public func isPieceBelongToCurrentPlayer(_ piece: String) -> Bool {
         let currentTurn = getCurrentTurn()
-        return (currentTurn == "r" && piece.hasPrefix("r")) || 
+        return ((currentTurn == "r" || currentTurn == "w") && piece.hasPrefix("r")) ||
                (currentTurn == "b" && piece.hasPrefix("b"))
     }
 

@@ -41,7 +41,7 @@ class PikafishService: @unchecked Sendable {
         let sideChar = parts[1]
         // App uses "r" for red-to-move, UCI uses "w"
         // App uses "b" for black-to-move, UCI uses "b"
-        let uciSide = sideChar == "r" ? "w" : "b"
+        let uciSide = (sideChar == "r" || sideChar == "w") ? "w" : "b"
 
         // If already has enough fields, just fix the side
         if parts.count >= 6 {

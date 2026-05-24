@@ -537,20 +537,26 @@ class Session: ObservableObject {
         currentFenObject.redJustPlayed
     }
 
+    private static func fenNextIsRed(_ fen: String) -> Bool {
+        let parts = fen.split(separator: " ")
+        guard parts.count > 1 else { return true }
+        let turn = parts[1]
+        return turn == "r" || turn == "w"
+    }
+
     private func adjustScore(_ score: Int, nextIsRed: Bool) -> Int {
-        // 这里有个技巧：云库的分数是基于下一步行棋方的，而我们的界面想要显示基于当前视角的分数
         let boardIsRed = !sessionData.isBlackOrientation
         return (nextIsRed != boardIsRed) ? -score : score
     }
 
     var displayScore: String {
-        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        let nextIsRed = Session.fenNextIsRed(currentFen)
         guard let score = currentFenScore else { return "" }
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
     }
 
     var displayEngineScore: String {
-        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        let nextIsRed = Session.fenNextIsRed(currentFen)
         guard let score = currentEngineScore else { return "" }
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
     }
@@ -559,7 +565,7 @@ class Session: ObservableObject {
     var displayDeepEngineScore: String {
         #if os(macOS)
         guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.engineKey) else { return "" }
-        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        let nextIsRed = Session.fenNextIsRed(currentFen)
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
         #else
         return ""
@@ -570,7 +576,7 @@ class Session: ObservableObject {
     var displayQuickEngineScore: String {
         #if os(macOS)
         guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.quickEngineKey) else { return "" }
-        let nextIsRed = currentFen.split(separator: " ")[1] == "r"
+        let nextIsRed = Session.fenNextIsRed(currentFen)
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
         #else
         return ""
@@ -586,7 +592,7 @@ class Session: ObservableObject {
         guard let targetFen = getFenForId(targetFenId) else {
             return ""
         }
-        let nextIsRed = targetFen.split(separator: " ")[1] == "r"
+        let nextIsRed = Session.fenNextIsRed(targetFen)
         let adjustedScore = adjustScore(score, nextIsRed: nextIsRed)
         
         return String(adjustedScore)
@@ -603,13 +609,13 @@ class Session: ObservableObject {
         guard let sourceFen = getFenForId(sourceFenId) else {
             return ""
         }
-        let sourceNextIsRed = sourceFen.split(separator: " ")[1] == "r"
+        let sourceNextIsRed = Session.fenNextIsRed(sourceFen)
         let adjustedSourceScore = adjustScore(sourceFenScore, nextIsRed: sourceNextIsRed)
         
         guard let targetFen = getFenForId(targetFenId) else {
             return ""
         }
-        let targetNextIsRed = targetFen.split(separator: " ")[1] == "r"
+        let targetNextIsRed = Session.fenNextIsRed(targetFen)
         let adjustedTargetScore = adjustScore(targetFenScore, nextIsRed: targetNextIsRed)
         
         return String(adjustedTargetScore - adjustedSourceScore)

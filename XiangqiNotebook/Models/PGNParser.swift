@@ -276,7 +276,7 @@ enum PGNParser {
         guard parts.count >= 1 else { return fen }
         let boardPart = String(parts[0])
         let turnChar = parts.count > 1 ? String(parts[1].prefix(1)) : "w"
-        let pgnTurn = turnChar == "r" ? "w" : "b"
+        let pgnTurn = (turnChar == "r" || turnChar == "w") ? "w" : "b"
         return boardPart + " " + pgnTurn
     }
 

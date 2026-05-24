@@ -203,7 +203,7 @@ class GameOperations {
         guard let firstFenObject = databaseView.getFenObject(currentGame[0]) else {
             return []
         }
-        let firstMoveIsRed = firstFenObject.fen.split(separator: " ")[1] == "r"
+        let firstMoveIsRed = firstFenObject.blackJustPlayed
         var moveList: [MoveListItem] = []
 
         for i in 0..<currentGame.count {
