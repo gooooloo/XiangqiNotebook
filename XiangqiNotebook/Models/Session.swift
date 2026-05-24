@@ -93,10 +93,14 @@ class Session: ObservableObject {
     }
 
     var currentFenObject: FenObject {
-        guard let fenObject = databaseView.getFenObject(currentFenId) else {
-            fatalError("FenObject not found for fenId: \(currentFenId)")
+        if let fenObject = databaseView.getFenObject(currentFenId) {
+            return fenObject
         }
-        return fenObject
+        // Fallback: 尝试不经过筛选获取（数据一致性保护）
+        if let fenObject = databaseView.getFenObjectUnfiltered(currentFenId) {
+            return fenObject
+        }
+        fatalError("FenObject not found for fenId: \(currentFenId)")
     }
 
     var currentFen: String {
@@ -1851,29 +1855,43 @@ extension Session {
         if sessionData.currentGame2.isEmpty {
             needsReset = true
         } else if let firstFenId = sessionData.currentGame2.first,
-                  let firstFenObject = databaseView.getFenObject(firstFenId) {
-            // 检查第一个局面是否是起始局面
-            if firstFenObject.fen != startFen {
-                needsReset = true
-                print("currentGame2 不是从起始局面开始，将重置")
-            }
+                  databaseView.getFenObject(firstFenId) != nil {
+            // currentGame2[0] 在当前视图范围内，不需要重置
         } else {
-            // currentGame2[0] 指向的 fenId 不存在
+            // currentGame2[0] 指向的 fenId 不在当前视图范围内
             needsReset = true
             print("currentGame2[0] 指向无效的 fenId，将重置")
         }
 
         if needsReset {
-            // 查找起始局面的 fenId - use getIdForFen since we're searching by fen
-            if let startFenId = databaseView.getIdForFen(startFen) {
+            // 优先使用标准起始局面
+            if let startFenId = databaseView.getIdForFen(startFen),
+               databaseView.containsFenId(startFenId) {
                 sessionData.currentGame2 = [startFenId]
                 sessionData.currentGameStep = 0
-                print("已设置默认 currentGame2 为起始局面 fenId=\(startFenId)")
-            } else if let firstFenId = databaseView.getAllFenIds().min() {
-                // 后备方案：使用最小的 fenId
-                sessionData.currentGame2 = [firstFenId]
+            } else if let specificGameId = sessionData.specificGameId,
+                      let game = databaseView.getGameObjectUnfiltered(specificGameId),
+                      let gameFenId = game.startingFenId {
+                // specificGame 模式：使用棋局的 startingFenId
+                sessionData.currentGame2 = [gameFenId]
                 sessionData.currentGameStep = 0
-                print("已设置默认 currentGame2 为 fenId=\(firstFenId)（起始局面不存在）")
+            } else if let specificBookId = sessionData.specificBookId {
+                // specificBook 模式：使用棋书中第一个棋局的起始局面
+                let fullView = DatabaseView.full(database: .shared)
+                if let book = fullView.getBookObjectUnfiltered(specificBookId),
+                   let firstGameId = book.gameIds.first,
+                   let firstGame = fullView.getGameObjectUnfiltered(firstGameId),
+                   let gameFenId = firstGame.startingFenId {
+                    sessionData.currentGame2 = [gameFenId]
+                    sessionData.currentGameStep = 0
+                }
+            }
+
+            // 最终后备：如果上面都没处理到
+            if sessionData.currentGame2.isEmpty || (needsReset && sessionData.currentGame2.first.flatMap { databaseView.getFenObject($0) } == nil) {
+                let startFenId = databaseView.ensureFenId(for: startFen)
+                sessionData.currentGame2 = [startFenId]
+                sessionData.currentGameStep = 0
             }
         }
     }
