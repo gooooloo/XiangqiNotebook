@@ -296,15 +296,14 @@ struct RelatedCoursesTests {
         #expect(relatedGames.first?.id == game1Id)
     }
 
-    @Test func testRelatedCoursesIntegration_noCourseBook() throws {
+    @Test func testDefaultCourseBookAlwaysExists() throws {
         let database = createTestDatabase()
         let session = try createTestSession(database: database)
 
-        // 没有创建"课程"书籍
-
-        // 查找"课程"书籍应该返回 nil
+        // 课程书籍在初始化时自动创建
         let courseBook = session.databaseView.getAllBookObjectsUnfiltered().first { $0.name == "课程" }
-        #expect(courseBook == nil)
+        #expect(courseBook != nil)
+        #expect(courseBook?.id == Session.courseBookId)
     }
 
     @Test func testRelatedCoursesIntegration_withSubBooks() throws {
@@ -395,12 +394,30 @@ struct RelatedCoursesTests {
         #expect(courseBook?.subBookIds.contains(Session.xiangqiyashiuBookId) == true)
     }
 
-    @Test func testCourseBookStructure() throws {
+    @Test func testShiQingYaQuDataLoaded() throws {
         let database = createTestDatabase()
         let session = try createTestSession(database: database)
 
-        // 获取课程中的所有游戏（目前应该是空的）
+        // 验证《适情雅趣》中已加载棋局数据
+        let book = session.databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId)
+        #expect(book != nil)
+        #expect(book!.gameIds.count == ShiQingYaQuData.puzzles.count)
+
+        // 验证课程书籍中也能递归找到这些棋局
         let allGames = session.databaseView.getGamesInBookRecursivelyUnfiltered(bookId: Session.courseBookId)
-        #expect(allGames.isEmpty)
+        #expect(allGames.count == ShiQingYaQuData.puzzles.count)
+    }
+
+    @Test func testShiQingYaQuDataNotReloaded() throws {
+        let database = createTestDatabase()
+        let session = try createTestSession(database: database)
+
+        let book = session.databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId)
+        let initialCount = book!.gameIds.count
+
+        // 再次创建 Session 不应重复加载
+        let session2 = try Session(sessionData: SessionData(), databaseView: DatabaseView.full(database: database))
+        let book2 = session2.databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId)
+        #expect(book2!.gameIds.count == initialCount)
     }
 }

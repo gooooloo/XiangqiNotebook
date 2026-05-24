@@ -1801,6 +1801,29 @@ extension Session {
             courseBook.subBookIds.append(Session.xiangqiyashiuBookId)
             databaseView.updateBookObject(Session.courseBookId, bookObject: courseBook)
         }
+
+        loadShiQingYaQuDataIfNeeded()
+    }
+
+    private func loadShiQingYaQuDataIfNeeded() {
+        guard let book = databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId),
+              book.gameIds.isEmpty else { return }
+
+        for puzzle in ShiQingYaQuData.puzzles {
+            let fenId = databaseView.ensureFenId(for: puzzle.fen)
+            _ = databaseView.addGame(
+                to: Session.xiangqiyashiuBookId,
+                name: puzzle.name,
+                redPlayerName: "",
+                blackPlayerName: "",
+                gameDate: Date(),
+                gameResult: .unknown,
+                iAmRed: false,
+                iAmBlack: false,
+                startingFenId: fenId,
+                isFullyRecorded: false
+            )
+        }
     }
 
     /// 设置默认的 currentGame2（如果需要）
