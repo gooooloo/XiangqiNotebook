@@ -160,13 +160,11 @@ class Session: ObservableObject {
     var relatedCoursesForCurrentFen: [GameObject] {
         let currentFenId = self.currentFenId
 
-        // 查找名为"课程"的 BookObject
-        guard let courseBook = databaseView.getAllBookObjectsUnfiltered().first(where: { $0.name == "课程" }) else {
+        guard databaseView.getBookObjectUnfiltered(Session.courseBookId) != nil else {
             return []
         }
 
-        // 获取"课程"及其所有子书籍中的游戏
-        let allGames = databaseView.getGamesInBookRecursivelyUnfiltered(bookId: courseBook.id)
+        let allGames = databaseView.getGamesInBookRecursivelyUnfiltered(bookId: Session.courseBookId)
 
         // 过滤出包含当前 fenId 的游戏
         return allGames.filter { game in
@@ -781,8 +779,8 @@ class Session: ObservableObject {
         }
 
         if let fenId = fenObject?.fenId,
-           let courseBook = databaseView.getAllBookObjectsUnfiltered().first(where: { $0.name == "课程" }) {
-            let allGames = databaseView.getGamesInBookRecursivelyUnfiltered(bookId: courseBook.id)
+           databaseView.getBookObjectUnfiltered(Session.courseBookId) != nil {
+            let allGames = databaseView.getGamesInBookRecursivelyUnfiltered(bookId: Session.courseBookId)
             let relatedCourses = allGames.filter { game in
                 databaseView.gameContainsFenId(gameId: game.id, fenId: fenId)
             }
