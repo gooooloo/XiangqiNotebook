@@ -1146,6 +1146,7 @@ struct GameBrowserSidebarView: View {
     }
 
     private func toggleBookExpanded(_ bookId: UUID) {
+        let wasExpanded = isBookExpanded(bookId)
         if expandedBookIds == nil {
             var allIds = Set(viewModel.allBookObjects.map { $0.id })
             allIds.remove(bookId)
@@ -1154,6 +1155,66 @@ struct GameBrowserSidebarView: View {
             expandedBookIds!.remove(bookId)
         } else {
             expandedBookIds!.insert(bookId)
+        }
+
+        guard let bookIndex = cachedRows.firstIndex(where: {
+            if case .book(let b, _, _, _) = $0 { return b.id == bookId }
+            return false
+        }) else { return }
+
+        if wasExpanded {
+            collapseBookAt(bookIndex)
+        } else {
+            expandBookAt(bookIndex)
+        }
+    }
+
+    private func collapseBookAt(_ index: Int) {
+        guard case .book(let book, let level, _, let hasChildren) = cachedRows[index] else { return }
+        cachedRows[index] = .book(book, level: level, isExpanded: false, hasChildren: hasChildren)
+
+        var removeCount = 0
+        let startIndex = index + 1
+        while startIndex + removeCount < cachedRows.count {
+            let row = cachedRows[startIndex + removeCount]
+            let rowLevel: Int
+            switch row {
+            case .book(_, let l, _, _): rowLevel = l
+            case .game(_, let l): rowLevel = l
+            }
+            if rowLevel <= level { break }
+            removeCount += 1
+        }
+        if removeCount > 0 {
+            cachedRows.removeSubrange(startIndex..<(startIndex + removeCount))
+        }
+    }
+
+    private func expandBookAt(_ index: Int) {
+        guard case .book(let book, let level, _, let hasChildren) = cachedRows[index] else { return }
+        cachedRows[index] = .book(book, level: level, isExpanded: true, hasChildren: hasChildren)
+
+        var newRows: [SidebarRow] = []
+        buildChildRows(for: book, level: level + 1, into: &newRows)
+        if !newRows.isEmpty {
+            cachedRows.insert(contentsOf: newRows, at: index + 1)
+        }
+    }
+
+    private func buildChildRows(for book: BookObject, level: Int, into rows: inout [SidebarRow]) {
+        let subBooks = book.subBookIds.compactMap { subId in
+            viewModel.allBookObjects.first { $0.id == subId }
+        }
+        for subBook in subBooks {
+            let expanded = isBookExpanded(subBook.id)
+            let hasChildren = !subBook.subBookIds.isEmpty || !subBook.gameIds.isEmpty
+            rows.append(.book(subBook, level: level, isExpanded: expanded, hasChildren: hasChildren))
+            if expanded {
+                buildChildRows(for: subBook, level: level + 1, into: &rows)
+            }
+        }
+        for game in gamesInBook(book.id) {
+            rows.append(.game(game, level: level))
         }
     }
 
@@ -1178,13 +1239,7 @@ struct GameBrowserSidebarView: View {
                 let hasChildren = !book.subBookIds.isEmpty || !book.gameIds.isEmpty
                 rows.append(.book(book, level: level, isExpanded: expanded, hasChildren: hasChildren))
                 if expanded {
-                    let subBooks = book.subBookIds.compactMap { subId in
-                        viewModel.allBookObjects.first { $0.id == subId }
-                    }
-                    walk(subBooks, level: level + 1)
-                    for game in gamesInBook(book.id) {
-                        rows.append(.game(game, level: level + 1))
-                    }
+                    buildChildRows(for: book, level: level + 1, into: &rows)
                 }
             }
         }
@@ -1240,7 +1295,6 @@ struct GameBrowserSidebarView: View {
         }
         .onChange(of: expandedBookIds) {
             viewModel.session.sessionData.gameBrowserExpandedBookIds = expandedBookIds
-            rebuildRows()
         }
         .onReceive(viewModel.session.$dataChanged) { _ in
             rebuildRows()
