@@ -103,6 +103,10 @@ class SessionManager: ObservableObject {
         newSessionData.autoExtendGameWhenPlayingBoardFen = mainSession.sessionData.autoExtendGameWhenPlayingBoardFen
         newSessionData.isCommentEditing = mainSession.sessionData.isCommentEditing
         newSessionData.focusedPracticeGamePath = focusedPath
+        newSessionData.showGameBrowserSidebar = mainSession.sessionData.showGameBrowserSidebar
+        newSessionData.gameBrowserExpandedBookIds = mainSession.sessionData.gameBrowserExpandedBookIds
+        newSessionData.gameBrowserSelectedBookId = mainSession.sessionData.gameBrowserSelectedBookId
+        newSessionData.gameBrowserSelectedGameId = mainSession.sessionData.gameBrowserSelectedGameId
         // 保留上一次的 specificGameId/specificBookId，除非明确传入了新值
         newSessionData.specificGameId = specificGameId ?? mainSession.sessionData.specificGameId
         newSessionData.specificBookId = specificBookId ?? mainSession.sessionData.specificBookId
