@@ -87,6 +87,7 @@ class ViewModel: ObservableObject {
 
     #if os(macOS)
     private var referenceBoardWindowController: ReferenceBoardWindowController?
+    private var forceGraphWindowController: ForceGraphWindowController?
     #endif
 
     // 用于存储订阅
@@ -303,6 +304,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.reviewThisGame, text: "回顾本局", textIPhone: "回顾", shortcuts: [.sequence(",r")], supportedModes: [.practice]) { self.reviewThisGame() }
         actionDefinitions.registerAction(.searchCurrentMove, text: "搜索此步", shortcuts: [.sequence(",/")], supportedModes: [.normal]) { self.showSearchResultsWindow() }
         actionDefinitions.registerAction(.referenceBoard, text: "参考棋谱", shortcuts: [.modified([.command], "x")], supportedModes: [.normal]) { self.showReferenceBoard() }
+        actionDefinitions.registerAction(.forceGraph, text: "局面图谱", shortcuts: [.sequence(",g")], supportedModes: [.normal]) { self.showForceGraph() }
 
         actionDefinitions.registerAction(.practiceNewGame, text: "练习新局", textIPhone: "练习", shortcuts: [.single("P")], supportedModes: [.normal, .practice]) { self.practiceNewGame() }
         actionDefinitions.registerAction(.focusedPractice, text: "练习本局", textIPhone: "专练", shortcuts: [.single("Z")], supportedModes: [.normal, .practice]) { self.startFocusedPractice() }
@@ -1805,6 +1807,66 @@ class ViewModel: ObservableObject {
         #endif
     }
     
+    func showForceGraph() {
+        #if os(macOS)
+        if let controller = forceGraphWindowController, controller.window?.isVisible == true {
+            controller.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let rootFenId = session.sessionData.currentGame2.first
+        let currentFenId = session.currentFenId
+        let controller = ForceGraphWindowController(
+            databaseView: session.databaseView,
+            rootFenId: rootFenId,
+            currentFenId: currentFenId,
+            onNavigate: { [weak self] fenId in
+                self?.navigateToFenIdFromGraph(fenId)
+            }
+        )
+        forceGraphWindowController = controller
+        controller.showWindow(nil)
+        #endif
+    }
+
+    private func navigateToFenIdFromGraph(_ fenId: Int) {
+        #if os(macOS)
+        if let stepIndex = session.sessionData.currentGame2.firstIndex(of: fenId) {
+            session.toStepIndex(stepIndex)
+        } else {
+            let path = findPathToFenId(fenId)
+            if !path.isEmpty {
+                session.playNewGame(path)
+            }
+        }
+        forceGraphWindowController?.updateCurrentFenId(session.currentFenId)
+        #endif
+    }
+
+    private func findPathToFenId(_ targetFenId: Int) -> [Int] {
+        guard let rootFenId = session.sessionData.currentGame2.first else { return [] }
+        if rootFenId == targetFenId { return [targetFenId] }
+
+        var visited: Set<Int> = [rootFenId]
+        var queue: [(fenId: Int, path: [Int])] = [(rootFenId, [rootFenId])]
+        var idx = 0
+
+        while idx < queue.count {
+            let (current, path) = queue[idx]
+            idx += 1
+
+            let moves = session.databaseView.moves(from: current)
+            for move in moves {
+                guard let next = move.targetFenId, !visited.contains(next) else { continue }
+                let newPath = path + [next]
+                if next == targetFenId { return newPath }
+                visited.insert(next)
+                queue.append((next, newPath))
+            }
+        }
+        return []
+    }
+
     func showSearchResultsWindow() {
         #if os(macOS)
         let searchResults = session.searchCurrentMove()
