@@ -378,6 +378,7 @@ struct MacMenuCommands: Commands {
             Divider()
             menuButton(.referenceBoard)
             menuButton(.searchCurrentMove)
+            menuButton(.forceGraph)
             Divider()
             menuButton(.markPath)
             Divider()
