@@ -92,7 +92,7 @@ struct ForceGraphCanvasView: View {
                     Spacer()
                     HStack {
                         Spacer()
-                        Text("\(viewModel.nodePositions.count) 局面")
+                        Text("\(viewModel.nodePositions.count) 局面  \(viewModel.graphData?.edges.count ?? 0) 连线")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .padding(4)
