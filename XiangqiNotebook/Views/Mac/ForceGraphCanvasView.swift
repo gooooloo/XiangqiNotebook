@@ -33,6 +33,8 @@ struct ForceGraphCanvasView: View {
     @ObservedObject var viewModel: ForceGraphViewModel
     @State private var dragStart: CGPoint?
     @State private var initialOffset: CGPoint = .zero
+    @State private var draggingNodeId: Int?
+    @State private var canvasSize: CGSize = .zero
 
     var body: some View {
         GeometryReader { geometry in
@@ -99,7 +101,11 @@ struct ForceGraphCanvasView: View {
             }
             .background(Color(nsColor: .windowBackgroundColor))
             .onAppear {
+                canvasSize = geometry.size
                 viewModel.zoomToFit(canvasSize: geometry.size)
+            }
+            .onChange(of: geometry.size) { _, newSize in
+                canvasSize = newSize
             }
         }
         .toolbar {
@@ -215,14 +221,23 @@ struct ForceGraphCanvasView: View {
                 if dragStart == nil {
                     dragStart = value.startLocation
                     initialOffset = viewModel.viewportOffset
+                    let graphPoint = viewModel.viewPointToGraphPoint(value.startLocation, canvasSize: canvasSize)
+                    draggingNodeId = viewModel.hitTest(at: graphPoint)
                 }
-                viewModel.viewportOffset = CGPoint(
-                    x: initialOffset.x + value.translation.width,
-                    y: initialOffset.y + value.translation.height
-                )
+
+                if let nodeId = draggingNodeId {
+                    let graphPoint = viewModel.viewPointToGraphPoint(value.location, canvasSize: canvasSize)
+                    viewModel.nodePositions[nodeId] = graphPoint
+                } else {
+                    viewModel.viewportOffset = CGPoint(
+                        x: initialOffset.x + value.translation.width,
+                        y: initialOffset.y + value.translation.height
+                    )
+                }
             }
             .onEnded { _ in
                 dragStart = nil
+                draggingNodeId = nil
             }
     }
 
