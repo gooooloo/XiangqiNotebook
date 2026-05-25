@@ -2154,7 +2154,9 @@ class ViewModel: ObservableObject {
     }
 
     var allTopLevelBookObjects: [BookObject] {
-        session.allTopLevelBookObjects
+        session.allTopLevelBookObjects.sorted { b1, b2 in
+            b1.name.localizedStandardCompare(b2.name) == .orderedAscending
+        }
     }
 
     var allBookObjects: [BookObject] {
@@ -2171,6 +2173,14 @@ class ViewModel: ObservableObject {
 
     func getGamesInBook(_ bookId: UUID) -> [GameObject] {
         session.getGamesInBook(bookId)
+    }
+
+    func getSubBooksInBook(_ book: BookObject) -> [BookObject] {
+        book.subBookIds.compactMap { id in
+            session.allBookObjects.first { $0.id == id }
+        }.sorted { b1, b2 in
+            b1.name.localizedStandardCompare(b2.name) == .orderedAscending
+        }
     }
 
     func addCurrentGameToMyRealGame(gameInfo: GameObject) -> Bool {

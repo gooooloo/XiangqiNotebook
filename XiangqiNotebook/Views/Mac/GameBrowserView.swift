@@ -466,9 +466,7 @@ struct BookTreeNodeView: View {
     }
 
     private var subBooks: [BookObject] {
-        book.subBookIds.compactMap { subBookId in
-            viewModel.allBookObjects.first { $0.id == subBookId }
-        }
+        viewModel.getSubBooksInBook(book)
     }
 
     private var gameCount: Int {
@@ -485,9 +483,7 @@ struct BookTreeNodeView: View {
 
     private func getTotalGameCountForBook(_ book: BookObject) -> Int {
         let directGames = viewModel.getGamesInBook(book.id).count
-        let subBooks = book.subBookIds.compactMap { subBookId in
-            viewModel.allBookObjects.first { $0.id == subBookId }
-        }
+        let subBooks = viewModel.getSubBooksInBook(book)
         let subBooksGames = subBooks.reduce(0) { total, subBook in
             total + getTotalGameCountForBook(subBook)
         }
@@ -641,7 +637,9 @@ struct GameListView: View {
                 return d1 > d2
             }
         }
-        return allGames
+        return allGames.sorted { g1, g2 in
+            g1.displayTitle.localizedStandardCompare(g2.displayTitle) == .orderedAscending
+        }
     }
 
     var body: some View {
@@ -1166,7 +1164,9 @@ struct GameBrowserSidebarView: View {
                 return d1 > d2
             }
         }
-        return allGames
+        return allGames.sorted { g1, g2 in
+            g1.displayTitle.localizedStandardCompare(g2.displayTitle) == .orderedAscending
+        }
     }
 
     private var visibleRows: [SidebarRow] {
@@ -1177,9 +1177,7 @@ struct GameBrowserSidebarView: View {
                 let hasChildren = !book.subBookIds.isEmpty || !book.gameIds.isEmpty
                 rows.append(.book(book, level: level, isExpanded: expanded, hasChildren: hasChildren))
                 if expanded {
-                    let subBooks = book.subBookIds.compactMap { subId in
-                        viewModel.allBookObjects.first { $0.id == subId }
-                    }
+                    let subBooks = viewModel.getSubBooksInBook(book)
                     walk(subBooks, level: level + 1)
                     for game in gamesInBook(book.id) {
                         rows.append(.game(game, level: level + 1))
