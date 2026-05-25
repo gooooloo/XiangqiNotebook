@@ -69,12 +69,13 @@ struct ForceGraphData: Sendable {
     var edges: [GraphEdge]
 
     static func build(from snapshot: ForceGraphSnapshot) -> ForceGraphData {
-        var nodes: [Int: GraphNode] = [:]
-        var edges: [GraphEdge] = []
-        var edgeCounts: [Int: Int] = [:]
+        var allNodes: [Int: GraphNode] = [:]
+        var inDegree: [Int: Int] = [:]
+        var outDegree: [Int: Int] = [:]
+        var outEdges: [Int: [Int]] = [:]
 
         for entry in snapshot.fenEntries {
-            nodes[entry.fenId] = GraphNode(
+            allNodes[entry.fenId] = GraphNode(
                 id: entry.fenId,
                 fen: entry.fen,
                 position: .zero,
@@ -84,13 +85,53 @@ struct ForceGraphData: Sendable {
         }
 
         for entry in snapshot.moveEntries {
-            edges.append(GraphEdge(id: "\(entry.sourceId)-\(entry.targetId)", sourceId: entry.sourceId, targetId: entry.targetId))
-            edgeCounts[entry.sourceId, default: 0] += 1
-            edgeCounts[entry.targetId, default: 0] += 1
+            outDegree[entry.sourceId, default: 0] += 1
+            inDegree[entry.targetId, default: 0] += 1
+            outEdges[entry.sourceId, default: []].append(entry.targetId)
         }
 
-        for (fenId, count) in edgeCounts {
-            nodes[fenId]?.edgeCount = count
+        let shouldKeep: (Int) -> Bool = { fenId in
+            let inD = inDegree[fenId] ?? 0
+            let outD = outDegree[fenId] ?? 0
+            if inD == 1 && outD <= 1 { return false }
+            return true
+        }
+
+        let keptIds = Set(allNodes.keys.filter(shouldKeep))
+
+        var edges: [GraphEdge] = []
+        var edgeSet = Set<String>()
+        var edgeCounts: [Int: Int] = [:]
+
+        for sourceId in keptIds {
+            for target in outEdges[sourceId] ?? [] {
+                var current = target
+                var visited = Set<Int>()
+                while !keptIds.contains(current) && !visited.contains(current) {
+                    visited.insert(current)
+                    let nextTargets = outEdges[current] ?? []
+                    if nextTargets.count == 1 {
+                        current = nextTargets[0]
+                    } else {
+                        break
+                    }
+                }
+                if keptIds.contains(current) && current != sourceId {
+                    let key = "\(sourceId)-\(current)"
+                    if !edgeSet.contains(key) {
+                        edgeSet.insert(key)
+                        edges.append(GraphEdge(id: key, sourceId: sourceId, targetId: current))
+                        edgeCounts[sourceId, default: 0] += 1
+                        edgeCounts[current, default: 0] += 1
+                    }
+                }
+            }
+        }
+
+        var nodes: [Int: GraphNode] = [:]
+        for fenId in keptIds {
+            nodes[fenId] = allNodes[fenId]
+            nodes[fenId]?.edgeCount = edgeCounts[fenId] ?? 0
         }
 
         let depths = computeDepths(from: snapshot.rootFenId, nodes: nodes, edges: edges)
