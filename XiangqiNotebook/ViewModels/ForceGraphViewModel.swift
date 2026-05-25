@@ -14,6 +14,7 @@ class ForceGraphViewModel: ObservableObject {
     @Published var currentFenId: Int?
 
     var onNavigateToFenId: ((Int) -> Void)?
+    private(set) var cachedMaxDepth: Int = 1
 
     private var simulation = ForceGraphSimulation()
     private var boardPreviewCache: [Int: BoardViewModel] = [:]
@@ -29,6 +30,7 @@ class ForceGraphViewModel: ObservableObject {
             await MainActor.run { [weak self] in
                 guard let self = self else { return }
                 self.graphData = data
+                self.cachedMaxDepth = max(data.nodes.values.map(\.depth).max() ?? 1, 1)
                 self.nodePositions = data.nodes.mapValues { $0.position }
                 self.startSimulation(data: data)
             }
@@ -56,7 +58,8 @@ class ForceGraphViewModel: ObservableObject {
             let dx = point.x - pos.x
             let dy = point.y - pos.y
             let nodeRadius = nodeRadius(for: fenId)
-            if dx * dx + dy * dy <= (nodeRadius + threshold) * (nodeRadius + threshold) {
+            let r = nodeRadius + threshold
+            if dx * dx + dy * dy <= r * r {
                 return fenId
             }
         }
@@ -128,8 +131,7 @@ class ForceGraphViewModel: ObservableObject {
         guard let node = graphData?.nodes[fenId] else { return .gray }
         if fenId == currentFenId { return .orange }
         if fenId == selectedNodeId { return .yellow }
-        let maxDepth = max((graphData?.nodes.values.map(\.depth).max() ?? 1), 1)
-        let ratio = CGFloat(node.depth) / CGFloat(maxDepth)
+        let ratio = CGFloat(node.depth) / CGFloat(cachedMaxDepth)
         return Color(
             hue: 0.0 + ratio * 0.6,
             saturation: 0.7,
@@ -137,11 +139,22 @@ class ForceGraphViewModel: ObservableObject {
         )
     }
 
-    private func viewPointToGraphPoint(_ viewPoint: CGPoint, canvasSize: CGSize) -> CGPoint {
+    func viewPointToGraphPoint(_ viewPoint: CGPoint, canvasSize: CGSize) -> CGPoint {
         CGPoint(
             x: (viewPoint.x - viewportOffset.x) / viewportScale,
             y: (viewPoint.y - viewportOffset.y) / viewportScale
         )
+    }
+
+    func visibleGraphRect(canvasSize: CGSize) -> CGRect {
+        let topLeft = viewPointToGraphPoint(.zero, canvasSize: canvasSize)
+        let bottomRight = viewPointToGraphPoint(CGPoint(x: canvasSize.width, y: canvasSize.height), canvasSize: canvasSize)
+        return CGRect(
+            x: topLeft.x,
+            y: topLeft.y,
+            width: bottomRight.x - topLeft.x,
+            height: bottomRight.y - topLeft.y
+        ).insetBy(dx: -50, dy: -50)
     }
 }
 

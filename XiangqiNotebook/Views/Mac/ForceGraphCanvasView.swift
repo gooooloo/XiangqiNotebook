@@ -11,6 +11,7 @@ struct ForceGraphCanvasView: View {
         GeometryReader { geometry in
             ZStack {
                 canvas(size: geometry.size)
+                    .drawingGroup()
                     .gesture(dragGesture)
                     .gesture(magnificationGesture)
                     .onContinuousHover { phase in
@@ -46,6 +47,17 @@ struct ForceGraphCanvasView: View {
                         Spacer()
                     }
                 }
+
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text("\(viewModel.nodePositions.count) 局面")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(4)
+                    }
+                }
             }
             .background(Color(nsColor: .windowBackgroundColor))
             .onAppear {
@@ -68,56 +80,75 @@ struct ForceGraphCanvasView: View {
         Canvas { context, canvasSize in
             let offset = viewModel.viewportOffset
             let scale = viewModel.viewportScale
+            let visibleRect = viewModel.visibleGraphRect(canvasSize: canvasSize)
+            let nodeCount = viewModel.nodePositions.count
+            let showEdges = nodeCount < 20000 && scale > 0.05
 
-            // Draw edges
-            for edge in viewModel.graphData?.edges ?? [] {
-                guard let from = viewModel.nodePositions[edge.sourceId],
-                      let to = viewModel.nodePositions[edge.targetId] else { continue }
-
-                let screenFrom = graphToScreen(from, offset: offset, scale: scale)
-                let screenTo = graphToScreen(to, offset: offset, scale: scale)
-
-                // Skip edges outside visible area
-                if !isLineVisible(from: screenFrom, to: screenTo, in: canvasSize) { continue }
-
-                var path = Path()
-                path.move(to: screenFrom)
-                path.addLine(to: screenTo)
-
-                let isHovered = edge.sourceId == viewModel.hoveredNodeId || edge.targetId == viewModel.hoveredNodeId
-                context.stroke(
-                    path,
-                    with: .color(isHovered ? .blue.opacity(0.6) : .gray.opacity(0.3)),
-                    lineWidth: isHovered ? 1.5 : 0.8
-                )
-
-                // Draw arrowhead
-                drawArrowhead(context: &context, from: screenFrom, to: screenTo, scale: scale, isHovered: isHovered)
+            if showEdges {
+                drawEdges(context: &context, canvasSize: canvasSize, offset: offset, scale: scale, visibleRect: visibleRect)
             }
 
-            // Draw nodes
-            for (fenId, pos) in viewModel.nodePositions {
-                let screenPos = graphToScreen(pos, offset: offset, scale: scale)
-                if !isPointVisible(screenPos, in: canvasSize, margin: 20) { continue }
+            drawNodes(context: &context, canvasSize: canvasSize, offset: offset, scale: scale, visibleRect: visibleRect)
+        }
+    }
 
-                let radius = viewModel.nodeRadius(for: fenId) * scale
-                let rect = CGRect(
-                    x: screenPos.x - radius,
-                    y: screenPos.y - radius,
-                    width: radius * 2,
-                    height: radius * 2
+    private func drawEdges(context: inout GraphicsContext, canvasSize: CGSize, offset: CGPoint, scale: CGFloat, visibleRect: CGRect) {
+        let hoveredId = viewModel.hoveredNodeId
+        var normalPath = Path()
+        var hoveredPath = Path()
+
+        for edge in viewModel.graphData?.edges ?? [] {
+            guard let from = viewModel.nodePositions[edge.sourceId],
+                  let to = viewModel.nodePositions[edge.targetId] else { continue }
+
+            guard visibleRect.contains(from) || visibleRect.contains(to) else { continue }
+
+            let screenFrom = graphToScreen(from, offset: offset, scale: scale)
+            let screenTo = graphToScreen(to, offset: offset, scale: scale)
+
+            let isHovered = hoveredId != nil && (edge.sourceId == hoveredId || edge.targetId == hoveredId)
+            if isHovered {
+                hoveredPath.move(to: screenFrom)
+                hoveredPath.addLine(to: screenTo)
+            } else {
+                normalPath.move(to: screenFrom)
+                normalPath.addLine(to: screenTo)
+            }
+        }
+
+        context.stroke(normalPath, with: .color(.gray.opacity(0.2)), lineWidth: 0.5)
+        if !hoveredPath.isEmpty {
+            context.stroke(hoveredPath, with: .color(.blue.opacity(0.6)), lineWidth: 1.5)
+        }
+    }
+
+    private func drawNodes(context: inout GraphicsContext, canvasSize: CGSize, offset: CGPoint, scale: CGFloat, visibleRect: CGRect) {
+        let minVisibleRadius: CGFloat = 0.5
+        let hoveredId = viewModel.hoveredNodeId
+        let currentId = viewModel.currentFenId
+
+        for (fenId, pos) in viewModel.nodePositions {
+            guard visibleRect.contains(pos) else { continue }
+
+            let screenPos = graphToScreen(pos, offset: offset, scale: scale)
+            let radius = max(viewModel.nodeRadius(for: fenId) * scale, minVisibleRadius)
+
+            let rect = CGRect(
+                x: screenPos.x - radius,
+                y: screenPos.y - radius,
+                width: radius * 2,
+                height: radius * 2
+            )
+            let color = viewModel.nodeColor(for: fenId)
+            context.fill(Path(ellipseIn: rect), with: .color(color))
+
+            if fenId == hoveredId || fenId == currentId {
+                let outlineRect = rect.insetBy(dx: -2, dy: -2)
+                context.stroke(
+                    Path(ellipseIn: outlineRect),
+                    with: .color(fenId == currentId ? .orange : .white),
+                    lineWidth: 2
                 )
-                let color = viewModel.nodeColor(for: fenId)
-                context.fill(Path(ellipseIn: rect), with: .color(color))
-
-                if fenId == viewModel.hoveredNodeId || fenId == viewModel.currentFenId {
-                    let outlineRect = rect.insetBy(dx: -2, dy: -2)
-                    context.stroke(
-                        Path(ellipseIn: outlineRect),
-                        with: .color(fenId == viewModel.currentFenId ? .orange : .white),
-                        lineWidth: 2
-                    )
-                }
             }
         }
     }
@@ -170,43 +201,6 @@ struct ForceGraphCanvasView: View {
             x: point.x * scale + offset.x,
             y: point.y * scale + offset.y
         )
-    }
-
-    private func isLineVisible(from: CGPoint, to: CGPoint, in size: CGSize) -> Bool {
-        let margin: CGFloat = 50
-        let rect = CGRect(x: -margin, y: -margin, width: size.width + margin * 2, height: size.height + margin * 2)
-        return rect.contains(from) || rect.contains(to)
-    }
-
-    private func isPointVisible(_ point: CGPoint, in size: CGSize, margin: CGFloat) -> Bool {
-        point.x >= -margin && point.x <= size.width + margin &&
-        point.y >= -margin && point.y <= size.height + margin
-    }
-
-    private func drawArrowhead(context: inout GraphicsContext, from: CGPoint, to: CGPoint, scale: CGFloat, isHovered: Bool) {
-        let arrowLength: CGFloat = 8 * scale
-        let arrowAngle: CGFloat = .pi / 6
-
-        let dx = to.x - from.x
-        let dy = to.y - from.y
-        let angle = atan2(dy, dx)
-
-        let tipX = to.x
-        let tipY = to.y
-
-        var arrowPath = Path()
-        arrowPath.move(to: CGPoint(x: tipX, y: tipY))
-        arrowPath.addLine(to: CGPoint(
-            x: tipX - arrowLength * cos(angle - arrowAngle),
-            y: tipY - arrowLength * sin(angle - arrowAngle)
-        ))
-        arrowPath.addLine(to: CGPoint(
-            x: tipX - arrowLength * cos(angle + arrowAngle),
-            y: tipY - arrowLength * sin(angle + arrowAngle)
-        ))
-        arrowPath.closeSubpath()
-
-        context.fill(arrowPath, with: .color(isHovered ? .blue.opacity(0.6) : .gray.opacity(0.5)))
     }
 }
 
