@@ -46,10 +46,12 @@ struct ForceGraphSnapshot: Sendable {
             let redTotal = redStats[fenId].map { $0.redWin + $0.blackWin + $0.draw + $0.notFinished + $0.unknown } ?? 0
             let blackTotal = blackStats[fenId].map { $0.redWin + $0.blackWin + $0.draw + $0.notFinished + $0.unknown } ?? 0
             fenEntries.append((fenId: fenId, fen: fenObject.fen, realGameCount: redTotal + blackTotal))
+        }
 
-            for move in fenObject.moves {
-                guard let targetId = move.targetFenId, realGameFenIds.contains(targetId) else { continue }
-                moveEntries.append((sourceId: fenId, targetId: targetId))
+        for (_, move) in databaseView.allMoveObjects {
+            guard let targetId = move.targetFenId else { continue }
+            if realGameFenIds.contains(move.sourceFenId) && realGameFenIds.contains(targetId) {
+                moveEntries.append((sourceId: move.sourceFenId, targetId: targetId))
             }
         }
 

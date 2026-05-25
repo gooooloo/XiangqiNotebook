@@ -164,6 +164,10 @@ final class DatabaseView {
         database.databaseData.gameObjects
     }
 
+    var allMoveObjects: [Int: Move] {
+        database.databaseData.moveObjects
+    }
+
     var myRealRedGameStatisticsByFenId: [Int: GameResultStatistics] {
         database.databaseData.myRealRedGameStatisticsByFenId
     }
