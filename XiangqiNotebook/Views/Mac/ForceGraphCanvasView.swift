@@ -125,10 +125,15 @@ struct ForceGraphCanvasView: View {
             let offset = viewModel.viewportOffset
             let scale = viewModel.viewportScale
             let visibleRect = viewModel.visibleGraphRect(canvasSize: canvasSize)
-            let nodeCount = viewModel.nodePositions.count
-            let showEdges = nodeCount < 20000 && scale > 0.05
+            let edgeCount = viewModel.graphData?.edges.count ?? 0
 
-            if showEdges {
+            // Debug: draw edge count and test line
+            let debugText = Text("\(viewModel.nodePositions.count) nodes, \(edgeCount) edges, scale=\(String(format: "%.3f", scale))")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.red)
+            context.draw(context.resolve(debugText), at: CGPoint(x: canvasSize.width / 2, y: 20))
+
+            if edgeCount > 0 {
                 drawEdges(context: &context, canvasSize: canvasSize, offset: offset, scale: scale, visibleRect: visibleRect)
             }
 
