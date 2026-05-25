@@ -6,6 +6,7 @@ struct ForceGraphBoardPreview: View {
     let boardViewModel: BoardViewModel
     let fenId: Int
     let edgeCount: Int
+    let realGameCount: Int
 
     var body: some View {
         VStack(spacing: 4) {
@@ -13,9 +14,12 @@ struct ForceGraphBoardPreview: View {
                 .disabled(true)
                 .aspectRatio(1.0, contentMode: .fit)
 
-            Text("关联: \(edgeCount)")
-                .font(.caption2)
-                .foregroundColor(.secondary)
+            HStack(spacing: 8) {
+                Text("实战: \(realGameCount)")
+                Text("关联: \(edgeCount)")
+            }
+            .font(.caption2)
+            .foregroundColor(.secondary)
         }
         .padding(6)
     }

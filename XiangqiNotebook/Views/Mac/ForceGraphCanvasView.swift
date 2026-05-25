@@ -231,7 +231,7 @@ struct ForceGraphCanvasView: View {
             let xOffset: CGFloat = screenPos.x + previewSize + 20 > canvasSize.width ? -(previewSize + 20) : 20
             let yPos = min(max(screenPos.y - previewSize / 2, 10), canvasSize.height - previewSize - 10)
 
-            ForceGraphBoardPreview(boardViewModel: boardVM, fenId: fenId, edgeCount: viewModel.graphData?.nodes[fenId]?.edgeCount ?? 0)
+            ForceGraphBoardPreview(boardViewModel: boardVM, fenId: fenId, edgeCount: viewModel.graphData?.nodes[fenId]?.edgeCount ?? 0, realGameCount: viewModel.graphData?.nodes[fenId]?.realGameCount ?? 0)
                 .frame(width: previewSize, height: previewSize + 30)
                 .background(.ultraThinMaterial)
                 .cornerRadius(8)
