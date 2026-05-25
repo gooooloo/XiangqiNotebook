@@ -32,7 +32,7 @@ class ForceGraphViewModel: ObservableObject {
     private var lastSnapshot: ForceGraphSnapshot?
 
     func loadGraph(from databaseView: DatabaseView, rootFenId: Int?) {
-        let snapshot = ForceGraphSnapshot.extract(from: databaseView, rootFenId: rootFenId)
+        let snapshot = ForceGraphSnapshot.extractRealGames(from: databaseView, rootFenId: rootFenId)
         lastSnapshot = snapshot
         self.isSimulating = true
         boardPreviewCache.removeAll()
@@ -178,8 +178,8 @@ class ForceGraphViewModel: ObservableObject {
     }
 
     func nodeRadius(for fenId: Int) -> CGFloat {
-        let edgeCount = graphData?.nodes[fenId]?.edgeCount ?? 0
-        return min(CGFloat(edgeCount).squareRoot() * 4 + 2, 24)
+        let count = graphData?.nodes[fenId]?.realGameCount ?? 0
+        return min(CGFloat(count).squareRoot() * 3 + 2, 30)
     }
 
     func nodeColor(for fenId: Int) -> Color {
