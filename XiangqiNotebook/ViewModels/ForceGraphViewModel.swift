@@ -178,7 +178,8 @@ class ForceGraphViewModel: ObservableObject {
 
     func nodeRadius(for fenId: Int) -> CGFloat {
         let count = graphData?.nodes[fenId]?.realGameCount ?? 0
-        return min(CGFloat(count).squareRoot() * 3 + 2, 30)
+        if count <= 0 { return 2 }
+        return pow(CGFloat(count), 0.3) * 4 + 2
     }
 
     func nodeColor(for fenId: Int) -> Color {
