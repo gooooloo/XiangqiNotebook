@@ -141,12 +141,18 @@ final class DragState: @unchecked Sendable {
     }
 }
 
+struct SimulationParams: Sendable {
+    var repulsionK: CGFloat = 20000
+    var attractionK: CGFloat = 0.002
+    var centerForce: CGFloat = 0.0
+}
+
 class ForceGraphSimulation {
     private(set) var isRunning: Bool = false
     let dragState = DragState()
     private var task: Task<Void, Never>?
 
-    func start(data: ForceGraphData, onUpdate: @escaping @MainActor @Sendable ([Int: CGPoint]) -> Void) {
+    func start(data: ForceGraphData, params: SimulationParams = SimulationParams(), onUpdate: @escaping @MainActor @Sendable ([Int: CGPoint]) -> Void) {
         stop()
         isRunning = true
 
@@ -161,8 +167,9 @@ class ForceGraphSimulation {
             let maxIterations = 10000
             var temperature: CGFloat = 1.5
             let coolingRate: CGFloat = nodeCount > 5000 ? 0.99 : 0.995
-            let repulsionK: CGFloat = nodeCount > 5000 ? 15000 : 20000
-            let attractionK: CGFloat = nodeCount > 5000 ? 0.003 : 0.002
+            let repulsionK: CGFloat = params.repulsionK
+            let attractionK: CGFloat = params.attractionK
+            let centerForceK: CGFloat = params.centerForce
             let damping: CGFloat = 0.8
             let theta: CGFloat = 1.0
             let updateInterval = nodeCount > 5000 ? 10 : 5
@@ -216,6 +223,16 @@ class ForceGraphSimulation {
                     forces[edge.sourceId, default: .zero].y += fy
                     forces[edge.targetId, default: .zero].x -= fx
                     forces[edge.targetId, default: .zero].y -= fy
+                }
+
+                if centerForceK > 0 {
+                    let cx = (minX + maxX) / 2
+                    let cy = (minY + maxY) / 2
+                    for id in nodeIds {
+                        guard let node = localNodes[id] else { continue }
+                        forces[id, default: .zero].x -= (node.position.x - cx) * centerForceK
+                        forces[id, default: .zero].y -= (node.position.y - cy) * centerForceK
+                    }
                 }
 
                 let pinnedId = dragState.pinnedId

@@ -160,10 +160,36 @@ struct ForceGraphCanvasView: View {
             }
         }
 
-        context.stroke(normalPath, with: .color(.gray.opacity(0.2)), lineWidth: 0.5)
+        let lineWidth = viewModel.lineThickness
+        context.stroke(normalPath, with: .color(.gray.opacity(0.2)), lineWidth: lineWidth)
         if !hoveredPath.isEmpty {
-            context.stroke(hoveredPath, with: .color(.blue.opacity(0.6)), lineWidth: 1.5)
+            context.stroke(hoveredPath, with: .color(.blue.opacity(0.6)), lineWidth: max(lineWidth * 2, 1.5))
         }
+
+        if viewModel.showArrows {
+            for edge in viewModel.graphData?.edges ?? [] {
+                guard let from = viewModel.nodePositions[edge.sourceId],
+                      let to = viewModel.nodePositions[edge.targetId] else { continue }
+                guard visibleRect.contains(from) || visibleRect.contains(to) else { continue }
+                let screenFrom = graphToScreen(from, offset: offset, scale: scale)
+                let screenTo = graphToScreen(to, offset: offset, scale: scale)
+                drawArrowhead(context: &context, from: screenFrom, to: screenTo, scale: scale)
+            }
+        }
+    }
+
+    private func drawArrowhead(context: inout GraphicsContext, from: CGPoint, to: CGPoint, scale: CGFloat) {
+        let arrowLen: CGFloat = max(6 * scale, 3)
+        let arrowAngle: CGFloat = .pi / 7
+        let dx = to.x - from.x
+        let dy = to.y - from.y
+        let angle = atan2(dy, dx)
+        var path = Path()
+        path.move(to: to)
+        path.addLine(to: CGPoint(x: to.x - arrowLen * cos(angle - arrowAngle), y: to.y - arrowLen * sin(angle - arrowAngle)))
+        path.addLine(to: CGPoint(x: to.x - arrowLen * cos(angle + arrowAngle), y: to.y - arrowLen * sin(angle + arrowAngle)))
+        path.closeSubpath()
+        context.fill(path, with: .color(.gray.opacity(0.4)))
     }
 
     private func drawNodes(context: inout GraphicsContext, canvasSize: CGSize, offset: CGPoint, scale: CGFloat, visibleRect: CGRect) {
@@ -175,7 +201,7 @@ struct ForceGraphCanvasView: View {
             guard visibleRect.contains(pos) else { continue }
 
             let screenPos = graphToScreen(pos, offset: offset, scale: scale)
-            let radius = max(viewModel.nodeRadius(for: fenId) * scale, minVisibleRadius)
+            let radius = max(viewModel.nodeRadius(for: fenId) * viewModel.nodeSizeMultiplier * scale, minVisibleRadius)
 
             let rect = CGRect(
                 x: screenPos.x - radius,

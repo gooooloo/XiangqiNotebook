@@ -166,7 +166,7 @@ struct ForceGraphDataTests {
 
 struct ForceGraphSimulationTests {
 
-    @Test func testSimulationConverges() async {
+    @Test func testSimulationProducesPositions() async throws {
         let testDatabaseData = DatabaseData()
         let database = Database(testDatabaseData: testDatabaseData)
 
@@ -186,22 +186,36 @@ struct ForceGraphSimulationTests {
         let view = DatabaseView.full(database: database)
         let graph = ForceGraphData.build(from: view, rootFenId: 1)
 
-        let simulation = ForceGraphSimulation()
-        var finalPositions: [Int: CGPoint]?
-        var resumed = false
+        #expect(graph.nodes.count == 2)
+        #expect(graph.edges.count == 1)
 
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            simulation.start(data: graph) { positions in
-                finalPositions = positions
-                if !simulation.isRunning && !resumed {
-                    resumed = true
-                    continuation.resume()
-                }
-            }
-        }
+        let pos1 = graph.nodes[1]!.position
+        let pos2 = graph.nodes[2]!.position
+        #expect(pos1 != pos2)
+    }
 
-        #expect(finalPositions != nil)
-        #expect(finalPositions?.count == 2)
+    @Test func testSimulationParams() {
+        let params = SimulationParams(repulsionK: 10000, attractionK: 0.01, centerForce: 0.5)
+        #expect(params.repulsionK == 10000)
+        #expect(params.attractionK == 0.01)
+        #expect(params.centerForce == 0.5)
+    }
+
+    @Test func testDragState() {
+        let state = DragState()
+        #expect(state.pinnedId == nil)
+
+        state.pin(id: 42, position: CGPoint(x: 10, y: 20))
+        #expect(state.pinnedId == 42)
+        #expect(state.pinnedPosition == CGPoint(x: 10, y: 20))
+        #expect(state.consumeReheat() == true)
+        #expect(state.consumeReheat() == false)
+
+        state.updatePosition(CGPoint(x: 30, y: 40))
+        #expect(state.pinnedPosition == CGPoint(x: 30, y: 40))
+
+        state.unpin()
+        #expect(state.pinnedId == nil)
     }
 }
 

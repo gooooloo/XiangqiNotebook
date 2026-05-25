@@ -20,7 +20,11 @@ class ForceGraphWindowController: NSWindowController {
         window.title = "局面图谱"
         window.minSize = NSSize(width: 500, height: 400)
 
-        let contentView = ForceGraphCanvasView(viewModel: vm)
+        let contentView = HStack(spacing: 0) {
+            ForceGraphCanvasView(viewModel: vm)
+            Divider()
+            ForceGraphSettingsView(viewModel: vm)
+        }
         window.contentView = NSHostingView(rootView: contentView)
         window.center()
 
