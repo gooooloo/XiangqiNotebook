@@ -11,6 +11,12 @@ struct GraphNode: Identifiable {
     var depth: Int = 0
     var edgeCount: Int = 0
     var realGameCount: Int = 0
+    var radius: CGFloat = 2
+
+    static func computeRadius(realGameCount: Int) -> CGFloat {
+        if realGameCount <= 0 { return 2 }
+        return pow(CGFloat(realGameCount), 0.3) * 4 + 2
+    }
 }
 
 struct GraphEdge: Identifiable {
@@ -80,7 +86,8 @@ struct ForceGraphData: Sendable {
                 fen: entry.fen,
                 position: .zero,
                 edgeCount: 0,
-                realGameCount: entry.realGameCount
+                realGameCount: entry.realGameCount,
+                radius: GraphNode.computeRadius(realGameCount: entry.realGameCount)
             )
         }
 
