@@ -19,9 +19,9 @@ class ForceGraphViewModel: ObservableObject {
     @Published var lineThickness: CGFloat = 1.0
 
     // 力度设置
-    @Published var centerForce: CGFloat = 0.0
-    @Published var repulsionStrength: CGFloat = 0.5
-    @Published var attractionStrength: CGFloat = 0.5
+    @Published var centerForce: CGFloat = 0.3
+    @Published var repulsionStrength: CGFloat = 0.4
+    @Published var attractionStrength: CGFloat = 0.7
 
     var onNavigateToFenId: ((Int) -> Void)?
     private(set) var cachedMaxDepth: Int = 1
@@ -50,13 +50,12 @@ class ForceGraphViewModel: ObservableObject {
     }
 
     var simulationParams: SimulationParams {
-        let nodeCount = nodePositions.count
-        let baseRepulsion: CGFloat = nodeCount > 5000 ? 15000 : 20000
-        let baseAttraction: CGFloat = nodeCount > 5000 ? 0.003 : 0.002
+        let baseRepulsion: CGFloat = 5000
+        let baseAttraction: CGFloat = 0.02
         return SimulationParams(
-            repulsionK: baseRepulsion * (0.2 + repulsionStrength * 1.6),
-            attractionK: baseAttraction * (0.2 + attractionStrength * 1.6),
-            centerForce: centerForce * 0.05
+            repulsionK: baseRepulsion * (0.1 + repulsionStrength * 1.8),
+            attractionK: baseAttraction * (0.1 + attractionStrength * 1.8),
+            centerForce: centerForce * 0.08
         )
     }
 

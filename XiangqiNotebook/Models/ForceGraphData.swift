@@ -179,27 +179,12 @@ struct ForceGraphData: Sendable {
     }
 
     private static func assignInitialPositions(nodes: inout [Int: GraphNode], depths: [Int: Int]) {
-        let maxDepth = max(depths.values.max() ?? 1, 1)
-        var depthBuckets: [Int: [Int]] = [:]
+        let spread = CGFloat(nodes.count).squareRoot() * 10
         for (fenId, depth) in depths {
-            depthBuckets[depth, default: []].append(fenId)
-        }
-
-        for (depth, fenIds) in depthBuckets {
-            let radius = CGFloat(depth) / CGFloat(maxDepth) * CGFloat(nodes.count).squareRoot() * 8
-            let count = fenIds.count
-            for (i, fenId) in fenIds.enumerated() {
-                let angle: CGFloat
-                if count == 1 {
-                    angle = CGFloat.random(in: 0..<(.pi * 2))
-                } else {
-                    angle = CGFloat(i) / CGFloat(count) * .pi * 2 + CGFloat.random(in: -0.3...0.3)
-                }
-                let x = cos(angle) * radius + CGFloat.random(in: -10...10)
-                let y = sin(angle) * radius + CGFloat.random(in: -10...10)
-                nodes[fenId]?.position = CGPoint(x: x, y: y)
-                nodes[fenId]?.depth = depth
-            }
+            let x = CGFloat.random(in: -spread...spread)
+            let y = CGFloat.random(in: -spread...spread)
+            nodes[fenId]?.position = CGPoint(x: x, y: y)
+            nodes[fenId]?.depth = depth
         }
     }
 }
