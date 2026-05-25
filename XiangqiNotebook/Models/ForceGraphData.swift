@@ -18,43 +18,69 @@ struct GraphEdge: Identifiable {
     let targetId: Int
 }
 
-struct ForceGraphData {
+struct ForceGraphSnapshot: Sendable {
+    let fenEntries: [(fenId: Int, fen: String)]
+    let moveEntries: [(sourceId: Int, targetId: Int)]
+    let rootFenId: Int?
+
+    static func extract(from databaseView: DatabaseView, rootFenId: Int?) -> ForceGraphSnapshot {
+        let allFenIds = databaseView.getAllFenIds().filter { databaseView.containsFenId($0) }
+
+        var fenEntries: [(fenId: Int, fen: String)] = []
+        var moveEntries: [(sourceId: Int, targetId: Int)] = []
+        let fenIdSet = Set(allFenIds)
+
+        for fenId in allFenIds {
+            guard let fenObject = databaseView.getFenObject(fenId) else { continue }
+            fenEntries.append((fenId: fenId, fen: fenObject.fen))
+            let filteredMoves = databaseView.moves(from: fenId)
+            for move in filteredMoves {
+                guard let targetId = move.targetFenId, fenIdSet.contains(targetId) else { continue }
+                moveEntries.append((sourceId: fenId, targetId: targetId))
+            }
+        }
+
+        return ForceGraphSnapshot(fenEntries: fenEntries, moveEntries: moveEntries, rootFenId: rootFenId)
+    }
+}
+
+struct ForceGraphData: Sendable {
     var nodes: [Int: GraphNode]
     var edges: [GraphEdge]
 
-    static func build(from databaseView: DatabaseView, rootFenId: Int?) -> ForceGraphData {
-        let allFenIds = databaseView.getAllFenIds().filter { databaseView.containsFenId($0) }
-        let fenIdSet = Set(allFenIds)
-
+    static func build(from snapshot: ForceGraphSnapshot) -> ForceGraphData {
         var nodes: [Int: GraphNode] = [:]
         var edges: [GraphEdge] = []
         var edgeCounts: [Int: Int] = [:]
 
-        for fenId in allFenIds {
-            guard let fenObject = databaseView.getFenObject(fenId) else { continue }
-            let filteredMoves = databaseView.moves(from: fenId)
-            for move in filteredMoves {
-                guard let targetId = move.targetFenId, fenIdSet.contains(targetId) else { continue }
-                edges.append(GraphEdge(id: "\(fenId)-\(targetId)", sourceId: fenId, targetId: targetId))
-                edgeCounts[fenId, default: 0] += 1
-                edgeCounts[targetId, default: 0] += 1
-            }
-            nodes[fenId] = GraphNode(
-                id: fenId,
-                fen: fenObject.fen,
+        for entry in snapshot.fenEntries {
+            nodes[entry.fenId] = GraphNode(
+                id: entry.fenId,
+                fen: entry.fen,
                 position: .zero,
                 edgeCount: 0
             )
+        }
+
+        for entry in snapshot.moveEntries {
+            edges.append(GraphEdge(id: "\(entry.sourceId)-\(entry.targetId)", sourceId: entry.sourceId, targetId: entry.targetId))
+            edgeCounts[entry.sourceId, default: 0] += 1
+            edgeCounts[entry.targetId, default: 0] += 1
         }
 
         for (fenId, count) in edgeCounts {
             nodes[fenId]?.edgeCount = count
         }
 
-        let depths = computeDepths(from: rootFenId, nodes: nodes, edges: edges)
+        let depths = computeDepths(from: snapshot.rootFenId, nodes: nodes, edges: edges)
         assignInitialPositions(nodes: &nodes, depths: depths)
 
         return ForceGraphData(nodes: nodes, edges: edges)
+    }
+
+    static func build(from databaseView: DatabaseView, rootFenId: Int?) -> ForceGraphData {
+        let snapshot = ForceGraphSnapshot.extract(from: databaseView, rootFenId: rootFenId)
+        return build(from: snapshot)
     }
 
     private static func computeDepths(from rootFenId: Int?, nodes: [Int: GraphNode], edges: [GraphEdge]) -> [Int: Int] {

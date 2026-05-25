@@ -20,11 +20,22 @@ class ForceGraphViewModel: ObservableObject {
     private let maxCacheSize = 50
 
     func loadGraph(from databaseView: DatabaseView, rootFenId: Int?) {
-        let data = ForceGraphData.build(from: databaseView, rootFenId: rootFenId)
-        self.graphData = data
-        self.nodePositions = data.nodes.mapValues { $0.position }
+        let snapshot = ForceGraphSnapshot.extract(from: databaseView, rootFenId: rootFenId)
         self.isSimulating = true
+        boardPreviewCache.removeAll()
 
+        Task.detached(priority: .userInitiated) {
+            let data = ForceGraphData.build(from: snapshot)
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+                self.graphData = data
+                self.nodePositions = data.nodes.mapValues { $0.position }
+                self.startSimulation(data: data)
+            }
+        }
+    }
+
+    private func startSimulation(data: ForceGraphData) {
         simulation.start(data: data) { [weak self] positions in
             guard let self = self else { return }
             self.nodePositions = positions
