@@ -93,8 +93,57 @@ private struct QuadTreeNode {
     }
 }
 
+final class DragState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _pinnedId: Int?
+    private var _pinnedPosition: CGPoint?
+    private var _reheat: Bool = false
+
+    var pinnedId: Int? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _pinnedId
+    }
+
+    var pinnedPosition: CGPoint? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _pinnedPosition
+    }
+
+    func consumeReheat() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let val = _reheat
+        _reheat = false
+        return val
+    }
+
+    func pin(id: Int, position: CGPoint) {
+        lock.lock()
+        _pinnedId = id
+        _pinnedPosition = position
+        _reheat = true
+        lock.unlock()
+    }
+
+    func updatePosition(_ position: CGPoint) {
+        lock.lock()
+        _pinnedPosition = position
+        lock.unlock()
+    }
+
+    func unpin() {
+        lock.lock()
+        _pinnedId = nil
+        _pinnedPosition = nil
+        lock.unlock()
+    }
+}
+
 class ForceGraphSimulation {
     private(set) var isRunning: Bool = false
+    let dragState = DragState()
     private var task: Task<Void, Never>?
 
     func start(data: ForceGraphData, onUpdate: @escaping @MainActor @Sendable ([Int: CGPoint]) -> Void) {
@@ -103,12 +152,13 @@ class ForceGraphSimulation {
 
         let capturedNodes = data.nodes
         let capturedEdges = data.edges
+        let dragState = self.dragState
 
         task = Task.detached(priority: .userInitiated) { [weak self] in
             var localNodes = capturedNodes
             let localEdges = capturedEdges
             let nodeCount = localNodes.count
-            let maxIterations = min(500, max(200, 1000 - nodeCount / 20))
+            let maxIterations = 10000
             var temperature: CGFloat = 1.5
             let coolingRate: CGFloat = nodeCount > 5000 ? 0.99 : 0.995
             let repulsionK: CGFloat = nodeCount > 5000 ? 15000 : 20000
@@ -116,13 +166,22 @@ class ForceGraphSimulation {
             let damping: CGFloat = 0.8
             let theta: CGFloat = 1.0
             let updateInterval = nodeCount > 5000 ? 10 : 5
+            let minTemperature: CGFloat = 0.01
 
             for iteration in 0..<maxIterations {
                 if Task.isCancelled { break }
 
+                if dragState.consumeReheat() {
+                    temperature = max(temperature, 0.5)
+                }
+
+                if let pinnedId = dragState.pinnedId, let pinnedPos = dragState.pinnedPosition {
+                    localNodes[pinnedId]?.position = pinnedPos
+                    localNodes[pinnedId]?.velocity = .zero
+                }
+
                 let nodeIds = Array(localNodes.keys)
 
-                // Build quadtree
                 var minX: CGFloat = .infinity, minY: CGFloat = .infinity
                 var maxX: CGFloat = -.infinity, maxY: CGFloat = -.infinity
                 for (_, node) in localNodes {
@@ -137,7 +196,6 @@ class ForceGraphSimulation {
                     tree.insert(id: id, position: node.position)
                 }
 
-                // Repulsive forces via Barnes-Hut
                 var forces: [Int: CGPoint] = [:]
                 for id in nodeIds {
                     guard let node = localNodes[id] else { continue }
@@ -146,7 +204,6 @@ class ForceGraphSimulation {
                     forces[id] = f
                 }
 
-                // Attractive forces along edges
                 for edge in localEdges {
                     guard let nodeA = localNodes[edge.sourceId], let nodeB = localNodes[edge.targetId] else { continue }
                     let dx = nodeB.position.x - nodeA.position.x
@@ -161,18 +218,19 @@ class ForceGraphSimulation {
                     forces[edge.targetId, default: .zero].y -= fy
                 }
 
-                // Apply forces
+                let pinnedId = dragState.pinnedId
                 let maxDisplacement = max(temperature * 50.0, 0.1)
                 for id in nodeIds {
+                    if id == pinnedId { continue }
                     guard var node = localNodes[id] else { continue }
                     let f = forces[id] ?? .zero
                     node.velocity.x = (node.velocity.x + f.x) * damping
                     node.velocity.y = (node.velocity.y + f.y) * damping
                     let speed = sqrt(node.velocity.x * node.velocity.x + node.velocity.y * node.velocity.y)
                     if speed > maxDisplacement {
-                        let scale = maxDisplacement / speed
-                        node.velocity.x *= scale
-                        node.velocity.y *= scale
+                        let s = maxDisplacement / speed
+                        node.velocity.x *= s
+                        node.velocity.y *= s
                     }
                     node.position.x += node.velocity.x
                     node.position.y += node.velocity.y
@@ -184,7 +242,12 @@ class ForceGraphSimulation {
                     let positions = localNodes.mapValues { $0.position }
                     await onUpdate(positions)
                 }
-                if temperature < 0.01 { break }
+
+                if temperature < minTemperature && pinnedId == nil {
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    if dragState.pinnedId != nil { continue }
+                    break
+                }
             }
 
             let finalPositions = localNodes.mapValues { $0.position }

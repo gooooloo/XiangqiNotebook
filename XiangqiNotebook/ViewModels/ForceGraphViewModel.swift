@@ -52,6 +52,22 @@ class ForceGraphViewModel: ObservableObject {
         isSimulating = false
     }
 
+    func dragNode(_ nodeId: Int, to position: CGPoint) {
+        nodePositions[nodeId] = position
+        simulation.dragState.pin(id: nodeId, position: position)
+        if !simulation.isRunning, let data = graphData {
+            var updated = data
+            for (id, pos) in nodePositions {
+                updated.nodes[id]?.position = pos
+            }
+            startSimulation(data: updated)
+        }
+    }
+
+    func endDragNode() {
+        simulation.dragState.unpin()
+    }
+
     func hitTest(at point: CGPoint) -> Int? {
         let threshold: CGFloat = 12.0 / viewportScale
         for (fenId, pos) in nodePositions {

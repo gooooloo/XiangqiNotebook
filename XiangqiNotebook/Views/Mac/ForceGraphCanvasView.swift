@@ -227,7 +227,7 @@ struct ForceGraphCanvasView: View {
 
                 if let nodeId = draggingNodeId {
                     let graphPoint = viewModel.viewPointToGraphPoint(value.location, canvasSize: canvasSize)
-                    viewModel.nodePositions[nodeId] = graphPoint
+                    viewModel.dragNode(nodeId, to: graphPoint)
                 } else {
                     viewModel.viewportOffset = CGPoint(
                         x: initialOffset.x + value.translation.width,
@@ -236,6 +236,9 @@ struct ForceGraphCanvasView: View {
                 }
             }
             .onEnded { _ in
+                if draggingNodeId != nil {
+                    viewModel.endDragNode()
+                }
                 dragStart = nil
                 draggingNodeId = nil
             }
