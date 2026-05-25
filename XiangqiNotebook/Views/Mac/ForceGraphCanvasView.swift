@@ -2,6 +2,33 @@ import SwiftUI
 
 #if os(macOS)
 
+struct ScrollWheelView: NSViewRepresentable {
+    var onScroll: (CGFloat, CGPoint) -> Void
+
+    func makeNSView(context: Context) -> ScrollWheelNSView {
+        let view = ScrollWheelNSView()
+        view.onScroll = onScroll
+        return view
+    }
+
+    func updateNSView(_ nsView: ScrollWheelNSView, context: Context) {
+        nsView.onScroll = onScroll
+    }
+
+    class ScrollWheelNSView: NSView {
+        var onScroll: ((CGFloat, CGPoint) -> Void)?
+
+        override func scrollWheel(with event: NSEvent) {
+            let delta = event.deltaY
+            if abs(delta) > 0.01 {
+                let location = convert(event.locationInWindow, from: nil)
+                let flippedY = bounds.height - location.y
+                onScroll?(delta, CGPoint(x: location.x, y: flippedY))
+            }
+        }
+    }
+}
+
 struct ForceGraphCanvasView: View {
     @ObservedObject var viewModel: ForceGraphViewModel
     @State private var dragStart: CGPoint?
@@ -12,6 +39,17 @@ struct ForceGraphCanvasView: View {
             ZStack {
                 canvas(size: geometry.size)
                     .drawingGroup()
+                    .overlay(
+                        ScrollWheelView { delta, location in
+                            let zoomFactor: CGFloat = delta > 0 ? 1.05 : 0.95
+                            let oldScale = viewModel.viewportScale
+                            let newScale = max(0.01, min(oldScale * zoomFactor, 10.0))
+                            let ratio = newScale / oldScale
+                            viewModel.viewportOffset.x = location.x - (location.x - viewModel.viewportOffset.x) * ratio
+                            viewModel.viewportOffset.y = location.y - (location.y - viewModel.viewportOffset.y) * ratio
+                            viewModel.viewportScale = newScale
+                        }
+                    )
                     .gesture(dragGesture)
                     .gesture(magnificationGesture)
                     .onContinuousHover { phase in
