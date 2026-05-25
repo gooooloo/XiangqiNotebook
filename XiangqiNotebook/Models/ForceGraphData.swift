@@ -25,34 +25,39 @@ struct ForceGraphSnapshot: Sendable {
     let rootFenId: Int?
 
     static func extractRealGames(from databaseView: DatabaseView, rootFenId: Int?) -> ForceGraphSnapshot {
-        let redStats = databaseView.myRealRedGameStatisticsByFenId
-        let blackStats = databaseView.myRealBlackGameStatisticsByFenId
+        let allMoves = databaseView.allMoveObjects
+        let realGames = databaseView.getGamesInBookRecursivelyUnfiltered(bookId: Session.myRealGameBookId)
 
-        var realGameFenIds = Set<Int>()
-        for (fenId, s) in redStats {
-            let total = s.redWin + s.blackWin + s.draw + s.notFinished + s.unknown
-            if total > 0 { realGameFenIds.insert(fenId) }
-        }
-        for (fenId, s) in blackStats {
-            let total = s.redWin + s.blackWin + s.draw + s.notFinished + s.unknown
-            if total > 0 { realGameFenIds.insert(fenId) }
+        var fenGameCounts: [Int: Int] = [:]
+        var edgeSet = Set<String>()
+        var moveEntries: [(sourceId: Int, targetId: Int)] = []
+
+        for game in realGames {
+            var gameFenIds: [Int] = []
+            if let startId = game.startingFenId {
+                gameFenIds.append(startId)
+            }
+            for moveId in game.moveIds {
+                guard let move = allMoves[moveId] else { continue }
+                gameFenIds.append(move.sourceFenId)
+                if let targetId = move.targetFenId {
+                    gameFenIds.append(targetId)
+                    let edgeKey = "\(move.sourceFenId)-\(targetId)"
+                    if !edgeSet.contains(edgeKey) {
+                        edgeSet.insert(edgeKey)
+                        moveEntries.append((sourceId: move.sourceFenId, targetId: targetId))
+                    }
+                }
+            }
+            for fenId in gameFenIds {
+                fenGameCounts[fenId, default: 0] += 1
+            }
         }
 
         var fenEntries: [(fenId: Int, fen: String, realGameCount: Int)] = []
-        var moveEntries: [(sourceId: Int, targetId: Int)] = []
-
-        for fenId in realGameFenIds {
-            guard let fenObject = databaseView.getFenObject(fenId) ?? databaseView.getFenObjectUnfiltered(fenId) else { continue }
-            let redTotal = redStats[fenId].map { $0.redWin + $0.blackWin + $0.draw + $0.notFinished + $0.unknown } ?? 0
-            let blackTotal = blackStats[fenId].map { $0.redWin + $0.blackWin + $0.draw + $0.notFinished + $0.unknown } ?? 0
-            fenEntries.append((fenId: fenId, fen: fenObject.fen, realGameCount: redTotal + blackTotal))
-        }
-
-        for (_, move) in databaseView.allMoveObjects {
-            guard let targetId = move.targetFenId else { continue }
-            if realGameFenIds.contains(move.sourceFenId) && realGameFenIds.contains(targetId) {
-                moveEntries.append((sourceId: move.sourceFenId, targetId: targetId))
-            }
+        for (fenId, count) in fenGameCounts {
+            guard let fenObject = databaseView.getFenObjectUnfiltered(fenId) else { continue }
+            fenEntries.append((fenId: fenId, fen: fenObject.fen, realGameCount: count))
         }
 
         return ForceGraphSnapshot(fenEntries: fenEntries, moveEntries: moveEntries, rootFenId: rootFenId)
