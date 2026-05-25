@@ -254,33 +254,41 @@ class ForceGraphSimulation {
                     localNodes[id] = node
                 }
 
-                // Collision resolution: push overlapping nodes apart
-                for i in 0..<nodeIds.count {
-                    let idA = nodeIds[i]
-                    guard var nodeA = localNodes[idA] else { continue }
-                    let rA = nodeA.radius
-                    for j in (i+1)..<nodeIds.count {
-                        let idB = nodeIds[j]
-                        guard var nodeB = localNodes[idB] else { continue }
-                        let dx = nodeA.position.x - nodeB.position.x
-                        let dy = nodeA.position.y - nodeB.position.y
-                        let distSq = dx * dx + dy * dy
-                        let minDist = rA + nodeB.radius + 2
-                        let minDistSq = minDist * minDist
-                        if distSq < minDistSq && distSq > 0.01 {
-                            let dist = sqrt(distSq)
-                            let overlap = (minDist - dist) * 0.5
-                            let nx = dx / dist
-                            let ny = dy / dist
-                            if idA != pinnedId {
-                                nodeA.position.x += nx * overlap
-                                nodeA.position.y += ny * overlap
-                                localNodes[idA] = nodeA
-                            }
-                            if idB != pinnedId {
-                                nodeB.position.x -= nx * overlap
-                                nodeB.position.y -= ny * overlap
-                                localNodes[idB] = nodeB
+                // Collision resolution via spatial hash
+                let cellSize: CGFloat = 60
+                var grid: [Int: [Int]] = [:]
+                for id in nodeIds {
+                    guard let node = localNodes[id] else { continue }
+                    let cx = Int(floor(node.position.x / cellSize))
+                    let cy = Int(floor(node.position.y / cellSize))
+                    grid[cx &* 73856093 ^ cy &* 19349663, default: []].append(id)
+                }
+                for (_, cellIds) in grid {
+                    for i in 0..<cellIds.count {
+                        let idA = cellIds[i]
+                        guard var nodeA = localNodes[idA] else { continue }
+                        for j in (i+1)..<cellIds.count {
+                            let idB = cellIds[j]
+                            guard var nodeB = localNodes[idB] else { continue }
+                            let dx = nodeA.position.x - nodeB.position.x
+                            let dy = nodeA.position.y - nodeB.position.y
+                            let distSq = dx * dx + dy * dy
+                            let minDist = nodeA.radius + nodeB.radius + 2
+                            if distSq < minDist * minDist && distSq > 0.01 {
+                                let dist = sqrt(distSq)
+                                let overlap = (minDist - dist) * 0.5
+                                let nx = dx / dist
+                                let ny = dy / dist
+                                if idA != pinnedId {
+                                    nodeA.position.x += nx * overlap
+                                    nodeA.position.y += ny * overlap
+                                    localNodes[idA] = nodeA
+                                }
+                                if idB != pinnedId {
+                                    nodeB.position.x -= nx * overlap
+                                    nodeB.position.y -= ny * overlap
+                                    localNodes[idB] = nodeB
+                                }
                             }
                         }
                     }
