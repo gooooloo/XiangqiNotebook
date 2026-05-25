@@ -16,7 +16,7 @@ class ForceGraphViewModel: ObservableObject {
     // 外观设置
     @Published var showArrows: Bool = false
     @Published var nodeSizeMultiplier: CGFloat = 1.0
-    @Published var lineThickness: CGFloat = 0.5
+    @Published var lineThickness: CGFloat = 1.0
 
     // 力度设置
     @Published var centerForce: CGFloat = 0.0

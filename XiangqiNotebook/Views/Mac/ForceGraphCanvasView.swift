@@ -161,7 +161,7 @@ struct ForceGraphCanvasView: View {
         }
 
         let lineWidth = viewModel.lineThickness
-        context.stroke(normalPath, with: .color(.gray.opacity(0.2)), lineWidth: lineWidth)
+        context.stroke(normalPath, with: .color(.gray.opacity(0.5)), lineWidth: lineWidth)
         if !hoveredPath.isEmpty {
             context.stroke(hoveredPath, with: .color(.blue.opacity(0.6)), lineWidth: max(lineWidth * 2, 1.5))
         }
