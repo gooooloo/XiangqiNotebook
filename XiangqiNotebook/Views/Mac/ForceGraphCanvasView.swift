@@ -99,7 +99,7 @@ struct ForceGraphCanvasView: View {
                     }
                 }
             }
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background(Color.white)
             .onAppear {
                 canvasSize = geometry.size
                 viewModel.zoomToFit(canvasSize: geometry.size)
