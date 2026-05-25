@@ -179,7 +179,7 @@ class ForceGraphViewModel: ObservableObject {
 
     func nodeRadius(for fenId: Int) -> CGFloat {
         let edgeCount = graphData?.nodes[fenId]?.edgeCount ?? 0
-        return min(max(CGFloat(edgeCount) * 1.5 + 4, 4), 14)
+        return min(CGFloat(edgeCount).squareRoot() * 4 + 2, 24)
     }
 
     func nodeColor(for fenId: Int) -> Color {
