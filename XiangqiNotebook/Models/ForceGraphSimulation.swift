@@ -109,12 +109,12 @@ class ForceGraphSimulation {
             let localEdges = capturedEdges
             let nodeCount = localNodes.count
             let maxIterations = min(500, max(200, 1000 - nodeCount / 20))
-            var temperature: CGFloat = 1.0
+            var temperature: CGFloat = 1.5
             let coolingRate: CGFloat = nodeCount > 5000 ? 0.99 : 0.995
-            let repulsionK: CGFloat = nodeCount > 5000 ? 5000 : 8000
-            let attractionK: CGFloat = nodeCount > 5000 ? 0.008 : 0.005
-            let damping: CGFloat = 0.85
-            let theta: CGFloat = 1.2
+            let repulsionK: CGFloat = nodeCount > 5000 ? 15000 : 20000
+            let attractionK: CGFloat = nodeCount > 5000 ? 0.003 : 0.002
+            let damping: CGFloat = 0.8
+            let theta: CGFloat = 1.0
             let updateInterval = nodeCount > 5000 ? 10 : 5
 
             for iteration in 0..<maxIterations {
