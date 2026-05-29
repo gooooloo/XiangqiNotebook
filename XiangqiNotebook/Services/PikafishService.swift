@@ -13,8 +13,6 @@ class PikafishService: @unchecked Sendable {
     private var outputBuffer = ""
     private var isReady = false
 
-    /// 串行化评估请求，防止并发访问引擎
-    private let evaluationLock = NSLock()
 
     /// 引擎版本
     static let engineVersion = "Pikafish_dev-20260213-391d491a"
@@ -181,23 +179,12 @@ class PikafishService: @unchecked Sendable {
 
     // MARK: - Evaluation
 
-    /// 评估指定局面
-    /// - Parameter fen: App 内部 FEN 格式
-    /// - Returns: 评估结果（含分数、深度、耗时等），nil 表示评估失败
-    /// 尝试获取评估锁，成功返回 true
-    private nonisolated func tryAcquireEvaluationLock() -> Bool {
-        evaluationLock.try()
-    }
-
-    /// 释放评估锁
-    private nonisolated func releaseEvaluationLock() {
-        evaluationLock.unlock()
+    /// 中断当前搜索（用于取消评估）
+    func stopCurrentSearch() {
+        sendCommand("stop")
     }
 
     func evaluatePosition(fen: String, movetime: Int? = nil) async throws -> EvaluationResult? {
-        // 如果已有评估在进行中，直接返回 nil（不阻塞等待）
-        guard tryAcquireEvaluationLock() else { return nil }
-        defer { releaseEvaluationLock() }
 
         // Start engine if needed
         if process == nil || !(process?.isRunning ?? false) {

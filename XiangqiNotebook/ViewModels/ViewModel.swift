@@ -2,16 +2,6 @@ import SwiftUI
 import Foundation
 import Combine
 
-#if os(macOS)
-struct BatchEvalProgress {
-    let current: Int
-    let total: Int
-    let evaluatedCount: Int
-    let lastDetail: String?
-    let elapsedSeconds: Double?
-    let isCompleted: Bool
-}
-#endif
 
 /// 定义平台服务接口，用于处理平台特定的功能
 protocol PlatformService {
@@ -101,9 +91,7 @@ class ViewModel: ObservableObject {
     // 引擎评估（仅 macOS）
     #if os(macOS)
     private var pikafishService: PikafishService?
-    private var isBatchEvaluating: Bool = false
-    private var batchEvalCancelled: Bool = false
-    @Published var batchEvalProgress: BatchEvalProgress?
+    private(set) var evaluationQueue: EvaluationQueue?
     #endif
 
     // 初始化方法
@@ -171,6 +159,7 @@ class ViewModel: ObservableObject {
             forName: NSApplication.willTerminateNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
+            self?.evaluationQueue?.cancelAll()
             self?.pikafishService?.stop()
         }
         #endif
@@ -313,10 +302,10 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.queryScore, text: "云库查分", shortcuts: [.single("s")], supportedModes: [.normal]) { Task { await self.queryFenScore() } }
         #if os(macOS) && arch(arm64)
-        actionDefinitions.registerAction(.quickEngineScore, text: "皮卡鱼快速估分", shortcuts: [.sequence(",qs")], supportedModes: [.normal]) { Task { await self.quickEngineScore() } }
-        actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼深度评分", shortcuts: [.sequence(",Qs")], supportedModes: [.normal]) { Task { await self.queryEngineScore() } }
-        actionDefinitions.registerAction(.queryAllEngineScores, text: "皮卡鱼深评本局", shortcuts: [.sequence(",Qa")], supportedModes: [.normal]) { Task { await self.queryAllEngineScores() } }
-        actionDefinitions.registerAction(.quickAllEngineScores, text: "皮卡鱼快估本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { Task { await self.quickAllEngineScores() } }
+        actionDefinitions.registerAction(.quickEngineScore, text: "皮卡鱼快速估分", shortcuts: [.sequence(",qs")], supportedModes: [.normal]) { self.quickEngineScore() }
+        actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼深度评分", shortcuts: [.sequence(",Qs")], supportedModes: [.normal]) { self.queryEngineScore() }
+        actionDefinitions.registerAction(.queryAllEngineScores, text: "皮卡鱼深评本局", shortcuts: [.sequence(",Qa")], supportedModes: [.normal]) { self.queryAllEngineScores() }
+        actionDefinitions.registerAction(.quickAllEngineScores, text: "皮卡鱼快估本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { self.quickAllEngineScores() }
         actionDefinitions.registerAction(.pikafishQuickMove, text: "皮卡鱼快速应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
         #endif
         actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal]) { self.updateFenScore(self.currentFenId, score: nil) }
@@ -1349,7 +1338,6 @@ class ViewModel: ObservableObject {
     // MARK: - 引擎评估（macOS）
 
     #if os(macOS)
-    /// 确保 PikafishService 已创建
     private func ensurePikafishService() -> PikafishService? {
         #if arch(arm64)
         if pikafishService == nil {
@@ -1361,83 +1349,31 @@ class ViewModel: ObservableObject {
         #endif
     }
 
-    func queryEngineScore() async {
-        let fenId = session.currentFenId
-        guard let fen = session.getFenForId(fenId) else { return }
-        guard let service = ensurePikafishService() else { return }
-
-        isBatchEvaluating = true
-        batchEvalCancelled = false
-        defer { isBatchEvaluating = false }
-
-        let startTime = Date()
-        await MainActor.run {
-            self.batchEvalProgress = BatchEvalProgress(current: 0, total: 1, evaluatedCount: 0, lastDetail: nil, elapsedSeconds: nil, isCompleted: false)
+    private func ensureEvaluationQueue() -> EvaluationQueue? {
+        if let queue = evaluationQueue { return queue }
+        guard let service = ensurePikafishService() else { return nil }
+        let queue = EvaluationQueue(pikafishService: service) { fenId, engineKey in
+            Database.shared.getEngineScore(fenId: fenId, engineKey: engineKey) != nil
         }
-
-        do {
-            if batchEvalCancelled { return }
-
-            if let result = try await service.evaluatePosition(fen: fen) {
-                if batchEvalCancelled { return }
-                let detail = Self.formatEvalDetail(result)
-                let elapsed = Date().timeIntervalSince(startTime)
-                await MainActor.run {
-                    session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.engineKey)
-                    self.batchEvalProgress = BatchEvalProgress(current: 1, total: 1, evaluatedCount: 1, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: true)
-                }
-            } else {
-                await MainActor.run {
-                    self.batchEvalProgress = nil
-                }
-            }
-        } catch {
-            await MainActor.run { self.batchEvalProgress = nil }
-            platformService.showWarningAlert(
-                title: "皮卡鱼评估失败",
-                message: error.localizedDescription
-            )
+        queue.onEvaluationCompleted = { [weak self] request, result in
+            self?.session.updateEngineScore(request.fenId, score: result.score, engineKey: request.engineKey)
         }
+        evaluationQueue = queue
+        return queue
     }
 
-
-    func quickEngineScore() async {
+    func queryEngineScore() {
         let fenId = session.currentFenId
         guard let fen = session.getFenForId(fenId) else { return }
-        guard let service = ensurePikafishService() else { return }
+        guard let queue = ensureEvaluationQueue() else { return }
+        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.engineKey, movetime: nil))
+    }
 
-        isBatchEvaluating = true
-        batchEvalCancelled = false
-        defer { isBatchEvaluating = false }
-
-        let startTime = Date()
-        await MainActor.run {
-            self.batchEvalProgress = BatchEvalProgress(current: 0, total: 1, evaluatedCount: 0, lastDetail: nil, elapsedSeconds: nil, isCompleted: false)
-        }
-
-        do {
-            if batchEvalCancelled { return }
-
-            if let result = try await service.evaluatePosition(fen: fen, movetime: 3000) {
-                if batchEvalCancelled { return }
-                let detail = Self.formatEvalDetail(result)
-                let elapsed = Date().timeIntervalSince(startTime)
-                await MainActor.run {
-                    session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
-                    self.batchEvalProgress = BatchEvalProgress(current: 1, total: 1, evaluatedCount: 1, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: true)
-                }
-            } else {
-                await MainActor.run {
-                    self.batchEvalProgress = nil
-                }
-            }
-        } catch {
-            await MainActor.run { self.batchEvalProgress = nil }
-            platformService.showWarningAlert(
-                title: "皮卡鱼快速估分失败",
-                message: error.localizedDescription
-            )
-        }
+    func quickEngineScore() {
+        let fenId = session.currentFenId
+        guard let fen = session.getFenForId(fenId) else { return }
+        guard let queue = ensureEvaluationQueue() else { return }
+        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: 3000))
     }
 
     func pikafishQuickMove() async {
@@ -1448,47 +1384,29 @@ class ViewModel: ObservableObject {
             )
             return
         }
+        guard let queue = ensureEvaluationQueue() else { return }
+        guard queue.isIdle else {
+            platformService.showWarningAlert(
+                title: "引擎忙碌中",
+                message: "请先等待当前评估完成或取消评估。"
+            )
+            return
+        }
+
         let fenId = session.currentFenId
         guard let fen = session.getFenForId(fenId) else { return }
         guard let service = ensurePikafishService() else { return }
 
-        isBatchEvaluating = true
-        batchEvalCancelled = false
-        defer { isBatchEvaluating = false }
-
-        let startTime = Date()
-        await MainActor.run {
-            self.batchEvalProgress = BatchEvalProgress(current: 0, total: 1, evaluatedCount: 0, lastDetail: nil, elapsedSeconds: nil, isCompleted: false)
-        }
-
         do {
-            if batchEvalCancelled { return }
-
             if let result = try await service.evaluatePosition(fen: fen, movetime: 3000) {
-                if batchEvalCancelled { return }
-                let detail = Self.formatEvalDetail(result)
-                let elapsed = Date().timeIntervalSince(startTime)
-
-                await MainActor.run {
-                    // 保存评分
-                    session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
-
-                    // 走出推荐着法，并保存新局面的估分（取反）
-                    if let uciMove = result.bestMove,
-                       let newFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) {
-                        _ = session.playNewBoardFen(newFen)
-                        session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishService.quickEngineKey)
-                    }
-
-                    self.batchEvalProgress = BatchEvalProgress(current: 1, total: 1, evaluatedCount: 1, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: true)
-                }
-            } else {
-                await MainActor.run {
-                    self.batchEvalProgress = nil
+                session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
+                if let uciMove = result.bestMove,
+                   let newFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) {
+                    _ = session.playNewBoardFen(newFen)
+                    session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishService.quickEngineKey)
                 }
             }
         } catch {
-            await MainActor.run { self.batchEvalProgress = nil }
             platformService.showWarningAlert(
                 title: "皮卡鱼应招失败",
                 message: error.localizedDescription
@@ -1496,198 +1414,52 @@ class ViewModel: ObservableObject {
         }
     }
 
-    private static func formatEvalDetail(_ result: PikafishService.EvaluationResult) -> String {
-        var parts: [String] = []
-        if let depth = result.depth {
-            parts.append("深度\(depth)")
-        }
-        if let ms = result.timeMs {
-            parts.append("耗时\(String(format: "%.1f", Double(ms) / 1000.0))s")
-        }
-        if let h = result.hashfull {
-            parts.append("Hash\(h * 100 / 1000)%")
-        }
-        if result.timedOut {
-            parts.append("超时")
-        }
-        return parts.joined(separator: " ")
-    }
-
-    func cancelBatchEval() {
-        batchEvalCancelled = true
-        batchEvalProgress = nil
-    }
-
-    func dismissBatchEvalProgress() {
-        batchEvalProgress = nil
-    }
-
-    func queryAllEngineScores() async {
-        guard let service = ensurePikafishService() else { return }
-
-        isBatchEvaluating = true
-        batchEvalCancelled = false
-        defer { isBatchEvaluating = false }
-
+    func queryAllEngineScores() {
+        guard let queue = ensureEvaluationQueue() else { return }
         let game = session.sessionData.currentGame2
-        let totalSteps = game.count
-        var evaluatedCount = 0
-        var lastDetail: String?
-        let startTime = Date()
-
-        await MainActor.run {
-            self.batchEvalProgress = BatchEvalProgress(current: 0, total: totalSteps, evaluatedCount: 0, lastDetail: nil, elapsedSeconds: nil, isCompleted: false)
-        }
-
-        // 从前往后搜索，利用 Hash 表复用加速后续局面
-        for i in 0..<totalSteps {
-            if batchEvalCancelled { break }
-
-            let fenId = game[i]
-
-            // 跳过已有引擎分数的局面
-            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) != nil {
-                let elapsed = Date().timeIntervalSince(startTime)
-                let count = evaluatedCount
-                let detail = lastDetail
-                await MainActor.run {
-                    self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: count, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: false)
-                }
-                continue
-            }
-
+        var requests: [EvaluationRequest] = []
+        for fenId in game {
+            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) != nil { continue }
             guard let fen = session.getFenForId(fenId) else { continue }
-
-            let elapsed = Date().timeIntervalSince(startTime)
-            let countBefore = evaluatedCount
-            let detailBefore = lastDetail
-            await MainActor.run {
-                self.batchEvalProgress = BatchEvalProgress(current: i, total: totalSteps, evaluatedCount: countBefore, lastDetail: detailBefore, elapsedSeconds: elapsed, isCompleted: false)
-            }
-
-            do {
-                // evaluatePosition 用 try() 获取锁，如果被占用返回 nil
-                // 等待当前评估完成后重试一次
-                var result = try await service.evaluatePosition(fen: fen)
-                if result == nil {
-                    try await Task.sleep(nanoseconds: 500_000_000)
-                    result = try await service.evaluatePosition(fen: fen)
-                }
-
-                if batchEvalCancelled { break }
-
-                if let result = result {
-                    lastDetail = Self.formatEvalDetail(result)
-                    await MainActor.run {
-                        self.session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.engineKey)
-                    }
-                    evaluatedCount += 1
-                }
-            } catch {
-                print("[Pikafish] 全局评估 \(i)/\(totalSteps - 1) fenId=\(fenId) 失败: \(error.localizedDescription)")
-                break
-            }
-
-            let elapsedAfter = Date().timeIntervalSince(startTime)
-            let countAfter = evaluatedCount
-            let detailAfter = lastDetail
-            await MainActor.run {
-                self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: countAfter, lastDetail: detailAfter, elapsedSeconds: elapsedAfter, isCompleted: false)
-            }
+            requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.engineKey, movetime: nil))
         }
-
-        // 完成后显示最终结果
-        let finalElapsed = Date().timeIntervalSince(startTime)
-        let finalCount = evaluatedCount
-        let finalDetail = lastDetail
-        await MainActor.run {
-            self.batchEvalProgress = BatchEvalProgress(current: totalSteps, total: totalSteps, evaluatedCount: finalCount, lastDetail: finalDetail, elapsedSeconds: finalElapsed, isCompleted: true)
-        }
+        queue.enqueueAll(requests)
     }
 
-    func quickAllEngineScores() async {
-        guard let service = ensurePikafishService() else { return }
-
-        isBatchEvaluating = true
-        batchEvalCancelled = false
-        defer { isBatchEvaluating = false }
-
+    func quickAllEngineScores() {
+        guard let queue = ensureEvaluationQueue() else { return }
         let game = session.sessionData.currentGame2
-        let totalSteps = game.count
-        var evaluatedCount = 0
-        var lastDetail: String?
-        let startTime = Date()
-
-        await MainActor.run {
-            self.batchEvalProgress = BatchEvalProgress(current: 0, total: totalSteps, evaluatedCount: 0, lastDetail: nil, elapsedSeconds: nil, isCompleted: false)
-        }
-
-        // 从前往后搜索，利用 Hash 表复用加速后续局面
-        for i in 0..<totalSteps {
-            if batchEvalCancelled { break }
-
-            let fenId = game[i]
-
-            // 跳过已有快速引擎分数或深度引擎分数的局面
+        var requests: [EvaluationRequest] = []
+        for fenId in game {
             if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey) != nil ||
-               Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) != nil {
-                let elapsed = Date().timeIntervalSince(startTime)
-                let count = evaluatedCount
-                let detail = lastDetail
-                await MainActor.run {
-                    self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: count, lastDetail: detail, elapsedSeconds: elapsed, isCompleted: false)
-                }
-                continue
-            }
-
+               Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) != nil { continue }
             guard let fen = session.getFenForId(fenId) else { continue }
-
-            let elapsed = Date().timeIntervalSince(startTime)
-            let countBefore = evaluatedCount
-            let detailBefore = lastDetail
-            await MainActor.run {
-                self.batchEvalProgress = BatchEvalProgress(current: i, total: totalSteps, evaluatedCount: countBefore, lastDetail: detailBefore, elapsedSeconds: elapsed, isCompleted: false)
-            }
-
-            do {
-                var result = try await service.evaluatePosition(fen: fen, movetime: 3000)
-                if result == nil {
-                    try await Task.sleep(nanoseconds: 500_000_000)
-                    result = try await service.evaluatePosition(fen: fen, movetime: 3000)
-                }
-
-                if batchEvalCancelled { break }
-
-                if let result = result {
-                    lastDetail = Self.formatEvalDetail(result)
-                    await MainActor.run {
-                        self.session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
-                    }
-                    evaluatedCount += 1
-                }
-            } catch {
-                print("[Pikafish] 快估本局 \(i)/\(totalSteps - 1) fenId=\(fenId) 失败: \(error.localizedDescription)")
-                break
-            }
-
-            let elapsedAfter = Date().timeIntervalSince(startTime)
-            let countAfter = evaluatedCount
-            let detailAfter = lastDetail
-            await MainActor.run {
-                self.batchEvalProgress = BatchEvalProgress(current: i + 1, total: totalSteps, evaluatedCount: countAfter, lastDetail: detailAfter, elapsedSeconds: elapsedAfter, isCompleted: false)
-            }
+            requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: 3000))
         }
+        queue.enqueueAll(requests)
+    }
 
-        // 完成后显示最终结果
-        let finalElapsed = Date().timeIntervalSince(startTime)
-        let finalCount = evaluatedCount
-        let finalDetail = lastDetail
-        await MainActor.run {
-            self.batchEvalProgress = BatchEvalProgress(current: totalSteps, total: totalSteps, evaluatedCount: finalCount, lastDetail: finalDetail, elapsedSeconds: finalElapsed, isCompleted: true)
-        }
+    func cancelEvaluation() {
+        evaluationQueue?.cancelAll()
     }
 
     #endif
+
+    var currentFenQuickEvalStatus: FenEvalStatus {
+        #if os(macOS)
+        return evaluationQueue?.statusForFen(fenId: session.currentFenId, engineKey: PikafishService.quickEngineKey) ?? .idle
+        #else
+        return .idle
+        #endif
+    }
+
+    var currentFenDeepEvalStatus: FenEvalStatus {
+        #if os(macOS)
+        return evaluationQueue?.statusForFen(fenId: session.currentFenId, engineKey: PikafishService.engineKey) ?? .idle
+        #else
+        return .idle
+        #endif
+    }
 
     func copyFenToClipboard() {
         let fen = displayFen

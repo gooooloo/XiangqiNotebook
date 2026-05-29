@@ -43,6 +43,40 @@ struct StatusBarView: View {
         .font(fontStyle)
     }
 
+    private var quickEngineScoreText: Text {
+        #if os(macOS)
+        switch viewModel.currentFenQuickEvalStatus {
+        case .evaluating:
+            return Text("皮卡鱼快估: 评估中...").foregroundColor(.orange)
+        case .queued:
+            return Text("皮卡鱼快估: 等待中...").foregroundColor(.gray)
+        case .idle:
+            return Text("皮卡鱼快估: \(viewModel.displayQuickEngineScore)")
+                .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
+        }
+        #else
+        return Text("皮卡鱼快估: \(viewModel.displayQuickEngineScore)")
+            .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
+        #endif
+    }
+
+    private var deepEngineScoreText: Text {
+        #if os(macOS)
+        switch viewModel.currentFenDeepEvalStatus {
+        case .evaluating:
+            return Text("皮卡鱼深评: 评估中...").foregroundColor(.orange)
+        case .queued:
+            return Text("皮卡鱼深评: 等待中...").foregroundColor(.gray)
+        case .idle:
+            return Text("皮卡鱼深评: \(viewModel.displayDeepEngineScore)")
+                .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
+        }
+        #else
+        return Text("皮卡鱼深评: \(viewModel.displayDeepEngineScore)")
+            .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
+        #endif
+    }
+
     var body: some View {
         VStack {
             HStack {
@@ -68,13 +102,11 @@ struct StatusBarView: View {
                     .font(fontStyle)
                     .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("皮卡鱼快估: \(viewModel.displayQuickEngineScore)")
+                quickEngineScoreText
                     .font(fontStyle)
-                    .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text("皮卡鱼深评: \(viewModel.displayDeepEngineScore)")
+                deepEngineScoreText
                     .font(fontStyle)
-                    .foregroundColor(viewModel.isCurrentMoveBad ? .red : (viewModel.isCurrentMoveRecommended ? .green : .primary))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text("步数: \(viewModel.currentGameStepDisplay) / \(viewModel.maxGameStepDisplay) / \(viewModel.gameStepLimitation?.description ?? "")")
                     .font(fontStyle)
@@ -110,6 +142,26 @@ struct StatusBarView: View {
                 Text("数据: \(String(viewModel.currentDataVersion))\(viewModel.currentDatabaseDirty ? "*" : " ")")
                     .font(fontStyle)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                #if os(macOS)
+                if let queue = viewModel.evaluationQueue, !queue.state.isIdle {
+                    HStack(spacing: 4) {
+                        Text("评估 \(queue.state.completedCount)/\(queue.state.totalEnqueued)")
+                            .font(fontStyle)
+                        if let detail = queue.state.currentDetail {
+                            Text(detail)
+                                .font(fontStyle)
+                                .foregroundStyle(.secondary)
+                        }
+                        Button("取消") {
+                            viewModel.cancelEvaluation()
+                        }
+                        .font(fontStyle)
+                        .buttonStyle(.plain)
+                        .foregroundColor(.red)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                #endif
             }
             .padding(.vertical, verticalPadding)
             .padding(.horizontal)
