@@ -1399,11 +1399,14 @@ class ViewModel: ObservableObject {
 
         do {
             if let result = try await service.evaluatePosition(fen: fen, movetime: 3000) {
-                session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
-                if let uciMove = result.bestMove,
-                   let newFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) {
-                    _ = session.playNewBoardFen(newFen)
-                    session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishService.quickEngineKey)
+                // await 之后在后台线程恢复，数据修改必须回到主线程，否则与主线程读取产生数据竞争
+                await MainActor.run {
+                    session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
+                    if let uciMove = result.bestMove,
+                       let newFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) {
+                        _ = session.playNewBoardFen(newFen)
+                        session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishService.quickEngineKey)
+                    }
                 }
             }
         } catch {
