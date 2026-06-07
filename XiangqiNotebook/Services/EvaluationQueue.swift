@@ -115,7 +115,9 @@ class EvaluationQueue: ObservableObject {
 
     private func startProcessingIfNeeded() {
         guard processingTask == nil else { return }
-        processingTask = Task { [weak self] in
+        // 必须在 MainActor 上处理：回调会修改 Session/Database 数据，
+        // 队列状态也与主线程的 enqueue/cancelAll 共享，否则产生数据竞争
+        processingTask = Task { @MainActor [weak self] in
             while let self = self, !Task.isCancelled {
                 guard !self.pendingRequests.isEmpty else { break }
                 await self.processNext()
@@ -135,6 +137,7 @@ class EvaluationQueue: ObservableObject {
         }
     }
 
+    @MainActor
     private func processNext() async {
         guard !pendingRequests.isEmpty else { return }
         let request = pendingRequests.removeFirst()
