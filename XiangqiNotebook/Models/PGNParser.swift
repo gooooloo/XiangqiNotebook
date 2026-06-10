@@ -160,7 +160,10 @@ enum PGNParser {
     static func generateFenSequence(_ game: PGNGame) -> [String]? {
         let startingFen: String
         if let pgnFen = game.startingFen {
-            startingFen = pgnFenToAppFen(pgnFen)
+            let converted = pgnFenToAppFen(pgnFen)
+            // 外部 FEN 必须结构合法才能入库，否则后续解析/显示会越界崩溃
+            guard XiangqiBoardUtils.isValidBoardFen(converted) else { return nil }
+            startingFen = converted
         } else {
             startingFen = normalizeFen(XiangqiBoardUtils.startFEN)
         }

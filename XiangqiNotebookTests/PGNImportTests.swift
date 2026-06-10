@@ -288,3 +288,60 @@ struct PGNImportTests {
         #expect(!wasMirrored)
     }
 }
+
+// MARK: - FEN 结构校验与畸形输入防御
+
+struct FenValidationTests {
+
+    @Test func testIsValidBoardFen_StartPosition() {
+        #expect(XiangqiBoardUtils.isValidBoardFen("rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"))
+    }
+
+    @Test func testIsValidBoardFen_EmptyString() {
+        #expect(!XiangqiBoardUtils.isValidBoardFen(""))
+    }
+
+    @Test func testIsValidBoardFen_WrongRowCount() {
+        // 只有 9 行
+        #expect(!XiangqiBoardUtils.isValidBoardFen("9/9/9/9/9/9/9/9/9 r"))
+    }
+
+    @Test func testIsValidBoardFen_RowTooWide() {
+        // 第一行 10 列
+        #expect(!XiangqiBoardUtils.isValidBoardFen("rnbakabnrr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r"))
+    }
+
+    @Test func testIsValidBoardFen_RowTooNarrow() {
+        // 第二行只有 8 列
+        #expect(!XiangqiBoardUtils.isValidBoardFen("rnbakabnr/8/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r"))
+    }
+
+    @Test func testIsValidBoardFen_InvalidCharacter() {
+        // x 不是合法棋子
+        #expect(!XiangqiBoardUtils.isValidBoardFen("xnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r"))
+    }
+
+    @Test func testFenToPiecesBySquare_MalformedInputDoesNotCrash() {
+        // 空串、超宽行：不崩溃即为通过
+        #expect(XiangqiBoardUtils.fenToPiecesBySquare("").isEmpty)
+        _ = XiangqiBoardUtils.fenToPiecesBySquare("rrrrrrrrrrrr/9/9/9/9/9/9/9/9/9 r")
+        _ = XiangqiBoardUtils.fenToPiecesBySquare("999999/abc")
+    }
+
+    @Test func testGenerateFenSequence_InvalidFenHeader_ReturnsNil() {
+        var game = PGNGame()
+        game.startingFen = "rrrrrrrrrrrr/9/9 w" // 畸形 FEN
+        game.coordinateMoves = []
+        #expect(PGNParser.generateFenSequence(game) == nil)
+    }
+
+    @Test func testGenerateFenSequence_EmptyFenHeader_ReturnsNil() {
+        var game = PGNGame()
+        game.startingFen = ""
+        #expect(PGNParser.generateFenSequence(game) == nil)
+    }
+
+    @Test func testNormalizeFen_EmptyStringDoesNotCrash() {
+        #expect(normalizeFen("") == "")
+    }
+}

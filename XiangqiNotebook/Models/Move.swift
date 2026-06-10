@@ -144,6 +144,8 @@ class Move: Codable, Hashable {
         }
         
         func findDiffColumns(_ row1: String, _ row2: String) -> [Int] {
+            // 行长不足 9 的畸形 FEN 直接返回空，避免 String.index 越界 trap
+            guard row1.count == 9, row2.count == 9 else { return [] }
             var columns: [Int] = []
             for i in 0..<9 {
                 let index = row1.index(row1.startIndex, offsetBy: i)
@@ -153,10 +155,10 @@ class Move: Codable, Hashable {
             }
             return columns
         }
-        
+
         let fen1Components = fen1.split(separator: " ")
         let fen2Components = fen2.split(separator: " ")
-        
+
         guard let fen1Board = fen1Components.first,
               let fen2Board = fen2Components.first else {
             return nil
@@ -278,6 +280,8 @@ class Move: Codable, Hashable {
         }
         
         func findDiffColumns(_ row1: String, _ row2: String) -> [Int] {
+            // 行长不足 9 的畸形 FEN 直接返回空，避免 String.index 越界 trap
+            guard row1.count == 9, row2.count == 9 else { return [] }
             var columns: [Int] = []
             for i in 0..<9 {
                 let index = row1.index(row1.startIndex, offsetBy: i)
@@ -287,7 +291,7 @@ class Move: Codable, Hashable {
             }
             return columns
         }
-        
+
         func stringifyPieceRed(_ ch: Character) -> String? {
             switch ch {
             case "P": return "兵"

@@ -9,20 +9,49 @@ extension XiangqiBoardUtils {
 
 // MARK: - Utility Functions
 enum XiangqiBoardUtils {
+    /// 校验 FEN 的棋盘部分结构是否合法：10 行、每行恰好 9 列、字符集正确
+    /// 不检查棋子数量等规则层面的合法性；外部输入（如 PGN 的 FEN 头）入库前必须先过此校验
+    static func isValidBoardFen(_ fen: String) -> Bool {
+        let components = fen.split(separator: " ")
+        guard let boardPart = components.first else { return false }
+
+        let rows = boardPart.split(separator: "/")
+        guard rows.count == 10 else { return false }
+
+        let validPieces = Set("rnbakcpRNBAKCP")
+        for row in rows {
+            var colCount = 0
+            for char in row {
+                if let empty = char.wholeNumberValue, (1...9).contains(empty) {
+                    colCount += empty
+                } else if validPieces.contains(char) {
+                    colCount += 1
+                } else {
+                    return false
+                }
+            }
+            guard colCount == 9 else { return false }
+        }
+        return true
+    }
+
     static func fenToPiecesBySquare(_ fen: String) -> [String: String] {
         var piecesBySquare: [String: String] = [:]
         let components = fen.split(separator: " ")
-        let boardPart = String(components[0])
-        
+        guard let firstComponent = components.first else { return [:] }
+        let boardPart = String(firstComponent)
+
         let rows = boardPart.split(separator: "/")
         let columnChars = Array("abcdefghi")
-        
+
         for (rowIndex, row) in rows.enumerated() {
+            guard rowIndex < 10 else { break }
             var colIndex = 0
             for char in row {
                 if let emptySquares = Int(String(char)) {
                     colIndex += emptySquares
                 } else {
+                    guard colIndex < columnChars.count else { break }
                     let square = String(columnChars[colIndex]) + String(9 - rowIndex)
                     let piece = fenToPieceCode(String(char))
                     piecesBySquare[square] = piece
@@ -30,7 +59,7 @@ enum XiangqiBoardUtils {
                 }
             }
         }
-        
+
         return piecesBySquare
     }
     
