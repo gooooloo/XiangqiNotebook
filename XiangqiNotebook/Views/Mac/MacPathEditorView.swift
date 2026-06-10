@@ -104,8 +104,12 @@ struct PathGroupView: View {
                             paths: newPaths,
                             name: pathGroup.name
                         )
-                        if selectedGroupIndex == groupIndex && selectedPathIndex == pathIndex {
-                            onSelect(-1, -1) // 取消选择被删除的路径
+                        if selectedGroupIndex == groupIndex {
+                            if selectedPathIndex == pathIndex {
+                                onSelect(-1, -1) // 取消选择被删除的路径
+                            } else if let selected = selectedPathIndex, selected > pathIndex {
+                                onSelect(groupIndex, selected - 1) // 删除点之后的路径整体左移一位
+                            }
                         }
                     }
                     .foregroundColor(.red)
@@ -161,6 +165,12 @@ struct MarkPathView: View {
         }
     }
 
+    /// 选中索引在当前数据范围内有效（删除操作后的最后防线，越界时按未选中处理）
+    private var selectionIsValid: Bool {
+        selectedGroupIndex >= 0 && selectedGroupIndex < pathGroups.count
+            && selectedPathIndex >= 0 && selectedPathIndex < pathGroups[selectedGroupIndex].paths.count
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // 左侧：路径组列表
@@ -205,6 +215,8 @@ struct MarkPathView: View {
                                     if selectedGroupIndex == index {
                                         selectedGroupIndex = -1
                                         selectedPathIndex = -1
+                                    } else if selectedGroupIndex > index {
+                                        selectedGroupIndex -= 1 // 删除点之后的组整体左移一位
                                     }
                                 }
                             )
@@ -245,9 +257,8 @@ struct MarkPathView: View {
                     selectedPathIndex: $selectedPathIndex,
                     viewModel: boardViewModel,
                     onSquareClick: { square in
-                        guard selectedGroupIndex >= 0,
-                              selectedPathIndex >= 0 else { return }
-                        
+                        guard selectionIsValid else { return }
+
                         var newPathGroups = pathGroups
                         newPathGroups[selectedGroupIndex].paths[selectedPathIndex].points.append(square)
                         pathGroups = newPathGroups
@@ -257,13 +268,13 @@ struct MarkPathView: View {
                 
                 // 路径编辑控制
                 VStack {
-                    Text(selectedGroupIndex >= 0 && selectedPathIndex >= 0 
+                    Text(selectionIsValid
                         ? "正在编辑: \(pathGroups[selectedGroupIndex].name ?? "未命名组") - 路径 \(selectedPathIndex + 1)"
                         : "请选择一个路径进行编辑")
-                        .foregroundColor(selectedGroupIndex >= 0 && selectedPathIndex >= 0 ? .primary : .gray)
-                    
+                        .foregroundColor(selectionIsValid ? .primary : .gray)
+
                     Button("清空路径") {
-                        if selectedGroupIndex >= 0 && selectedPathIndex >= 0 {
+                        if selectionIsValid {
                             var newPathGroups = pathGroups
                             newPathGroups[selectedGroupIndex].paths[selectedPathIndex] = PathConfig(
                                 points: [],
@@ -275,8 +286,8 @@ struct MarkPathView: View {
                     }
                     .buttonStyle(.bordered)
                     .foregroundColor(.red)
-                    .disabled(selectedGroupIndex < 0 || selectedPathIndex < 0)
-                    .opacity(selectedGroupIndex >= 0 && selectedPathIndex >= 0 ? 1.0 : 0.5)
+                    .disabled(!selectionIsValid)
+                    .opacity(selectionIsValid ? 1.0 : 0.5)
                 }
                 .frame(height: 80)
                 .padding()
