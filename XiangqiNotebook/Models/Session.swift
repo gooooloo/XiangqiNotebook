@@ -1237,9 +1237,15 @@ extension Session {
   func playRandomGame() -> Int? {
     updateAllGamePaths()
 
-    let totalPathsCount = sessionData.allGamePaths!.count
+    // 当前局面不在视图范围内（如对应开局库为空）时没有任何可用路径，
+    // 直接返回而非在空范围上 Int.random 崩溃
+    guard let allGamePaths = sessionData.allGamePaths, !allGamePaths.isEmpty else {
+      return nil
+    }
+
+    let totalPathsCount = allGamePaths.count
     let randomIndex = Int.random(in: 0..<totalPathsCount)
-    let selectedPath = sessionData.allGamePaths![randomIndex]
+    let selectedPath = allGamePaths[randomIndex]
 
     self.sessionData.currentPathIndex = randomIndex
     self.sessionData.currentGame2 = selectedPath

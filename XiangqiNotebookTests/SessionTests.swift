@@ -375,4 +375,21 @@ struct SessionTests {
         #expect(variantMoves.count == 1)
         #expect(variantMoves.first?.targetFenId == 2)
     }
+
+    // MARK: - playRandomGame 空路径防护
+
+    @Test func testPlayRandomGame_NoPathsInScope_ReturnsNil() {
+        let database = createTestDatabase()
+        let sessionData = SessionData()
+        sessionData.currentGame2 = [1]
+        sessionData.currentGameStep = 0
+        // 视图范围只含 fenId 2，当前局面（fenId 1）不在范围内 → 生成不出任何路径
+        let databaseView = DatabaseView.focusedPractice(database: database, path: [2])
+        let session = try! Session(sessionData: sessionData, databaseView: databaseView)
+
+        // 修复前这里会因 Int.random(in: 0..<0) 崩溃
+        let result = session.playRandomGame()
+
+        #expect(result == nil)
+    }
 }
