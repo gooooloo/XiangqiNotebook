@@ -21,6 +21,58 @@ class DatabaseStorage {
                url.absoluteString.contains("com~apple~CloudDocs")
     }
 
+    /// 检查默认存档文件是否存在（含 iCloud 未下载的占位文件）
+    /// 用于区分"全新安装（无存档）"与"存档存在但读取失败"
+    static func databaseFileExists() -> Bool {
+        guard let url = getDatabaseURL() else { return false }
+        let fm = FileManager.default
+        if fm.fileExists(atPath: url.path) { return true }
+        // iCloud 未下载到本地时只有隐藏占位文件 .<name>.icloud
+        let placeholder = url.deletingLastPathComponent()
+            .appendingPathComponent(".\(url.lastPathComponent).icloud")
+        return fm.fileExists(atPath: placeholder.path)
+    }
+
+    /// 把现有存档文件原样备份到本地 Application Support（覆盖存档前的安全副本）
+    /// - Returns: 备份文件 URL；无存档或读取失败返回 nil
+    static func backupExistingDatabaseFile() -> URL? {
+        guard let url = getDatabaseURL() else { return nil }
+
+        var fileData: Data?
+        if isICloudURL(url) {
+            let semaphore = DispatchSemaphore(value: 0)
+            iCloudFileCoordinator.shared.coordinatedRead(from: url) { result in
+                fileData = result
+                semaphore.signal()
+            }
+            semaphore.wait()
+        } else {
+            fileData = try? Data(contentsOf: url)
+        }
+        guard let data = fileData else { return nil }
+
+        do {
+            let dir = try FileManager.default.url(
+                for: .applicationSupportDirectory, in: .userDomainMask,
+                appropriateFor: nil, create: true
+            )
+            .appendingPathComponent("XiangqiNotebook")
+            .appendingPathComponent("OverwriteBackups")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd-HHmmss"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            let backupURL = dir.appendingPathComponent("database-\(formatter.string(from: Date())).json")
+            try data.write(to: backupURL, options: .atomic)
+            print("✅ DatabaseStorage: 覆盖前备份已保存 - \(backupURL.path)")
+            return backupURL
+        } catch {
+            print("❌ DatabaseStorage: 覆盖前备份失败 - \(error)")
+            return nil
+        }
+    }
+
     // MARK: - Version Management
 
     /// 从指定 URL 加载数据版本号

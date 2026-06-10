@@ -1022,7 +1022,9 @@ class ViewModel: ObservableObject {
         let session = self.session
 
         // 检查远程版本（database）
-        if let remoteVersion = DatabaseStorage.loadDataVersionFromDefault(),
+        let remoteVersion = DatabaseStorage.loadDataVersionFromDefault()
+
+        if let remoteVersion = remoteVersion,
            remoteVersion > session.currentCheckpointDataVersion {
             platformService.showConfirmAlert(
                 title: "存档文件可能在别处被修改过",
@@ -1032,6 +1034,25 @@ class ViewModel: ObservableObject {
                         self.saveToDefaultWithResultNotification(session: session)
                     } else {
                         self.showWarningAlert( message: "保存取消", info: "保存取消")
+                    }
+                }
+            )
+        } else if remoteVersion == nil && DatabaseStorage.databaseFileExists() {
+            // 存档文件存在但读不出版本号（损坏/未下载/schema 不兼容）。
+            // 此时内存数据可能是启动失败后的空库，静默保存会覆盖云端真实数据
+            platformService.showConfirmAlert(
+                title: "无法确认存档版本",
+                message: "存档文件存在但无法读取其版本号（文件可能损坏或尚未从 iCloud 下载完成）。继续保存会覆盖现有存档。\n\n继续前会自动将原存档备份到本地。是否继续保存？",
+                completion: { result in
+                    if result {
+                        if let backupURL = DatabaseStorage.backupExistingDatabaseFile() {
+                            print("✅ 原存档已备份到 \(backupURL.path)")
+                        } else {
+                            print("⚠️ 原存档备份失败（文件可能不可读），继续保存")
+                        }
+                        self.saveToDefaultWithResultNotification(session: session)
+                    } else {
+                        self.showWarningAlert(message: "保存取消", info: "保存取消")
                     }
                 }
             )

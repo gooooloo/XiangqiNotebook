@@ -28,6 +28,10 @@ internal class Database: ObservableObject {
     /// 当前活跃的引擎 key（PikafishService 启动时设置）
     var activeEngineKey: String?
 
+    /// 启动时存档文件存在但读取/解码失败（区别于"文件不存在"的全新安装）
+    /// 此时内存中是空库，保存前必须经用户确认，防止空库覆盖云端真实数据
+    private(set) var loadFailedAtStartup: Bool = false
+
     // MARK: - Initialization
     private init() {
         // 尝试加载数据库
@@ -37,7 +41,12 @@ internal class Database: ObservableObject {
         } else {
             // 创建空的数据库（包含起始局面）
             self.databaseData = DatabaseStorage.createEmptyDatabase()
-            print("⚠️ Database: 创建新数据库")
+            self.loadFailedAtStartup = DatabaseStorage.databaseFileExists()
+            if loadFailedAtStartup {
+                print("⚠️ Database: 存档文件存在但加载失败，已创建空库（保存前将要求确认）")
+            } else {
+                print("⚠️ Database: 创建新数据库")
+            }
         }
 
         // 加载所有引擎分数文件
