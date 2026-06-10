@@ -154,15 +154,55 @@ class ViewModel: ObservableObject {
         #if os(macOS)
         Database.shared.activeEngineKey = PikafishService.engineKey
 
-        // 10. App 退出时关闭引擎子进程，防止孤儿进程残留
+        // 10. App 退出时先自动保存脏数据，再关闭引擎子进程，防止孤儿进程残留
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
+            self?.autoSaveIfNeeded()
             self?.evaluationQueue?.cancelAll()
             self?.pikafishService?.stop()
         }
         #endif
+
+        #if os(iOS)
+        // 10. 进后台时自动保存脏数据（覆盖系统杀进程的场景）
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.autoSaveIfNeeded()
+        }
+        #endif
+    }
+
+    /// 退出/进后台时自动保存脏数据（无 UI 反馈，失败仅记录日志）
+    /// 与 saveToDefault 相同的安全护栏：远端版本更新或版本不可读时不静默覆盖，
+    /// 留给用户下次手动保存时走确认流程
+    private func autoSaveIfNeeded() {
+        let session = self.session
+        guard session.currentDataDirty else { return }
+
+        let remoteVersion = DatabaseStorage.loadDataVersionFromDefault()
+        if let remoteVersion = remoteVersion,
+           remoteVersion > session.currentCheckpointDataVersion {
+            print("⚠️ 自动保存跳过：远端版本更新，需用户手动解决冲突")
+            return
+        }
+        if remoteVersion == nil && DatabaseStorage.databaseFileExists() {
+            print("⚠️ 自动保存跳过：无法确认存档版本")
+            return
+        }
+
+        do {
+            try session.databaseView.save()
+            try session.databaseView.saveEngineScores()
+            try SessionStorage.saveSessionToDefault(session: sessionManager.mainSessionData)
+            session.setDataClean()
+            print("✅ 自动保存完成")
+        } catch {
+            print("❌ 自动保存失败：\(error)")
+        }
     }
     
     #if DEBUG
