@@ -358,4 +358,23 @@ struct DatabaseViewTests {
         #expect(view.containsFenId(2) == false)
         #expect(view.containsFenId(3) == false)
     }
+
+    @Test func testGetGamesInBookUnfiltered_DanglingGameId_DoesNotCrash() {
+        let database = createTestDatabase()
+        let view = DatabaseView.full(database: database)
+
+        // 棋书引用一个存在的棋局和一个已被删除（悬空）的棋局
+        let bookId = UUID()
+        let book = BookObject(id: bookId, name: "测试棋书")
+        let game = GameObject(id: UUID())
+        database.databaseData.gameObjects[game.id] = game
+        book.gameIds = [game.id, UUID()] // 第二个是悬空引用
+        database.databaseData.bookObjects[bookId] = book
+
+        // 修复前这里会因强制解包悬空 gameId 崩溃
+        let games = view.getGamesInBookUnfiltered(bookId)
+
+        #expect(games.count == 1)
+        #expect(games.first?.id == game.id)
+    }
 }

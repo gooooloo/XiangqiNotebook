@@ -334,7 +334,9 @@ final class DatabaseView {
     }
 
     func getGamesInBookUnfiltered(_ bookId: UUID) -> [GameObject] {
-        return database.databaseData.bookObjects[bookId]?.gameIds.map { database.databaseData.gameObjects[$0]! } ?? []
+        // compactMap 容忍悬空引用：棋局同时挂在多本棋书下时，deleteBook 会删除
+        // 棋局对象但不会清理其他棋书中的 gameIds
+        return database.databaseData.bookObjects[bookId]?.gameIds.compactMap { database.databaseData.gameObjects[$0] } ?? []
     }
 
     func getGamesInBookRecursivelyUnfiltered(bookId: UUID) -> [GameObject] {
