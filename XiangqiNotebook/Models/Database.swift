@@ -56,12 +56,15 @@ internal class Database: ObservableObject {
     // MARK: - Data Mutation
 
     /// 标记数据已修改
+    /// guard 与赋值必须在同一个主线程临界区内执行：
+    /// 若 guard 在调用方线程检查而赋值异步执行，同一 runloop 内的多次调用
+    /// 会全部通过 guard，导致 dataVersion 多次自增，破坏版本仲裁；
+    /// 且 mutation 后立即 save() 会因 isDirty 尚未置位而被跳过
     func markDirty() {
-        guard !isDirty else { return }
+        runOnMain {
+            guard !self.isDirty else { return }
 
-        invalidateRealGamesIndex()
-
-        DispatchQueue.main.async {
+            self.invalidateRealGamesIndex()
             self.isDirty = true
             self.databaseData.dataVersion += 1
             print("🔄 Database: 数据已标记为脏 (版本 \(self.databaseData.dataVersion))")
@@ -70,9 +73,18 @@ internal class Database: ObservableObject {
 
     /// 清除脏标记
     func markClean() {
-        DispatchQueue.main.async {
+        runOnMain {
             self.isDirty = false
             print("✅ Database: 数据已标记为干净")
+        }
+    }
+
+    /// 主线程同步执行；非主线程调用时异步派发到主线程
+    private func runOnMain(_ block: @escaping () -> Void) {
+        if Thread.isMainThread {
+            block()
+        } else {
+            DispatchQueue.main.async(execute: block)
         }
     }
 

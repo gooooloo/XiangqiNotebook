@@ -69,6 +69,27 @@ struct DatabaseTests {
         #expect(db.databaseData.dataVersion == initialVersion + 1)
     }
 
+    @Test @MainActor func testMarkDirty_TwiceInSameRunloop_OnlyIncrementsOnce() {
+        let db = createTestDatabase()
+        let initialVersion = db.databaseData.dataVersion
+
+        // 同一 runloop 内连续两次调用（中间无 yield），模拟一次走子触发
+        // ensureFenId + ensureMove 各调一次 markDirty 的真实场景
+        db.markDirty()
+        db.markDirty()
+
+        #expect(db.databaseData.dataVersion == initialVersion + 1)
+    }
+
+    @Test @MainActor func testMarkDirty_OnMainThread_TakesEffectImmediately() {
+        let db = createTestDatabase()
+
+        // mutation 后同一 runloop 内调用 save() 依赖 isDirty 立即置位
+        db.markDirty()
+
+        #expect(db.isDirty == true)
+    }
+
     // MARK: - Engine Score Tests
 
     @Test func testEngineScore_SetAndGet() {
