@@ -13,9 +13,12 @@ struct iPadContentView: View {
             .flatMap { $0 as? UIWindowScene }?.windows
             .first(where: { $0.isKeyWindow })?
             .rootViewController
-        _viewModel = StateObject(wrappedValue: ViewModel(
-            platformService: IOSPlatformService(presentingViewController: rootViewController)
-        ))
+        let platformService = IOSPlatformService(presentingViewController: rootViewController)
+        let viewModel = ViewModel(platformService: platformService)
+        // 不接线 viewModel 时 showAlert/showWarningAlert 全部 no-op，
+        // 练习模式的"棋谱结束/没有着法"等提示会无声消失
+        platformService.setViewModel(viewModel)
+        _viewModel = StateObject(wrappedValue: viewModel)
     }
     
     var body: some View {
@@ -124,6 +127,11 @@ struct iPadContentView: View {
         .sheet(isPresented: $viewModel.showingReviewListView) {
             ReviewListView(viewModel: viewModel)
                 .frame(minWidth: 400, minHeight: 300)
+        }
+        .alert(viewModel.globalAlertTitle, isPresented: $viewModel.showingGlobalAlert) {
+            Button("确定") { }
+        } message: {
+            Text(viewModel.globalAlertMessage)
         }
     }
 }

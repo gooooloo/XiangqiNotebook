@@ -3,11 +3,30 @@ import SwiftUI
 import UIKit
 
 class IOSPlatformService: PlatformService {
-    private weak var presentingViewController: UIViewController?
+    private weak var storedPresentingViewController: UIViewController?
     private weak var viewModel: ViewModel?
-    
+
     init(presentingViewController: UIViewController?) {
-        self.presentingViewController = presentingViewController
+        self.storedPresentingViewController = presentingViewController
+    }
+
+    /// 呈现弹窗用的 view controller。
+    /// init 注入的实例创建于 app 启动早期，scene 往往尚未 foregroundActive，
+    /// 注入值常为 nil；这里每次呈现时实时解析，并下钻到最顶层的 presented VC，
+    /// 避免"已在 present 其他控制器"导致的呈现失败
+    private var presentingViewController: UIViewController? {
+        let root = storedPresentingViewController ?? UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .filter { $0.activationState == .foregroundActive }
+            .flatMap { $0.windows }
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController
+
+        guard var top = root else { return nil }
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+        return top
     }
     
     func setViewModel(_ viewModel: ViewModel) {
