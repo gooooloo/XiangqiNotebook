@@ -48,6 +48,11 @@ class IO {
             return nil
         }
         
+        // 云库限流响应：无论是否静默都抛错，让调用方退避
+        if responseText.contains("rate limit") {
+            throw IOError.quotaExceeded
+        }
+
         if responseText.contains("unknown") {
             triggerQueueScore(fen)
         }

@@ -105,6 +105,12 @@ class ViewModel: ObservableObject {
     private(set) var evaluationQueue: EvaluationQueue?
     #endif
 
+    // 静默云库查分：在飞去重与退避状态（仅主线程访问）
+    private var silentQueryTask: Task<Void, Never>?
+    private var silentQueryFenId: Int?
+    private var silentQueryBackoffUntil: Date = .distantPast
+    private var silentQueryFailureCount = 0
+
     // 初始化方法
     init(platformService: PlatformService) {
         // 1. 加载 SessionData
@@ -1443,18 +1449,50 @@ class ViewModel: ObservableObject {
         guard let fen = session.getFenForId(fenId) else {return}
         if session.getScoreByFenId(fenId) != nil { return }
 
+        // 退避期内不发起新请求（限流或网络故障后指数退避）
+        guard Date() >= silentQueryBackoffUntil else { return }
+
+        // 在飞去重：同一 fenId 已在查询则跳过；
+        // 已导航到别的局面则取消旧请求，任何时刻至多一个在飞请求，
+        // 避免按住方向键扫过未评分线路时发出几十个并发请求
+        if silentQueryFenId == fenId, silentQueryTask != nil { return }
+        silentQueryTask?.cancel()
+        silentQueryFenId = fenId
+
         let yunKuFen = String(fen.split(separator: " - ")[0])
-        
-        Task.detached {
+
+        silentQueryTask = Task { [weak self] in
             do {
-                if let score = try await IO.queryFenScore(yunKuFen, silentMode: true) {
-                    await MainActor.run {
+                let score = try await IO.queryFenScore(yunKuFen, silentMode: true)
+                await MainActor.run {
+                    guard let self else { return }
+                    if let score {
                         self.updateFenScore(fenId, score: score)
                     }
+                    self.silentQueryFailureCount = 0
+                    self.clearSilentQueryTask(for: fenId)
                 }
             } catch {
-                // 在后台默默地跑，所以忽略错误
+                let cancelled = error is CancellationError || (error as? URLError)?.code == .cancelled
+                await MainActor.run {
+                    guard let self else { return }
+                    if !cancelled {
+                        // 限流或网络故障：指数退避（5s、10s、20s…上限 60s）
+                        self.silentQueryFailureCount += 1
+                        let delay = min(60.0, 5.0 * pow(2.0, Double(self.silentQueryFailureCount - 1)))
+                        self.silentQueryBackoffUntil = Date().addingTimeInterval(delay)
+                    }
+                    self.clearSilentQueryTask(for: fenId)
+                }
             }
+        }
+    }
+
+    /// 清理在飞记录（仅当仍指向本次请求时，避免误清后续请求的记录）
+    private func clearSilentQueryTask(for fenId: Int) {
+        if silentQueryFenId == fenId {
+            silentQueryTask = nil
+            silentQueryFenId = nil
         }
     }
     
