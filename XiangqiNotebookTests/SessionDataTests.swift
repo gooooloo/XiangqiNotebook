@@ -154,7 +154,7 @@ struct SessionDataTests {
 
     @Test func testCacheFields_NotEncoded() throws {
         let sessionData = SessionData()
-        sessionData.allGamePaths = [[1, 2], [1, 3]]
+        sessionData.totalGamePathsCount = 2
         sessionData.fenIdToGamePathCount = [1: 2, 2: 1]
         sessionData.currentPathIndex = 1
 
@@ -162,7 +162,7 @@ struct SessionDataTests {
         let decoded = try JSONDecoder().decode(SessionData.self, from: data)
 
         // 缓存字段不应该被编码，解码后应为 nil
-        #expect(decoded.allGamePaths == nil)
+        #expect(decoded.totalGamePathsCount == nil)
         #expect(decoded.fenIdToGamePathCount == nil)
         #expect(decoded.currentPathIndex == nil)
     }

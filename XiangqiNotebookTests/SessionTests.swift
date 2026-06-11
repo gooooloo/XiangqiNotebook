@@ -304,9 +304,9 @@ struct SessionTests {
         #expect(move == nil)
     }
 
-    // MARK: - GenerateAllGamePaths Tests
+    // MARK: - 路径枚举 Tests（计数枚举，issue #162）
 
-    @Test func testGenerateAllGamePaths_FullView() {
+    @Test func testPathEnumeration_FullView() {
         let session = createTestSession()
 
         // 设置起始局面为 fenId 1，锁定步骤为 0
@@ -314,19 +314,18 @@ struct SessionTests {
         session.sessionData.currentGameStep = 0
         session.sessionData.lockedStep = 0
 
-        let (paths, fenIdToPathCount) = session.generateAllGamePaths()
+        let enumerator = session.makePathEnumerator()
 
-        // 在完整视图中，应该有 2 条路径：
-        // [1, 2, 4] 和 [1, 3, 5]
-        #expect(paths.count == 2)
-        #expect(paths.contains([1, 2, 4]))
-        #expect(paths.contains([1, 3, 5]))
+        // 在完整视图中，应该有 2 条路径：[1, 2, 4] 和 [1, 3, 5]
+        #expect(enumerator.totalCount == 2)
+        #expect(enumerator.path(at: 0) == [1, 2, 4])
+        #expect(enumerator.path(at: 1) == [1, 3, 5])
 
         // fenId 1 应该有 2 条路径
-        #expect(fenIdToPathCount[1] == 2)
+        #expect(enumerator.pathCountMap()[1] == 2)
     }
 
-    @Test func testGenerateAllGamePaths_WithRedOpeningFilter() {
+    @Test func testPathEnumeration_WithRedOpeningFilter() {
         // 创建带红方开局库过滤器的 Session
         let session = createTestSessionWithFilter(Session.filterRedOpeningOnly)
 
@@ -335,15 +334,34 @@ struct SessionTests {
         session.sessionData.currentGameStep = 0
         session.sessionData.lockedStep = 0
 
-        let (paths, fenIdToPathCount) = session.generateAllGamePaths()
+        let enumerator = session.makePathEnumerator()
 
         // 在红方开局库视图中，只有一条路径：[1, 2, 4]
         // （因为 fenId 3 和 5 不在红方开局库中）
-        #expect(paths.count == 1)
-        #expect(paths.first == [1, 2, 4])
+        #expect(enumerator.totalCount == 1)
+        #expect(enumerator.path(at: 0) == [1, 2, 4])
 
         // fenId 1 应该有 1 条路径
-        #expect(fenIdToPathCount[1] == 1)
+        #expect(enumerator.pathCountMap()[1] == 1)
+    }
+
+    @Test func testGoToNextPath_CyclesThroughPaths() {
+        let session = createTestSession()
+        session.sessionData.currentGame2 = [1, 2, 4]
+        session.sessionData.currentGameStep = 0
+        session.sessionData.lockedStep = 0
+
+        session.goToNextPath()
+        #expect(session.sessionData.currentGame2 == [1, 3, 5])
+        #expect(session.sessionData.currentPathIndex == 1)
+
+        session.goToNextPath()  // 环回第一条
+        #expect(session.sessionData.currentGame2 == [1, 2, 4])
+        #expect(session.sessionData.currentPathIndex == 0)
+
+        session.goToPreviousPath()
+        #expect(session.sessionData.currentGame2 == [1, 3, 5])
+        #expect(session.sessionData.currentPathIndex == 1)
     }
 
     // MARK: - Edge Cases

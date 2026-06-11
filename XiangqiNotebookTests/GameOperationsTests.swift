@@ -163,70 +163,94 @@ struct GameOperationsTests {
         #expect(step == 2)
     }
 
-    // MARK: - makeRandomGameDFSWithRandomizer Tests
+    // MARK: - GamePathEnumerator Tests（计数枚举代替全路径物化，issue #162）
 
-    @Test func testMakeRandomGameDFS_AlwaysPickFirst() {
+    @Test func testPathEnumerator_TotalCountAndLexicographicOrder() {
         let database = createTestDatabase()
         let view = DatabaseView.full(database: database)
 
-        // 始终选择第一条路径
-        let result = GameOperations.makeRandomGameDFSWithRandomizer(
-            currentFenId: 1,
-            databaseView: view,
-            randomizer: { _ in 0 }
-        )
+        // 测试库：两条路径 [1,2,4] 与 [1,3,5]，子节点按 fenId 升序枚举
+        let enumerator = GamePathEnumerator(databaseView: view, prefix: [1])
 
-        #expect(result != nil)
-        // 两条路径：[1,2,4] 和 [1,3,5]，DFS 中第一条应该是 [1,2,4]
-        // result 去掉起始 fenId
-        #expect(result!.result.first == 2 || result!.result.first == 3)
-        #expect(result!.totalCount == 2)
+        #expect(enumerator.totalCount == 2)
+        #expect(enumerator.path(at: 0) == [1, 2, 4])
+        #expect(enumerator.path(at: 1) == [1, 3, 5])
+        #expect(enumerator.path(at: 2) == nil)   // 越界
+        #expect(enumerator.path(at: -1) == nil)
     }
 
-    @Test func testMakeRandomGameDFS_AlwaysPickLast() {
+    @Test func testPathEnumerator_IndexOfPath_RoundTrip() {
+        let database = createTestDatabase()
+        let view = DatabaseView.full(database: database)
+        let enumerator = GamePathEnumerator(databaseView: view, prefix: [1])
+
+        for i in 0..<enumerator.totalCount {
+            let path = enumerator.path(at: i)!
+            #expect(enumerator.index(of: path) == i)
+        }
+        // 非完整路径：返回以它为前缀的第一条路径的序号
+        #expect(enumerator.index(of: [1, 3]) == 1)
+        #expect(enumerator.index(of: [1]) == 0)
+        // 不以 prefix 开头或子节点不存在
+        #expect(enumerator.index(of: [2]) == nil)
+        #expect(enumerator.index(of: [1, 9]) == nil)
+    }
+
+    @Test func testPathEnumerator_LeafStart_SinglePath() {
         let database = createTestDatabase()
         let view = DatabaseView.full(database: database)
 
-        // 始终选择最后一条路径
-        let result = GameOperations.makeRandomGameDFSWithRandomizer(
-            currentFenId: 1,
-            databaseView: view,
-            randomizer: { count in count - 1 }
-        )
-
-        #expect(result != nil)
-        #expect(result!.totalCount == 2)
+        // fenId 4 是叶子：唯一路径就是前缀本身
+        let enumerator = GamePathEnumerator(databaseView: view, prefix: [4])
+        #expect(enumerator.totalCount == 1)
+        #expect(enumerator.path(at: 0) == [4])
     }
 
-    @Test func testMakeRandomGameDFS_NoNextMoves_ReturnsNil() {
+    @Test func testPathEnumerator_StartNotInScope_ZeroPaths() {
         let database = createTestDatabase()
-        let view = DatabaseView.full(database: database)
-
-        // fenId 4 没有 next moves
-        let result = GameOperations.makeRandomGameDFSWithRandomizer(
-            currentFenId: 4,
-            databaseView: view,
-            randomizer: { _ in 0 }
-        )
-
-        // 叶节点：只有一条路径（空路径），result 为空数组
-        #expect(result != nil)
-        #expect(result!.result.isEmpty)
-    }
-
-    @Test func testMakeRandomGameDFS_FenIdNotInScope() {
-        let database = createTestDatabase()
-        // 使用过滤视图，fenId 1 不在 scope 中
+        // 过滤视图：fenId 1 不在红方开局库中
         let view = DatabaseView.redOpening(database: database)
 
-        let result = GameOperations.makeRandomGameDFSWithRandomizer(
-            currentFenId: 1,
-            databaseView: view,
-            randomizer: { _ in 0 }
-        )
+        let enumerator = GamePathEnumerator(databaseView: view, prefix: [1])
+        #expect(enumerator.totalCount == 0)
+        #expect(enumerator.path(at: 0) == nil)
+    }
 
-        // fenId 1 不在红方开局库中，应该返回 nil
-        #expect(result == nil)
+    @Test func testPathEnumerator_PathCountMap_MatchesOldSemantics() {
+        let database = createTestDatabase()
+        let view = DatabaseView.full(database: database)
+        let enumerator = GamePathEnumerator(databaseView: view, prefix: [1])
+
+        let map = enumerator.pathCountMap()
+        #expect(map[1] == 2)  // 起点 = 总路径数
+        #expect(map[2] == 1)
+        #expect(map[3] == 1)
+        #expect(map[4] == 1)  // 叶子计 1
+        #expect(map[5] == 1)
+    }
+
+    @Test func testPathEnumerator_CycleSafety() {
+        // 构造 1 → 2 → 1 的环：不应死循环，计数有限
+        let data = DatabaseData()
+        let fen1 = FenObject(fen: "cycle_fen_1", fenId: 1)
+        let fen2 = FenObject(fen: "cycle_fen_2", fenId: 2)
+        data.fenObjects2[1] = fen1
+        data.fenObjects2[2] = fen2
+        data.fenToId["cycle_fen_1"] = 1
+        data.fenToId["cycle_fen_2"] = 2
+        let m12 = Move(sourceFenId: 1, targetFenId: 2)
+        let m21 = Move(sourceFenId: 2, targetFenId: 1)
+        data.moveObjects[1] = m12
+        data.moveObjects[2] = m21
+        data.moveToId[[1, 2]] = 1
+        data.moveToId[[2, 1]] = 2
+        fen1.moves.append(m12)
+        fen2.moves.append(m21)
+        let view = DatabaseView.full(database: Database(testDatabaseData: data))
+
+        let enumerator = GamePathEnumerator(databaseView: view, prefix: [1])
+        #expect(enumerator.totalCount == 1)       // 1 → 2（2 的唯一子节点在环上，视为叶）
+        #expect(enumerator.path(at: 0) == [1, 2]) // 走子终止于环入口
     }
 
     // MARK: - nextVariantIndex Tests

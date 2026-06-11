@@ -31,7 +31,7 @@ class SessionData: Codable {
     }
 
     // 缓存数据 - 不编码
-    var allGamePaths: [[Int]]? = nil
+    var totalGamePathsCount: Int? = nil
     var fenIdToGamePathCount: [Int: Int]? = nil
     var currentPathIndex: Int? = nil
 

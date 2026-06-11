@@ -20,6 +20,11 @@ class Session: ObservableObject {
     var sessionDataDirty: Bool = false
     var engineScoreDirty: Bool = false
 
+    // MARK: - 路径枚举器缓存（issue #162：计数枚举代替全路径物化）
+    /// 与 sessionData.fenIdToGamePathCount/totalGamePathsCount 同生命周期，
+    /// clearAllGamePaths 时一并失效
+    var pathEnumerator: GamePathEnumerator?
+
     // MARK: - 实战列表缓存
     private var _cachedRealGames: [GameObject] = []
     private var _cachedHasMoreRealGames: Bool = false
@@ -845,7 +850,7 @@ class Session: ObservableObject {
     }
     
     var totalPathsCount: Int? {
-        sessionData.allGamePaths?.count
+        sessionData.totalGamePathsCount
     }
 
     var totalPathsCountFromCurrentFen: Int? {
@@ -1240,13 +1245,14 @@ extension Session {
 
     // 当前局面不在视图范围内（如对应开局库为空）时没有任何可用路径，
     // 直接返回而非在空范围上 Int.random 崩溃
-    guard let allGamePaths = sessionData.allGamePaths, !allGamePaths.isEmpty else {
+    guard let enumerator = pathEnumerator,
+          let totalPathsCount = sessionData.totalGamePathsCount,
+          totalPathsCount > 0 else {
       return nil
     }
 
-    let totalPathsCount = allGamePaths.count
     let randomIndex = Int.random(in: 0..<totalPathsCount)
-    let selectedPath = allGamePaths[randomIndex]
+    guard let selectedPath = enumerator.path(at: randomIndex) else { return nil }
 
     self.sessionData.currentPathIndex = randomIndex
     self.sessionData.currentGame2 = selectedPath
@@ -1675,49 +1681,11 @@ extension Session {
         notifyDataChanged(markDatabaseDirty: true)
     }
     
-    func generateAllGamePaths() -> ([[Int]], [Int: Int]) {
-        var allDFSPaths: [[Int]] = []
-        var fenIdToGamePathCount: [Int: Int] = [:]
-
-        func dfs(_ dfsPath: [Int]) {
-            var isLeaf = true
-            let fensInGame = Set(dfsPath)
-
-            guard let lastFenId = dfsPath.last else { return }
-            guard databaseView.containsFenId(lastFenId) else { return }
-            let moves = databaseView.moves(from: lastFenId)
-
-            var pathCount = 0
-            for move in moves {
-                if move.targetFenId == nil { continue }
-                if fensInGame.contains(move.targetFenId!) { continue }
-                if sessionData.gameStepLimitation != nil && dfsPath.count > sessionData.gameStepLimitation! { continue }
-
-                isLeaf = false
-                dfs(dfsPath + [move.targetFenId!])
-
-                pathCount += fenIdToGamePathCount[move.targetFenId!]!
-            }
-
-            if isLeaf {
-                allDFSPaths.append(dfsPath)
-            }
-
-            if isLeaf {
-                fenIdToGamePathCount[lastFenId] = 1
-            } else {
-                fenIdToGamePathCount[lastFenId] = pathCount
-            }
-        }
-
+    /// 创建以「锁定步之前的路径」为前缀的路径枚举器。
+    /// 步数限制已由 databaseView 的范围过滤承担（rebuildDatabaseView 应用 withStepLimit）
+    func makePathEnumerator() -> GamePathEnumerator {
         let initialPath = Array(sessionData.currentGame2[0...(sessionData.lockedStep ?? 0)])
-        for fenId in initialPath {
-            fenIdToGamePathCount[fenId] = 1
-        }
-
-        dfs(initialPath)
-
-        return (allDFSPaths, fenIdToGamePathCount)
+        return GamePathEnumerator(databaseView: databaseView, prefix: initialPath)
     }
 
     func searchCurrentMove() -> [Move] {
@@ -1749,37 +1717,29 @@ extension Session {
 // MARK: - Path Navigation Operations (路径导航操作)
 extension Session {
     func goToPreviousPath() {
-        updateAllGamePaths()
-
-        guard let allGamePaths = sessionData.allGamePaths, !allGamePaths.isEmpty, let currentPathIndex = sessionData.currentPathIndex else { return }
-        
-        // 计算前一个路径的索引
-        let previousIndex = (currentPathIndex - 1 + allGamePaths.count) % allGamePaths.count
-        
-        // 如果当前路径不是第一个，则跳转到前一个路径
-        if previousIndex != currentPathIndex {
-            self.sessionData.currentPathIndex = previousIndex
-            sessionData.currentGame2 = allGamePaths[previousIndex]
-            sessionData.currentGameStep = sessionData.lockedStep ?? 0
-            notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
-        }
+        goToPath(offset: -1)
     }
-    
+
     func goToNextPath() {
+        goToPath(offset: 1)
+    }
+
+    /// 按序号偏移跳转路径（环形）
+    private func goToPath(offset: Int) {
         updateAllGamePaths()
 
-        guard let allGamePaths = sessionData.allGamePaths, !allGamePaths.isEmpty, let currentPathIndex = sessionData.currentPathIndex else { return }
-        
-        // 计算下一个路径的索引
-        let nextIndex = (currentPathIndex + 1) % allGamePaths.count
-        
-        // 如果当前路径不是最后一个，则跳转到下一个路径
-        if nextIndex != currentPathIndex {
-            self.sessionData.currentPathIndex = nextIndex
-            sessionData.currentGame2 = allGamePaths[nextIndex]
-            sessionData.currentGameStep = sessionData.lockedStep ?? 0
-            notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
-        }
+        guard let enumerator = pathEnumerator,
+              let total = sessionData.totalGamePathsCount, total > 0,
+              let currentPathIndex = sessionData.currentPathIndex else { return }
+
+        let newIndex = ((currentPathIndex + offset) % total + total) % total
+        guard newIndex != currentPathIndex,
+              let newPath = enumerator.path(at: newIndex) else { return }
+
+        self.sessionData.currentPathIndex = newIndex
+        sessionData.currentGame2 = newPath
+        sessionData.currentGameStep = sessionData.lockedStep ?? 0
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
     }
 }
 
@@ -2227,7 +2187,8 @@ extension Session {
 // MARK: - 清除所有路径缓存
 extension Session {
     private func clearAllGamePaths() {
-        sessionData.allGamePaths = nil
+        pathEnumerator = nil
+        sessionData.totalGamePathsCount = nil
         sessionData.fenIdToGamePathCount = nil
         sessionData.currentPathIndex = nil
     }
@@ -2236,21 +2197,16 @@ extension Session {
 // MARK: - 更新所有路径缓存
 extension Session {
     func updateAllGamePaths() {
-        if sessionData.allGamePaths == nil {
+        if pathEnumerator == nil || sessionData.totalGamePathsCount == nil {
             sessionData.currentPathIndex = nil
-            (sessionData.allGamePaths, sessionData.fenIdToGamePathCount) = generateAllGamePaths()
+            let enumerator = makePathEnumerator()
+            pathEnumerator = enumerator
+            sessionData.totalGamePathsCount = enumerator.totalCount
+            sessionData.fenIdToGamePathCount = enumerator.pathCountMap()
         }
         if sessionData.currentPathIndex == nil {
-            if let allPaths = sessionData.allGamePaths {
-                let currentPath = sessionData.currentGame2
-                for (index, path) in allPaths.enumerated() {
-                    if path == currentPath {
-                        sessionData.currentPathIndex = index
-                        return
-                    }
-                }
-            }
-            sessionData.currentPathIndex = 0
+            // 当前路径（或以它为前缀的第一条路径）的序号；找不到则归 0
+            sessionData.currentPathIndex = pathEnumerator?.index(of: sessionData.currentGame2) ?? 0
         }
     }
 } 
