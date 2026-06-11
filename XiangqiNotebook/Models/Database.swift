@@ -124,6 +124,8 @@ internal class Database: ObservableObject {
         DispatchQueue.main.async {
             self.databaseData = newData
             self.isDirty = false
+            // 实战反查索引基于旧数据构建，必须随数据整体替换而失效
+            self.invalidateRealGamesIndex()
             print("✅ Database: 数据已重新加载")
         }
     }
@@ -245,13 +247,15 @@ internal class Database: ObservableObject {
     /// - Parameter database: 要恢复的数据库数据
     func restoreFromBackup(_ database: DatabaseData) {
         // 必须在主线程同步执行，确保数据立即更新
-        // 注意：索引已在 DatabaseData.init(from:) 中自动重建
+        // 注意：fenToId/moveToId 索引已在 DatabaseData.init(from:) 中自动重建，
+        // 但实战反查索引（realGamesByFenId）属于 Database 层，需在此显式失效
         if Thread.isMainThread {
             let oldVersion = self.databaseData.dataVersion
 
             self.objectWillChange.send()  // 手动触发通知
             self.databaseData = database
             self.isDirty = true  // 标记为脏，需要保存
+            self.invalidateRealGamesIndex()
             print("✅ Database: 数据已从备份恢复 (版本 \(oldVersion) → \(database.dataVersion))")
         } else {
             DispatchQueue.main.sync {
@@ -260,6 +264,7 @@ internal class Database: ObservableObject {
                 self.objectWillChange.send()  // 手动触发通知
                 self.databaseData = database
                 self.isDirty = true
+                self.invalidateRealGamesIndex()
                 print("✅ Database: 数据已从备份恢复 (版本 \(oldVersion) → \(database.dataVersion))")
             }
         }
