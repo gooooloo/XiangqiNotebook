@@ -21,6 +21,16 @@
 
 **ARM64 注意事项**: 在 Apple Silicon Mac 上运行测试时，需用 `arch -arm64 /bin/bash -c '...'` 包裹命令以确保正确的架构。
 
+### Git Hooks（本地检查）
+
+仓库用版本化的 `.githooks/` 目录管理 git hooks，新 clone 后需执行一次：
+
+```bash
+git config core.hooksPath .githooks
+```
+
+- **pre-push**: 运行 iOS Simulator 构建检查，防止 macOS-only API 漏进共享代码（macOS 端的构建与测试查不出此类问题，存量案例见 issue #171）。跳过单次检查用 `git push --no-verify`。
+
 ## 架构概述
 
 ### MVVM 模式与严格分层

@@ -1,0 +1,28 @@
+#!/bin/sh
+# pre-push: iOS 构建检查
+#
+# 防止 macOS-only API 漏进共享代码——macOS 端的日常构建与测试查不出
+# 这类问题（存量案例见 issue #171）。模拟器构建用 ad-hoc 签名，无需证书。
+#
+# 跳过单次检查：git push --no-verify
+# 或者：SKIP_IOS_BUILD_CHECK=1 git push
+
+[ -n "$SKIP_IOS_BUILD_CHECK" ] && exit 0
+
+echo "[pre-push] iOS 构建检查中（跳过：git push --no-verify）..."
+
+LOG=$(mktemp -t ios_prepush_build)
+if xcodebuild build \
+    -project XiangqiNotebook.xcodeproj \
+    -scheme XiangqiNotebook \
+    -destination "generic/platform=iOS Simulator" \
+    CODE_SIGN_IDENTITY=- > "$LOG" 2>&1; then
+    echo "[pre-push] ✅ iOS 构建通过"
+    rm -f "$LOG"
+    exit 0
+else
+    echo "[pre-push] ❌ iOS 构建失败，已阻止 push："
+    grep -E "error:" "$LOG" | head -20
+    echo "[pre-push] 完整日志：$LOG"
+    exit 1
+fi
