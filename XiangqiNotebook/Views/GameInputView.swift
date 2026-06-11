@@ -68,7 +68,7 @@ struct GameInputView: View {
         let game = GameObject(id: UUID())
         game.name = gameName.isEmpty ? nil : gameName
         game.creationDate = creationDate
-        game.gameDate = gameDate
+        game.gameDate = hasGameDate ? gameDate : nil
         game.redPlayerName = redPlayerName
         game.blackPlayerName = blackPlayerName
         game.iAmRed = iAmRed
