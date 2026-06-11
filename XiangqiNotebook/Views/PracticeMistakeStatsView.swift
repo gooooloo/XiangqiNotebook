@@ -9,7 +9,7 @@ struct PracticeMistakeStatsView: View {
     @State private var showingResetConfirmation = false
 
     /// 触发重新计算的依赖：dataChanged 翻转时整个视图刷新
-    private var dataVersion: Bool { viewModel.session.dataChanged }
+    private var dataVersion: Bool { viewModel.dataChanged }
 
     private struct Row: Identifiable {
         let id: Int             // fenId
@@ -21,14 +21,13 @@ struct PracticeMistakeStatsView: View {
     }
 
     private var rows: [Row] {
-        let view = viewModel.session.databaseView
-        let mistakes = view.practiceMistakes
+        let mistakes = viewModel.practiceMistakesInScope
         return mistakes.compactMap { (fenId, records) -> Row? in
             guard !records.isEmpty else { return nil }
             let total = records.reduce(0) { $0 + $1.count }
             let last = records.map { $0.lastWrongAt }.max() ?? Date.distantPast
             let sorted = records.sorted { $0.count > $1.count }
-            let fen = view.getFenObject(fenId)?.fen ?? "(unknown fen)"
+            let fen = viewModel.fenString(for: fenId) ?? "(unknown fen)"
             return Row(id: fenId, fenId: fenId, totalCount: total,
                        lastWrongAt: last, mistakes: sorted, fen: fen)
         }
@@ -58,7 +57,7 @@ struct PracticeMistakeStatsView: View {
         .frame(minWidth: 540, minHeight: 400)
         .alert("重置练习错误统计？", isPresented: $showingResetConfirmation) {
             Button("取消", role: .cancel) {}
-            Button("重置", role: .destructive) { viewModel.session.databaseView.resetPracticeMistakes(); viewModel.session.dataChanged.toggle() }
+            Button("重置", role: .destructive) { viewModel.resetPracticeMistakes() }
         } message: {
             Text("此操作将清空所有练习错误记录，且无法撤销。")
         }
@@ -79,7 +78,7 @@ struct PracticeMistakeStatsView: View {
         }
         .alert("重置练习错误统计？", isPresented: $showingResetConfirmation) {
             Button("取消", role: .cancel) {}
-            Button("重置", role: .destructive) { viewModel.session.databaseView.resetPracticeMistakes(); viewModel.session.dataChanged.toggle() }
+            Button("重置", role: .destructive) { viewModel.resetPracticeMistakes() }
         } message: {
             Text("此操作将清空所有练习错误记录，且无法撤销。")
         }

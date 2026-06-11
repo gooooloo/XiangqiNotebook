@@ -34,9 +34,82 @@ extension PlatformService {
 class ViewModel: ObservableObject {
     @Published private(set) var sessionManager: SessionManager
 
-    // 计算属性：向 Views 暴露当前活跃的 Session（向后兼容）
-    var session: Session {
+    // 当前活跃的 Session。private 以维持分层：Views 只能经 ViewModel 的转发接口
+    // 访问数据（issue #164）；测试经 sessionManager.currentSession 访问
+    private var session: Session {
         sessionManager.currentSession
+    }
+
+    // MARK: - Session 数据转发接口（供 Views 使用）
+
+    /// 数据变更指示器（视图用作重新计算依赖）
+    var dataChanged: Bool { session.dataChanged }
+
+    /// 当前筛选范围内的练习走错统计
+    var practiceMistakesInScope: [Int: [PracticeMistakeRecord]] {
+        session.databaseView.practiceMistakes
+    }
+
+    /// 按 fenId 取局面 FEN（当前范围内；范围外返回 nil）
+    func fenString(for fenId: Int) -> String? {
+        session.databaseView.getFenObject(fenId)?.fen
+    }
+
+    /// 清空练习走错统计
+    func resetPracticeMistakes() {
+        session.databaseView.resetPracticeMistakes()
+        session.dataChanged.toggle()
+    }
+
+    /// 棋局浏览器 UI 状态（选中棋书/棋局、展开集合），写入时标记会话脏
+    var gameBrowserSelectedBookId: UUID? {
+        get { session.sessionData.gameBrowserSelectedBookId }
+        set {
+            session.sessionData.gameBrowserSelectedBookId = newValue
+            session.sessionDataDirty = true
+        }
+    }
+
+    var gameBrowserSelectedGameId: UUID? {
+        get { session.sessionData.gameBrowserSelectedGameId }
+        set {
+            session.sessionData.gameBrowserSelectedGameId = newValue
+            session.sessionDataDirty = true
+        }
+    }
+
+    var gameBrowserExpandedBookIds: Set<UUID>? {
+        get { session.sessionData.gameBrowserExpandedBookIds }
+        set {
+            session.sessionData.gameBrowserExpandedBookIds = newValue
+            session.sessionDataDirty = true
+        }
+    }
+
+    // MARK: - 课程视频关联转发（维持 Views → ViewModel → Storage 分层）
+
+    func courseVideoPath(for gameId: UUID) -> String? {
+        CourseVideoStorage.shared.videoPath(for: gameId)
+    }
+
+    func setCourseVideoPath(_ path: String, for gameId: UUID) {
+        CourseVideoStorage.shared.setVideoPath(path, for: gameId)
+    }
+
+    func removeCourseVideoPath(for gameId: UUID) {
+        CourseVideoStorage.shared.removeVideoPath(for: gameId)
+    }
+
+    func courseVideoTimestamp(for gameId: UUID, fenId: Int) -> String? {
+        CourseVideoStorage.shared.timestamp(for: gameId, fenId: fenId)
+    }
+
+    func setCourseVideoTimestamp(_ value: String, for gameId: UUID, fenId: Int) {
+        CourseVideoStorage.shared.setTimestamp(value, for: gameId, fenId: fenId)
+    }
+
+    func removeCourseVideoTimestamp(for gameId: UUID, fenId: Int) {
+        CourseVideoStorage.shared.removeTimestamp(for: gameId, fenId: fenId)
     }
 
     // 棋盘配置

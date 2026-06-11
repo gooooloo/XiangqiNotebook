@@ -59,7 +59,7 @@ struct CommentView: View {
                                 .cornerRadius(4)
                                 #if os(macOS)
                                 .contextMenu {
-                                    CourseVideoContextMenu(gameId: game.id, currentFenId: viewModel.currentFenId)
+                                    CourseVideoContextMenu(viewModel: viewModel, gameId: game.id, currentFenId: viewModel.currentFenId)
                                 }
                                 #endif
                         }
@@ -98,31 +98,34 @@ struct CommentView: View {
 #if os(macOS)
 import AppKit
 
-/// 课程项目的右键菜单：关联/显示/更换/清除视频文件，时间戳管理
+/// 课程项目的右键菜单：关联/显示/更换/清除视频文件，时间戳管理。
+/// 数据操作经 ViewModel 转发（不直接触碰 Storage 层）；面板与弹窗是 macOS 专属 UI，留在视图内
 struct CourseVideoContextMenu: View {
+    @ObservedObject var viewModel: ViewModel
     let gameId: UUID
     let currentFenId: Int
     @State private var hasVideo: Bool
 
-    init(gameId: UUID, currentFenId: Int) {
+    init(viewModel: ViewModel, gameId: UUID, currentFenId: Int) {
+        self.viewModel = viewModel
         self.gameId = gameId
         self.currentFenId = currentFenId
-        self._hasVideo = State(initialValue: CourseVideoStorage.shared.videoPath(for: gameId) != nil)
+        self._hasVideo = State(initialValue: viewModel.courseVideoPath(for: gameId) != nil)
     }
 
     private var currentTimestamp: String? {
-        CourseVideoStorage.shared.timestamp(for: gameId, fenId: currentFenId)
+        viewModel.courseVideoTimestamp(for: gameId, fenId: currentFenId)
     }
 
     var body: some View {
         if hasVideo {
             Button("在 Finder 中显示") {
-                if let path = CourseVideoStorage.shared.videoPath(for: gameId) {
+                if let path = viewModel.courseVideoPath(for: gameId) {
                     let url = URL(fileURLWithPath: path)
                     if FileManager.default.fileExists(atPath: path) {
                         NSWorkspace.shared.activateFileViewerSelecting([url])
                     } else {
-                        CourseVideoStorage.shared.removeVideoPath(for: gameId)
+                        viewModel.removeCourseVideoPath(for: gameId)
                         hasVideo = false
                     }
                 }
@@ -131,7 +134,7 @@ struct CourseVideoContextMenu: View {
                 selectVideoFile()
             }
             Button("清除关联") {
-                CourseVideoStorage.shared.removeVideoPath(for: gameId)
+                viewModel.removeCourseVideoPath(for: gameId)
                 hasVideo = false
             }
             Divider()
@@ -140,7 +143,7 @@ struct CourseVideoContextMenu: View {
                     showTimestampAlert(existing: ts)
                 }
                 Button("清除时间戳") {
-                    CourseVideoStorage.shared.removeTimestamp(for: gameId, fenId: currentFenId)
+                    viewModel.removeCourseVideoTimestamp(for: gameId, fenId: currentFenId)
                 }
             } else {
                 Button("设置时间戳") {
@@ -160,7 +163,7 @@ struct CourseVideoContextMenu: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         if panel.runModal() == .OK, let url = panel.url {
-            CourseVideoStorage.shared.setVideoPath(url.path, for: gameId)
+            viewModel.setCourseVideoPath(url.path, for: gameId)
             hasVideo = true
         }
     }
@@ -179,7 +182,7 @@ struct CourseVideoContextMenu: View {
         if alert.runModal() == .alertFirstButtonReturn {
             let value = textField.stringValue.trimmingCharacters(in: .whitespaces)
             if !value.isEmpty {
-                CourseVideoStorage.shared.setTimestamp(value, for: gameId, fenId: currentFenId)
+                viewModel.setCourseVideoTimestamp(value, for: gameId, fenId: currentFenId)
             }
         }
     }

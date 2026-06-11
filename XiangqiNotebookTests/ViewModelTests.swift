@@ -260,12 +260,12 @@ struct ViewModelTests {
         let (vm, _) = createViewModel(database: database)
 
         // 先选棋书筛选
-        vm.session.sessionData.specificBookId = bookId
+        vm.sessionManager.currentSession.sessionData.specificBookId = bookId
         vm.sessionManager.setFilters([Session.filterSpecificBook], specificBookId: .set(bookId))
         #expect(vm.currentFilters.contains(Session.filterSpecificBook))
 
         // 再选棋局筛选 — 应该互斥移除棋书
-        vm.session.sessionData.specificGameId = gameId
+        vm.sessionManager.currentSession.sessionData.specificGameId = gameId
         vm.toggleFilterSpecificGame()
         #expect(vm.currentFilters.contains(Session.filterSpecificGame))
         #expect(!vm.currentFilters.contains(Session.filterSpecificBook))
@@ -286,12 +286,12 @@ struct ViewModelTests {
         let (vm, _) = createViewModel(database: database)
 
         // 先选棋局筛选
-        vm.session.sessionData.specificGameId = gameId
+        vm.sessionManager.currentSession.sessionData.specificGameId = gameId
         vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
         #expect(vm.currentFilters.contains(Session.filterSpecificGame))
 
         // 再选棋书筛选 — 应该互斥移除棋局
-        vm.session.sessionData.specificBookId = bookId
+        vm.sessionManager.currentSession.sessionData.specificBookId = bookId
         vm.toggleFilterSpecificBook()
         #expect(vm.currentFilters.contains(Session.filterSpecificBook))
         #expect(!vm.currentFilters.contains(Session.filterSpecificGame))
@@ -306,7 +306,7 @@ struct ViewModelTests {
         database.databaseData.gameObjects[gameId] = game
 
         let (vm, _) = createViewModel(database: database)
-        vm.session.sessionData.specificGameId = gameId
+        vm.sessionManager.currentSession.sessionData.specificGameId = gameId
         vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
         #expect(vm.currentFilters.contains(Session.filterSpecificGame))
 
@@ -326,7 +326,7 @@ struct ViewModelTests {
         database.databaseData.gameObjects[gameId] = game
 
         let (vm, _) = createViewModel(database: database)
-        vm.session.sessionData.specificGameId = gameId
+        vm.sessionManager.currentSession.sessionData.specificGameId = gameId
         vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
         #expect(vm.currentFilters.contains(Session.filterSpecificGame))
 
@@ -351,7 +351,7 @@ struct ViewModelTests {
         database.databaseData.gameObjects[gameId2] = game2
 
         let (vm, _) = createViewModel(database: database)
-        vm.session.sessionData.specificGameId = gameId1
+        vm.sessionManager.currentSession.sessionData.specificGameId = gameId1
         vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId1))
 
         // 删除另一个棋局
@@ -370,7 +370,7 @@ struct ViewModelTests {
         let vm = ViewModel(sessionManager: sm, platformService: mock)
 
         // 导航到终点 (fenId 3, 无后续着法)
-        vm.session.sessionData.currentMode = .practice
+        vm.sessionManager.currentSession.sessionData.currentMode = .practice
         vm.toEnd()
 
         vm.handleBoardMove("some_new_fen r - - 2 2")
@@ -380,7 +380,7 @@ struct ViewModelTests {
     @Test func testHandleBoardMove_PracticeMode_WrongMove_ShowsWarning() {
         let (vm, mock) = createViewModel()
         // 进入练习模式
-        vm.session.sessionData.currentMode = .practice
+        vm.sessionManager.currentSession.sessionData.currentMode = .practice
         // 走一个不在棋谱中的着法
         vm.handleBoardMove("completely_wrong_fen b - - 1 1")
         #expect(mock.lastWarningTitle == "没有着法")
@@ -389,8 +389,8 @@ struct ViewModelTests {
     @Test func testHandleBoardMove_NormalMode_AddingNewMoveDisabled_ShowsWarning() {
         let (vm, mock) = createViewModel()
         // 确保不允许添加新走法
-        if vm.session.allowAddingNewMoves {
-            vm.session.toggleAllowAddingNewMoves()
+        if vm.sessionManager.currentSession.allowAddingNewMoves {
+            vm.sessionManager.currentSession.toggleAllowAddingNewMoves()
         }
         // 走一个棋谱中不存在的着法
         vm.handleBoardMove("nonexistent_fen b - - 1 1")
@@ -422,7 +422,7 @@ struct ViewModelTests {
 
     @Test func testReviewThisGame_ExitsPracticeMode() {
         let (vm, _) = createViewModel()
-        vm.session.togglePracticeMode()
+        vm.sessionManager.currentSession.togglePracticeMode()
         #expect(vm.currentAppMode == .practice)
 
         vm.reviewThisGame()
@@ -455,7 +455,7 @@ struct ViewModelTests {
         database.databaseData.gameObjects[gameId] = game
 
         let (vm, _) = createViewModel(database: database)
-        vm.session.sessionData.specificGameId = gameId
+        vm.sessionManager.currentSession.sessionData.specificGameId = gameId
         vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
 
         // 在特定棋局模式下，normal 模式，removeMoveFromGame 应可见
@@ -759,7 +759,7 @@ struct ViewModelTests {
 
     @Test func testSetNormalModeAction_SwitchesToNormal() {
         let (vm, _) = createViewModel()
-        vm.session.togglePracticeMode()
+        vm.sessionManager.currentSession.togglePracticeMode()
         #expect(vm.currentAppMode == .practice)
 
         let info = vm.actionDefinitions.getToggleActionInfo(.setNormalMode)!
@@ -798,7 +798,7 @@ struct ViewModelTests {
         #expect(practiceInfo.isOn() == false)
         #expect(reviewInfo.isOn() == false)
 
-        vm.session.togglePracticeMode()
+        vm.sessionManager.currentSession.togglePracticeMode()
         #expect(normalInfo.isOn() == false)
         #expect(practiceInfo.isOn() == true)
         #expect(reviewInfo.isOn() == false)
@@ -832,7 +832,7 @@ struct ViewModelTests {
         let initialStep = vm.currentGameStepDisplay
         vm.stepForward()
         // After stepping forward, we should be at a later step (if moves exist)
-        if vm.session.hasNextMove || vm.currentGameStepDisplay > initialStep {
+        if vm.sessionManager.currentSession.hasNextMove || vm.currentGameStepDisplay > initialStep {
             #expect(vm.currentGameStepDisplay >= initialStep)
         }
     }
@@ -841,7 +841,7 @@ struct ViewModelTests {
         let (vm, _) = createViewModel()
         vm.stepForward()
         vm.toStart()
-        #expect(vm.session.sessionData.currentGameStep == 0)
+        #expect(vm.sessionManager.currentSession.sessionData.currentGameStep == 0)
     }
 
     // MARK: - Global Alert
@@ -873,7 +873,7 @@ struct ViewModelTests {
         // 锁应在新的当前步骤处重建
         #expect(vm.isAnyMoveLocked == true)
         // 应该在 gamePath 末尾（步骤1，即 [1,2] 的最后一步位置）
-        #expect(vm.session.sessionData.currentGameStep == 1)
+        #expect(vm.sessionManager.currentSession.sessionData.currentGameStep == 1)
     }
 
     @Test func testLoadReviewItem_WithoutLock_SetsLock() {
@@ -883,7 +883,7 @@ struct ViewModelTests {
         vm.loadReviewItem([1, 2])
 
         #expect(vm.isAnyMoveLocked == true)
-        #expect(vm.session.sessionData.currentGameStep == 1)
+        #expect(vm.sessionManager.currentSession.sessionData.currentGameStep == 1)
     }
 
     // MARK: - setCurrentFenInRedOpening

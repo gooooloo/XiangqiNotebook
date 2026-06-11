@@ -83,10 +83,8 @@ struct GameBrowserView: View {
             }
         }
         .onAppear {
-            let sessionData = viewModel.session.sessionData
-
             // 恢复折叠状态
-            expandedBookIds = sessionData.gameBrowserExpandedBookIds
+            expandedBookIds = viewModel.gameBrowserExpandedBookIds
 
             // 自动定位到当前特定棋局（优先级最高）
             if viewModel.currentFilters.contains(Session.filterSpecificGame),
@@ -100,18 +98,18 @@ struct GameBrowserView: View {
                 }
             } else {
                 // 恢复上次的选中状态
-                selectedBookId = sessionData.gameBrowserSelectedBookId
-                selectedGameId = sessionData.gameBrowserSelectedGameId
+                selectedBookId = viewModel.gameBrowserSelectedBookId
+                selectedGameId = viewModel.gameBrowserSelectedGameId
             }
         }
         .onChange(of: selectedBookId) {
-            viewModel.session.sessionData.gameBrowserSelectedBookId = selectedBookId
+            viewModel.gameBrowserSelectedBookId = selectedBookId
         }
         .onChange(of: selectedGameId) {
-            viewModel.session.sessionData.gameBrowserSelectedGameId = selectedGameId
+            viewModel.gameBrowserSelectedGameId = selectedGameId
         }
         .onChange(of: expandedBookIds) {
-            viewModel.session.sessionData.gameBrowserExpandedBookIds = expandedBookIds
+            viewModel.gameBrowserExpandedBookIds = expandedBookIds
         }
     }
 }
@@ -1232,10 +1230,10 @@ struct GameBrowserSidebarView: View {
         }
         .background(Color.adaptiveBackground)
         .onAppear {
-            expandedBookIds = viewModel.session.sessionData.gameBrowserExpandedBookIds
+            expandedBookIds = viewModel.gameBrowserExpandedBookIds
         }
         .onChange(of: expandedBookIds) {
-            viewModel.session.sessionData.gameBrowserExpandedBookIds = expandedBookIds
+            viewModel.gameBrowserExpandedBookIds = expandedBookIds
         }
     }
 }
