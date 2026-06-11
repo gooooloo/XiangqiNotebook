@@ -473,7 +473,9 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerToggleAction(
           .toggleStepLimitation,
           text: "步数限制",
-          shortcuts: [.sequence(",l")],
+          // ,l 已被 toggleShowLastMove 占用（同键注册时后注册者覆盖前者，
+          // 本动作的快捷键会静默失效），故用 ,L
+          shortcuts: [.sequence(",L")],
           isEnabled: { true },
           isOn: { self.gameStepLimitation != nil },
           action: { newValue in
