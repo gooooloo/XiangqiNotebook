@@ -31,6 +31,8 @@ private class MockPlatformService: PlatformService {
     func recoverData(completion: @escaping (Data?) -> Void) { completion(nil) }
 }
 
+/// ViewModel 已隔离到 MainActor，测试整体在主线程串行执行
+@MainActor
 struct ViewModelTests {
 
     // MARK: - 辅助方法

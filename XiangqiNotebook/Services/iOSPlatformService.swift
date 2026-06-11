@@ -51,13 +51,16 @@ class IOSPlatformService: PlatformService {
     }
     
     func showAlert(title: String, message: String) {
-        // 直接设置ViewModel的alert状态
-        viewModel?.showGlobalAlert(title: title, message: message)
+        // 可能从后台任务调用，归位主线程后设置 ViewModel 的 alert 状态
+        Task { @MainActor [weak viewModel] in
+            viewModel?.showGlobalAlert(title: title, message: message)
+        }
     }
-    
+
     func showWarningAlert(title: String, message: String) {
-        // 直接设置ViewModel的alert状态
-        viewModel?.showGlobalAlert(title: title, message: message)
+        Task { @MainActor [weak viewModel] in
+            viewModel?.showGlobalAlert(title: title, message: message)
+        }
     }
     
     func showConfirmAlert(title: String, message: String, completion: @escaping (Bool) throws -> Void) {

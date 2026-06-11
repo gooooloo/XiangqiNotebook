@@ -173,6 +173,8 @@ class RemoteControlServer {
         }
 
         DispatchQueue.main.sync {
+            // 已在主队列同步执行，向编译器声明 MainActor 隔离成立
+            MainActor.assumeIsolated {
             if let actionInfo = vm.actionDefinitions.getActionInfo(actionKey) {
                 actionInfo.action()
                 sendJSONResponse(connection: connection, status: "200 OK",
@@ -191,6 +193,7 @@ class RemoteControlServer {
                 sendJSONResponse(connection: connection, status: "400 Bad Request",
                                  body: "{\"error\":\"Action not registered: \(escapeJSON(actionName))\"}")
             }
+            }
         }
     }
 
@@ -204,11 +207,13 @@ class RemoteControlServer {
         }
 
         DispatchQueue.main.sync {
-            let state = buildStateJSON(vm)
+            // 已在主队列同步执行，向编译器声明 MainActor 隔离成立
+            let state = MainActor.assumeIsolated { buildStateJSON(vm) }
             sendJSONResponse(connection: connection, status: "200 OK", body: state)
         }
     }
 
+    @MainActor
     private func buildStateJSON(_ vm: ViewModel) -> String {
         let fen = escapeJSON(vm.currentFen)
         let displayFen = escapeJSON(vm.displayFen)

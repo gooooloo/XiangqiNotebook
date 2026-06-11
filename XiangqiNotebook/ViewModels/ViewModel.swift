@@ -30,6 +30,7 @@ extension PlatformService {
 
 /// ViewModel 负责处理象棋应用的业务逻辑
 /// 它作为 View 和 Model(Session) 之间的中介
+@MainActor
 class ViewModel: ObservableObject {
     @Published private(set) var sessionManager: SessionManager
 
