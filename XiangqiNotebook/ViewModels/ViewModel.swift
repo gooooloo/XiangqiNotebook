@@ -1352,16 +1352,17 @@ class ViewModel: ObservableObject {
     
     // MARK: - 网络操作
     
+    /// @MainActor：从快捷键闭包经无结构 Task 调用时会落在全局执行器上，
+    /// session 状态读写必须归位主线程；网络请求的 await 仍在后台挂起
+    @MainActor
     func queryFenScore() async {
         let fenId = session.currentFenId
         guard let fen = session.getFenForId(fenId) else {return}
         let yunKuFen = String(fen.split(separator: " - ")[0])
-        
+
         do {
             if let score = try await IO.queryFenScore(yunKuFen, silentMode: false) {
-                await MainActor.run {
-                    session.updateFenScore(fenId, score: score)
-                }
+                session.updateFenScore(fenId, score: score)
             } else {
                 platformService.showWarningAlert(
                     title: "查询失败",
@@ -1437,6 +1438,10 @@ class ViewModel: ObservableObject {
         queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: 3000))
     }
 
+    /// @MainActor：从快捷键闭包经无结构 Task 调用时会落在全局执行器上，
+    /// 惰性创建 service/queue 的 ivar 写入、queue.isIdle 读取（MainActor 状态）
+    /// 与 session 读写都必须归位主线程；引擎评估的 await 仍在后台挂起
+    @MainActor
     func pikafishQuickMove() async {
         guard session.allowAddingNewMoves else {
             platformService.showWarningAlert(
@@ -1460,14 +1465,12 @@ class ViewModel: ObservableObject {
 
         do {
             if let result = try await service.evaluatePosition(fen: fen, movetime: 3000) {
-                // await 之后在后台线程恢复，数据修改必须回到主线程，否则与主线程读取产生数据竞争
-                await MainActor.run {
-                    session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
-                    if let uciMove = result.bestMove,
-                       let newFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) {
-                        _ = session.playNewBoardFen(newFen)
-                        session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishService.quickEngineKey)
-                    }
+                // 函数为 @MainActor，await 恢复后数据修改自动回到主线程
+                session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
+                if let uciMove = result.bestMove,
+                   let newFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) {
+                    _ = session.playNewBoardFen(newFen)
+                    session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishService.quickEngineKey)
                 }
             }
         } catch {
