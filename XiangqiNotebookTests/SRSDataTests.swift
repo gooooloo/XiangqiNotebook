@@ -84,11 +84,17 @@ struct SRSDataTests {
         #expect(srs.easeFactor > initialEF)
     }
 
-    @Test func testEaseFactorDecreasesWithAgainReviews() {
+    @Test func testEaseFactorUnchangedOnFailedReviews() {
+        // 标准 SM-2：q<3 的失败评分只重置重复次数与间隔，不更新 easeFactor。
+        // 失败已由间隔重置惩罚，再扣 EF 属双重惩罚，会使 EF 速降钉死在 1.3
         let srs = SRSData()
         let initialEF = srs.easeFactor
+
         srs.review(quality: .again)
-        #expect(srs.easeFactor < initialEF)
+        #expect(srs.easeFactor == initialEF)
+
+        srs.review(quality: .hard)
+        #expect(srs.easeFactor == initialEF)
     }
 
     @Test func testEaseFactorNeverBelowMinimum() {

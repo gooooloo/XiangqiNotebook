@@ -30,15 +30,16 @@ class SRSData: Codable {
     func review(quality: ReviewQuality) {
         let q = quality.rawValue
 
-        // 更新 easeFactor
-        let newEF = easeFactor + (0.1 - Double(5 - q) * (0.08 + Double(5 - q) * 0.02))
-        easeFactor = max(1.3, newEF)
-
         if q < 3 {
-            // 失败：重置
+            // 失败：重置重复次数与间隔。
+            // 标准 SM-2 规定 q<3 不更新 easeFactor——失败已由重置间隔惩罚，
+            // 再扣 EF 会双重惩罚，EF 很快钉死在下限 1.3，间隔永远长不起来
             repetitions = 0
             interval = 0
         } else {
+            // 成功：按标准 SM-2 公式更新 easeFactor
+            let newEF = easeFactor + (0.1 - Double(5 - q) * (0.08 + Double(5 - q) * 0.02))
+            easeFactor = max(1.3, newEF)
             // 成功：增长间隔
             repetitions += 1
             switch repetitions {
