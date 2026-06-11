@@ -103,7 +103,14 @@ class DatabaseStorage {
             data = try Data(contentsOf: url)
         }
 
-        // 只解码版本号字段以提高性能
+        // 字节级扫描版本号：JSONDecoder 即使只解码单字段也要解析整个文档，
+        // 大库下远程变更检查会在主线程卡顿
+        if let version = extractDataVersion(from: data) {
+            print("✅ DatabaseStorage: 读取版本号 \(version)")
+            return version
+        }
+
+        // 回退：完整解析
         struct VersionOnly: Codable {
             let dataVersion: Int
             enum CodingKeys: String, CodingKey {
@@ -111,8 +118,35 @@ class DatabaseStorage {
             }
         }
         let version = try JSONDecoder().decode(VersionOnly.self, from: data)
-        print("✅ DatabaseStorage: 读取版本号 \(version.dataVersion)")
+        print("✅ DatabaseStorage: 读取版本号（完整解析回退）\(version.dataVersion)")
         return version.dataVersion
+    }
+
+    /// 在原始字节中扫描 "data_version" 的整数值，不解析 JSON。
+    /// 该 key 在 database.json 中只出现在顶层一次；兼容紧凑与 prettyPrinted 格式
+    static func extractDataVersion(from data: Data) -> Int? {
+        let key = Data("\"data_version\"".utf8)
+        guard let keyRange = data.range(of: key) else { return nil }
+
+        var i = keyRange.upperBound
+        let whitespace: Set<UInt8> = [UInt8(ascii: ":"), UInt8(ascii: " "), 9, 10, 13]
+        while i < data.endIndex, whitespace.contains(data[i]) { i += 1 }
+
+        var negative = false
+        if i < data.endIndex, data[i] == UInt8(ascii: "-") {
+            negative = true
+            i += 1
+        }
+
+        var value = 0
+        var found = false
+        let zero = UInt8(ascii: "0"), nine = UInt8(ascii: "9")
+        while i < data.endIndex, data[i] >= zero, data[i] <= nine {
+            value = value * 10 + Int(data[i] - zero)
+            found = true
+            i += 1
+        }
+        return found ? (negative ? -value : value) : nil
     }
 
     /// 从默认位置加载数据版本号
@@ -188,7 +222,8 @@ class DatabaseStorage {
         )
 
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        // 紧凑编码（无 prettyPrinted）：体积约减半，编码与 iCloud 同步都更快
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(database)
 
         // 如果是 iCloud URL，使用协调写入
@@ -224,9 +259,9 @@ class DatabaseStorage {
             withIntermediateDirectories: true
         )
 
-        // 编码并保存数据
+        // 编码并保存数据（紧凑编码，与存档一致）
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(database)
         try data.write(to: url, options: .atomic)
         print("✅ DatabaseStorage: 备份保存成功 - \(url)")

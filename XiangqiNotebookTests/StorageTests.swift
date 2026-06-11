@@ -299,4 +299,31 @@ struct StorageTests {
         #expect(DatabaseStorage.recoverySnapshotVersion(at: url) == nil)
         #expect(DatabaseStorage.loadRecoverySnapshot(from: url) == nil)
     }
+
+    // MARK: - extractDataVersion 字节级扫描
+
+    @Test func testExtractDataVersion_CompactJSON() {
+        let data = Data(#"{"bookmarks":[],"data_version":123,"fenObjects2":{}}"#.utf8)
+        #expect(DatabaseStorage.extractDataVersion(from: data) == 123)
+    }
+
+    @Test func testExtractDataVersion_PrettyPrintedJSON() {
+        let data = Data("{\n  \"data_version\" : 45,\n  \"bookmarks\" : []\n}".utf8)
+        #expect(DatabaseStorage.extractDataVersion(from: data) == 45)
+    }
+
+    @Test func testExtractDataVersion_MissingKey_ReturnsNil() {
+        let data = Data(#"{"bookmarks":[]}"#.utf8)
+        #expect(DatabaseStorage.extractDataVersion(from: data) == nil)
+    }
+
+    @Test func testExtractDataVersion_MatchesFullDecode() throws {
+        // 与真实编码格式对照：扫描结果必须与完整解码一致
+        let db = DatabaseStorage.createEmptyDatabase()
+        db.dataVersion = 6789
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(db)
+        #expect(DatabaseStorage.extractDataVersion(from: data) == 6789)
+    }
 }
