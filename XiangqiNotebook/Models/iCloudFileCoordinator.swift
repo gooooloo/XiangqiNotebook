@@ -81,23 +81,55 @@ class iCloudFileCoordinator: NSObject, ObservableObject, NSFilePresenter {
     }
 
     /// 处理文件版本冲突
+    /// 旧实现无条件用 gained 的冲突版本覆盖当前文件（冲突版本可能比当前更旧），
+    /// 且未经写协调、未标记 isResolved。现按修改时间取较新者，避免静默丢弃新数据
     /// - Parameter version: 新的文件版本
     func presentedItemDidGain(_ version: NSFileVersion) {
-        print("[iCloudFileCoordinator] 检测到文件版本冲突: \(version.modificationDate ?? Date())")
+        print("[iCloudFileCoordinator] 检测到文件版本: \(version.modificationDate.map { "\($0)" } ?? "未知时间")")
 
-        // 尝试自动解决冲突：选择最新版本
+        guard version.isConflict else { return }
+        guard let url = presentedItemURL else {
+            print("[iCloudFileCoordinator] 错误: presentedItemURL 为空，无法解决冲突")
+            return
+        }
+
         do {
-            if version.isConflict {
-                // 标记为已解决
-                try version.replaceItem(at: presentedItemURL!, options: .byMoving)
-                try NSFileVersion.removeOtherVersionsOfItem(at: presentedItemURL!)
+            let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+            let currentModDate = attrs?[.modificationDate] as? Date ?? .distantPast
+            let versionModDate = version.modificationDate ?? .distantPast
 
-                print("[iCloudFileCoordinator] 已自动解决冲突，使用最新版本")
-
-                // 通知数据变更
-                DispatchQueue.main.async { [weak self] in
-                    self?.databaseFileChanged = true
+            if versionModDate > currentModDate {
+                // 冲突版本较新：经写协调替换当前文件
+                let coordinator = NSFileCoordinator(filePresenter: self)
+                var coordError: NSError?
+                var replaceError: Error?
+                coordinator.coordinate(writingItemAt: url, options: .forReplacing, error: &coordError) { writeURL in
+                    do {
+                        try version.replaceItem(at: writeURL, options: .byMoving)
+                    } catch {
+                        replaceError = error
+                    }
                 }
+                if let error = coordError { throw error }
+                if let error = replaceError { throw error }
+                print("[iCloudFileCoordinator] 冲突版本较新，已替换当前文件")
+            } else {
+                print("[iCloudFileCoordinator] 当前文件较新，保留当前文件")
+            }
+
+            // 标记所有未解决的冲突版本为已解决，再清理其他版本
+            if let conflicts = NSFileVersion.unresolvedConflictVersionsOfItem(at: url) {
+                for conflict in conflicts {
+                    conflict.isResolved = true
+                }
+            }
+            try NSFileVersion.removeOtherVersionsOfItem(at: url)
+
+            print("[iCloudFileCoordinator] 冲突已解决")
+
+            // 通知数据变更
+            DispatchQueue.main.async { [weak self] in
+                self?.databaseFileChanged = true
             }
         } catch {
             print("[iCloudFileCoordinator] 错误: 无法解决文件冲突 - \(error.localizedDescription)")
