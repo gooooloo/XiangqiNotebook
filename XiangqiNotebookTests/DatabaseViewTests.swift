@@ -359,6 +359,37 @@ struct DatabaseViewTests {
         #expect(view.containsFenId(3) == false)
     }
 
+    @Test func testEnsureMove_AfterMarkAsRemoved_CreatesNewMove() {
+        let database = createTestDatabase()
+        let view = DatabaseView.full(database: database)
+
+        // 取得已有着法 1 -> 2 并软删除（模拟"删招"）
+        let (move, moveId, _) = view.ensureMove(from: 1, to: 2)
+        move.markAsRemoved()
+        view.unregisterMove(from: 1, to: 2)
+
+        // 重新创建同一着法：不应返回 targetFenId 为 nil 的僵尸 move
+        let (newMove, newMoveId, isNew) = view.ensureMove(from: 1, to: 2)
+        #expect(newMove.targetFenId == 2)
+        #expect(isNew == true)
+        #expect(newMoveId != moveId)
+    }
+
+    @Test func testEnsureMove_StaleZombieMapping_CreatesNewMove() {
+        let database = createTestDatabase()
+        let view = DatabaseView.full(database: database)
+
+        // 只软删除、不清理 moveToId（老数据中的遗留状态）
+        let (move, moveId, _) = view.ensureMove(from: 1, to: 2)
+        move.markAsRemoved()
+
+        // ensureMove 应跳过僵尸映射并新建
+        let (newMove, newMoveId, isNew) = view.ensureMove(from: 1, to: 2)
+        #expect(newMove.targetFenId == 2)
+        #expect(isNew == true)
+        #expect(newMoveId != moveId)
+    }
+
     @Test func testGetGamesInBookUnfiltered_DanglingGameId_DoesNotCrash() {
         let database = createTestDatabase()
         let view = DatabaseView.full(database: database)

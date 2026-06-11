@@ -376,6 +376,30 @@ struct SessionTests {
         #expect(variantMoves.first?.targetFenId == 2)
     }
 
+    // MARK: - 删招后重新走同一招
+
+    @Test func testRemoveCurrentStep_ThenReplaySameMove_Succeeds() {
+        let session = createTestSession()
+        session.sessionData.currentGame2 = [1, 2]
+        session.sessionData.currentGameStep = 1
+        session.sessionData.allowAddingNewMoves = true
+        session.sessionData.autoExtendGameWhenPlayingBoardFen = false
+
+        // 删招：移除 1 -> 2
+        session.removeCurrentStep()
+
+        // 重新走同一招：修复前 ensureMove 返回僵尸 move，
+        // autoExtendGame 拒绝扩展，棋子无声弹回
+        session.sessionData.currentGame2 = [1]
+        session.sessionData.currentGameStep = 0
+        let ok = session.playNewBoardFen("fen2 - - 1 1")
+
+        #expect(ok)
+        #expect(session.sessionData.currentGame2.count >= 2)
+        #expect(session.sessionData.currentGame2[1] == 2)
+        #expect(session.currentMove?.targetFenId == 2)
+    }
+
     // MARK: - playRandomGame 空路径防护
 
     @Test func testPlayRandomGame_NoPathsInScope_ReturnsNil() {

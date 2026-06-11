@@ -109,8 +109,12 @@ final class DatabaseView {
     /// - Returns: (move对象, id, 是否新创建)
     func ensureMove(from source: Int, to target: Int) -> (Move, id: Int, isNew: Bool) {
         // Check if move already exists
+        // targetFenId == nil 的是被 markAsRemoved 软删除的僵尸 move：
+        // 不能复用（它在所有 move 查询中都不可见），必须新建，
+        // 否则删招后同一招法在本会话内永远无法重新添加
         if let existingMoveId = database.databaseData.moveToId[[source, target]],
-           let existingMove = database.databaseData.moveObjects[existingMoveId] {
+           let existingMove = database.databaseData.moveObjects[existingMoveId],
+           existingMove.targetFenId != nil {
             return (existingMove, existingMoveId, false)
         }
 
@@ -122,6 +126,12 @@ final class DatabaseView {
         markDirty()
 
         return (newMove, newMoveId, true)
+    }
+
+    /// 软删除着法后的收尾：清除 moveToId 映射，使该 (source, target) 之后可重新创建。
+    /// 僵尸 Move 对象本身保留在 moveObjects 中以保持 count+1 发号方案的 ID 唯一性
+    func unregisterMove(from source: Int, to target: Int) {
+        database.databaseData.moveToId.removeValue(forKey: [source, target])
     }
 
     /// 格式化 move 为字符串表示（如"炮二平五" - 表示层）

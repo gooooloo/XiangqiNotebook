@@ -1333,6 +1333,8 @@ extension Session {
     guard let currentMove = currentMove else { return }
     guard let targetFenId = currentMove.targetFenId else { return }
     previousFenObject?.removeMove(targetFenId: targetFenId)
+    // 清除 moveToId 映射，确保之后能重新创建同一招法
+    databaseView.unregisterMove(from: currentMove.sourceFenId, to: targetFenId)
     currentMove.markAsRemoved()
 
     cutGameUntilStep(sessionData.currentGameStep - 1)
