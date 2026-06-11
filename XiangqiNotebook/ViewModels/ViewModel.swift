@@ -1592,13 +1592,12 @@ class ViewModel: ObservableObject {
     // MARK: - 随机游戏
     
     func makeRandomGame() -> Int? {
-        // 如果没有锁定的着法，随机设置过滤器
+        // 如果没有锁定的着法，随机选择红方或黑方开局库筛选。
+        // 必须显式 setFilters 而非 toggle：当前已在红方开局筛选时
+        // 随机到红方，toggle 会把筛选关掉，在全库上随机
         if !isAnyMoveLocked {
-            if Bool.random() {
-                toggleFilterRedOpeningOnly()
-            } else {
-                toggleFilterBlackOpeningOnly()
-            }
+            let filter = Bool.random() ? Session.filterRedOpeningOnly : Session.filterBlackOpeningOnly
+            sessionManager.setFilters([filter])
         }
 
         // 生成随机游戏
