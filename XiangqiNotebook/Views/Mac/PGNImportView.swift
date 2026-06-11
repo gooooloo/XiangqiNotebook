@@ -117,7 +117,12 @@ struct PGNImportView: View {
         UserDefaults.standard.set(trimmedUsername, forKey: "pgnImportUsername")
 
         server.onPGNReceived = { pgnContent in
-            let result = viewModel.importPGNFile(content: pgnContent, username: trimmedUsername)
+            // 回调运行在 PGNHttpServer 的私有队列上；导入会修改 Database 并
+            // 切换 @Published 状态，必须回主线程执行。用 sync 等待结果以便
+            // 服务器把导入结果写回 HTTP 响应
+            let result = DispatchQueue.main.sync {
+                viewModel.importPGNFile(content: pgnContent, username: trimmedUsername)
+            }
             DispatchQueue.main.async {
                 self.importResult = result
             }
@@ -156,9 +161,10 @@ struct PGNImportView: View {
         isImporting = true
         DispatchQueue.global(qos: .userInitiated).async {
             do {
+                // 文件读取留在后台；导入修改 Database 与 @Published 状态，回主线程执行
                 let content = try String(contentsOf: url, encoding: .utf8)
-                let result = viewModel.importPGNFile(content: content, username: trimmedUsername)
                 DispatchQueue.main.async {
+                    let result = viewModel.importPGNFile(content: content, username: trimmedUsername)
                     self.importResult = result
                     self.isImporting = false
                 }
