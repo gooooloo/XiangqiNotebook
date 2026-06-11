@@ -234,6 +234,12 @@ struct XiangqiBoard: View {
             .frame(width: boardSize, height: boardSize)
         }
         .aspectRatio(1, contentMode: .fit)
+        // 局面被外部改变（键盘导航、加载棋局、切换筛选等）时清除选中状态。
+        // 否则旧高亮残留，点旧蓝点会经 getNewFenAfterMove 提交一个与当前局面无关的非法局面
+        .onChange(of: viewModel.getFen()) {
+            highlightedSquares = []
+            selectedSquare = nil
+        }
     }
 
     private func handleBoardTap(

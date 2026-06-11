@@ -44,6 +44,10 @@ class BoardViewModel: Equatable {
         return XiangqiBoardUtils.fenToPiecesBySquare(self.fen)
     }
 
+    public func getFen() -> String {
+        return self.fen
+    }
+
     public func getOrientation() -> String {
         return self.orientation
     }
