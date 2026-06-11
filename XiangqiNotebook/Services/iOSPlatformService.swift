@@ -93,6 +93,17 @@ class IOSPlatformService: PlatformService {
             }
         }
     }
+
+    func showConfirmAlert(title: String, message: String, confirmTitle: String, cancelTitle: String, completion: @escaping (Bool) -> Void) {
+        DispatchQueue.main.async {
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: confirmTitle, style: .default) { _ in completion(true) })
+            alert.addAction(UIAlertAction(title: cancelTitle, style: .cancel) { _ in completion(false) })
+            if !self.present(alert) {
+                completion(false)
+            }
+        }
+    }
     
     func saveFile(defaultName: String, completion: @escaping (URL?) -> Void) {
         // 在 iOS 上，我们使用文档选择器来保存文件

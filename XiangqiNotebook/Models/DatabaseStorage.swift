@@ -242,6 +242,81 @@ class DatabaseStorage {
         return database
     }
 
+    // MARK: - Crash Recovery Snapshot
+
+    /// 崩溃恢复快照文件（本地，不走 iCloud）。
+    /// 区别于正式存档 database.json 与 backupExistingDatabaseFile：
+    /// 这是周期性自动写入的"草稿"，仅用于崩溃/被杀后恢复未保存的改动。
+    static func recoveryFileURL() -> URL? {
+        guard let dir = try? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true
+        ).appendingPathComponent("XiangqiNotebook") else { return nil }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("recovery.json")
+    }
+
+    /// 写入崩溃恢复快照到指定文件（覆盖）。内部核心，便于测试注入路径。
+    static func writeRecoverySnapshot(_ database: DatabaseData, to url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        let encoder = JSONEncoder()
+        // 紧凑编码（不 prettyPrinted），周期性写入更快、文件更小
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        let data = try encoder.encode(database)
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// 从指定文件读取崩溃恢复快照
+    static func loadRecoverySnapshot(from url: URL) -> DatabaseData? {
+        guard FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(DatabaseData.self, from: data)
+    }
+
+    /// 只读取快照的版本号（避免解码整个文件）
+    static func recoverySnapshotVersion(at url: URL) -> Int? {
+        guard FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else { return nil }
+        struct VersionOnly: Codable {
+            let dataVersion: Int
+            enum CodingKeys: String, CodingKey { case dataVersion = "data_version" }
+        }
+        return (try? JSONDecoder().decode(VersionOnly.self, from: data))?.dataVersion
+    }
+
+    // 默认路径的便捷封装（生产代码使用）
+
+    static func writeRecoverySnapshot(_ database: DatabaseData) {
+        guard let url = recoveryFileURL() else { return }
+        do {
+            try writeRecoverySnapshot(database, to: url)
+        } catch {
+            print("⚠️ DatabaseStorage: 崩溃恢复快照写入失败 - \(error)")
+        }
+    }
+
+    static func loadRecoverySnapshot() -> DatabaseData? {
+        guard let url = recoveryFileURL() else { return nil }
+        return loadRecoverySnapshot(from: url)
+    }
+
+    static func loadRecoverySnapshotVersion() -> Int? {
+        guard let url = recoveryFileURL() else { return nil }
+        return recoverySnapshotVersion(at: url)
+    }
+
+    static func clearRecoverySnapshot() {
+        guard let url = recoveryFileURL() else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    static func hasRecoverySnapshot() -> Bool {
+        guard let url = recoveryFileURL() else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
     // MARK: - Database Creation
 
     /// 创建空的数据库（包含起始局面）

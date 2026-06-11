@@ -11,10 +11,21 @@ protocol PlatformService {
     func showConfirmAlert(title: String, message: String, completion: @escaping (Bool) throws -> Void)
     func saveFile(defaultName: String, completion: @escaping (URL?) -> Void)
     func openFile(completion: @escaping (URL?) -> Void)
-    
+
     // 备份和恢复方法
     func backupData(_ data: Data, defaultName: String, completion: @escaping (Bool) -> Void)
     func recoverData(completion: @escaping (Data?) -> Void)
+
+    /// 自定义按钮文案的确认对话框（如崩溃恢复用"恢复"/"丢弃"）
+    func showConfirmAlert(title: String, message: String, confirmTitle: String, cancelTitle: String, completion: @escaping (Bool) -> Void)
+}
+
+extension PlatformService {
+    /// 默认实现：复用基础确认对话框，忽略自定义按钮文案。
+    /// 各平台服务可覆盖以提供真正的自定义按钮（Mac/iOS 已覆盖）
+    func showConfirmAlert(title: String, message: String, confirmTitle: String, cancelTitle: String, completion: @escaping (Bool) -> Void) {
+        showConfirmAlert(title: title, message: message) { result in completion(result) }
+    }
 }
 
 /// ViewModel 负责处理象棋应用的业务逻辑
@@ -154,57 +165,100 @@ class ViewModel: ObservableObject {
         #if os(macOS)
         Database.shared.activeEngineKey = PikafishService.engineKey
 
-        // 10. App 退出时先自动保存脏数据，再关闭引擎子进程，防止孤儿进程残留
+        // 10. App 退出时：干净退出视为主动丢弃未保存改动（不自动写存档），
+        //     清除崩溃恢复快照——只有崩溃/被杀（不触发此回调）才会留下快照。
+        //     再关闭引擎子进程，防止孤儿进程残留
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            self?.autoSaveIfNeeded()
+            DatabaseStorage.clearRecoverySnapshot()
             self?.evaluationQueue?.cancelAll()
             self?.pikafishService?.stop()
         }
         #endif
 
         #if os(iOS)
-        // 10. 进后台时自动保存脏数据（覆盖系统杀进程的场景）
+        // 10. 进后台时强制写一次崩溃恢复快照（防系统在挂起期间杀掉进程）。
+        //     iOS 无可靠的"干净退出"信号，恢复留待下次冷启动判断
         NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            self?.autoSaveIfNeeded()
+            self?.writeRecoverySnapshotIfDirty(force: true)
         }
         #endif
-    }
 
-    /// 退出/进后台时自动保存脏数据（无 UI 反馈，失败仅记录日志）
-    /// 与 saveToDefault 相同的安全护栏：远端版本更新或版本不可读时不静默覆盖，
-    /// 留给用户下次手动保存时走确认流程
-    private func autoSaveIfNeeded() {
-        let session = self.session
-        guard session.currentDataDirty else { return }
+        // 11. 崩溃恢复定时器：周期性把脏数据写入本地恢复快照（与正式存档分开）
+        startRecoveryTimer()
 
-        let remoteVersion = DatabaseStorage.loadDataVersionFromDefault()
-        if let remoteVersion = remoteVersion,
-           remoteVersion > session.currentCheckpointDataVersion {
-            print("⚠️ 自动保存跳过：远端版本更新，需用户手动解决冲突")
-            return
-        }
-        if remoteVersion == nil && DatabaseStorage.databaseFileExists() {
-            print("⚠️ 自动保存跳过：无法确认存档版本")
-            return
-        }
-
-        do {
-            try session.databaseView.save()
-            try session.databaseView.saveEngineScores()
-            try SessionStorage.saveSessionToDefault(session: sessionManager.mainSessionData)
-            session.setDataClean()
-            print("✅ 自动保存完成")
-        } catch {
-            print("❌ 自动保存失败：\(error)")
+        // 12. 启动后检查是否有上次未保存的恢复快照（崩溃/被杀残留）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            self?.checkForCrashRecovery()
         }
     }
-    
+
+    // MARK: - 崩溃恢复
+
+    private var recoveryTimer: Timer?
+    /// 上次写入恢复快照时的数据版本，避免重复写同一版本
+    private var lastSnapshotVersion: Int = -1
+
+    /// 启动崩溃恢复定时器：每 30 秒检查一次，脏且有新改动时写入恢复快照
+    private func startRecoveryTimer() {
+        recoveryTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            self?.writeRecoverySnapshotIfDirty()
+        }
+    }
+
+    /// 数据库脏且版本较上次快照有变化时，写入本地崩溃恢复快照。
+    /// 这是与正式存档分开的"草稿"，不触碰 database.json，也不走 iCloud。
+    /// - Parameter force: 进后台等场景强制写一次（忽略版本去重）
+    private func writeRecoverySnapshotIfDirty(force: Bool = false) {
+        guard session.databaseDirty else { return }
+        let version = session.databaseView.dataVersion
+        guard force || version != lastSnapshotVersion else { return }
+        DatabaseStorage.writeRecoverySnapshot(session.databaseView.databaseDataForBackup)
+        lastSnapshotVersion = version
+    }
+
+    /// 清除崩溃恢复快照（手动保存成功 或 干净退出 后调用）
+    private func clearRecoverySnapshot() {
+        DatabaseStorage.clearRecoverySnapshot()
+        lastSnapshotVersion = -1
+    }
+
+    /// 启动时检查崩溃恢复快照：若上次会话因崩溃/被杀留下了未保存的更新，提示恢复
+    private func checkForCrashRecovery() {
+        guard let snapshotVersion = DatabaseStorage.loadRecoverySnapshotVersion() else { return }
+        let canonicalVersion = session.databaseView.dataVersion
+        // 快照版本不高于已保存数据 → 旧快照，静默清理
+        guard snapshotVersion > canonicalVersion else {
+            DatabaseStorage.clearRecoverySnapshot()
+            return
+        }
+        platformService.showConfirmAlert(
+            title: "检测到未保存的修改",
+            message: "上次可能因崩溃或被系统关闭，有一份未保存的修改未能写入存档（恢复版本 \(snapshotVersion)，当前存档版本 \(canonicalVersion)）。是否恢复？\n\n恢复后请记得手动保存（按 w 或保存按钮）。",
+            confirmTitle: "恢复",
+            cancelTitle: "丢弃",
+            completion: { [weak self] restore in
+                guard let self = self else { return }
+                if restore, let snapshot = DatabaseStorage.loadRecoverySnapshot() {
+                    self.session.databaseView.restoreFromBackup(snapshot)
+                    self.session.resetGameStateForDatabaseRestore()
+                    self.session.objectWillChange.send()
+                    // 恢复的数据尚未写入存档，保持 dirty，待用户手动保存
+                }
+                self.clearRecoverySnapshot()
+            }
+        )
+    }
+
+    deinit {
+        recoveryTimer?.invalidate()
+    }
+
     #if DEBUG
     /// 可测试的初始化器，允许直接注入 SessionManager，跳过文件加载和 iCloud 监听
     init(sessionManager: SessionManager, platformService: PlatformService) {
@@ -1119,6 +1173,7 @@ class ViewModel: ObservableObject {
             try SessionStorage.saveSessionToDefault(session: sessionManager.mainSessionData)
 
             self.setDataClean()
+            self.clearRecoverySnapshot()  // 已安全写入存档，恢复快照不再需要
             self.showAlert(
                 message: "保存成功",
                 info: "数据已成功保存"
@@ -1225,6 +1280,7 @@ class ViewModel: ObservableObject {
                         // 注意：只保存 mainSession，practiceSession 是临时的
                         try SessionStorage.saveSessionToDefault(session: self.sessionManager.mainSessionData)
                         self.setDataClean()
+                        self.clearRecoverySnapshot()  // 已写入存档，恢复快照不再需要
 
                         self.platformService.showAlert(
                             title: "已保存",
@@ -1241,8 +1297,9 @@ class ViewModel: ObservableObject {
                     print("[ViewModel] 用户选择使用远程数据，将丢弃本地修改")
                     self.reloadFromRemote()
 
-                    // 清除 dirty 标志（因为已经放弃本地修改）
+                    // 清除 dirty 标志与恢复快照（因为已经放弃本地修改）
                     self.setDataClean()
+                    self.clearRecoverySnapshot()
                 }
             }
         )

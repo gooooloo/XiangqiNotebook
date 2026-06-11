@@ -195,5 +195,31 @@ class MacOSPlatformService: PlatformService {
             DispatchQueue.main.async(execute: workItem)
         }
     }
+
+    func showConfirmAlert(title: String, message: String, confirmTitle: String, cancelTitle: String, completion: @escaping (Bool) -> Void) {
+        runOnMain { [weak self] in
+            guard let self else { return }
+            self.dismissCurrentAlert()
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.currentAlertDismissed = false
+                let alert = NSAlert()
+                alert.messageText = title
+                alert.informativeText = message
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: confirmTitle)
+                alert.addButton(withTitle: cancelTitle)
+
+                self.currentRunningAlert = alert
+                let response = alert.runModal()
+                self.currentRunningAlert = nil
+
+                guard !self.currentAlertDismissed else { return }
+                completion(response == .alertFirstButtonReturn)
+            }
+            self.currentAlertWorkItem = workItem
+            DispatchQueue.main.async(execute: workItem)
+        }
+    }
 } 
 #endif

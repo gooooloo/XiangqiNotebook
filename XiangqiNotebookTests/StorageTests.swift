@@ -264,4 +264,39 @@ struct StorageTests {
         #expect(loaded.focusedPracticeGamePath == [1, 2, 3])
         #expect(loaded.allowAddingNewMoves == false)
     }
+
+    // MARK: - 崩溃恢复快照
+
+    private func makeRecoveryURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("recovery.json")
+    }
+
+    @Test func testRecoverySnapshot_RoundTrip() throws {
+        let url = makeRecoveryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        let db = DatabaseData()
+        db.dataVersion = 42
+        let fen = FenObject(fen: "snap_fen - - 1 1", fenId: 7)
+        db.fenObjects2[7] = fen
+        db.fenToId["snap_fen - - 1 1"] = 7
+
+        try DatabaseStorage.writeRecoverySnapshot(db, to: url)
+
+        // 只读版本号
+        #expect(DatabaseStorage.recoverySnapshotVersion(at: url) == 42)
+
+        // 完整读取
+        let loaded = DatabaseStorage.loadRecoverySnapshot(from: url)
+        #expect(loaded?.dataVersion == 42)
+        #expect(loaded?.fenObjects2[7]?.fen == "snap_fen - - 1 1")
+    }
+
+    @Test func testRecoverySnapshot_VersionOfMissingFile_IsNil() {
+        let url = makeRecoveryURL()
+        #expect(DatabaseStorage.recoverySnapshotVersion(at: url) == nil)
+        #expect(DatabaseStorage.loadRecoverySnapshot(from: url) == nil)
+    }
 }
