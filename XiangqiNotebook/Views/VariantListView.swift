@@ -13,7 +13,9 @@ struct VariantListView: View {
             if viewModel.currentGameVariantListDisplay.count > 1 {
                 ScrollView(showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(viewModel.currentGameVariantListDisplay, id: \.move) { item in
+                        // 用 enumerated 的 offset 作为身份，与下方 scrollPosition
+                        // 的 Int 索引保持同一身份类型，否则定位无法匹配
+                        ForEach(Array(viewModel.currentGameVariantListDisplay.enumerated()), id: \.offset) { _, item in
                             MoveItemView(
                                 text: viewModel.getMoveString(move: item.move),
                                 score: viewModel.getDisplayScoreForMove(item.move),
@@ -28,6 +30,8 @@ struct VariantListView: View {
                             Divider()
                         }
                     }
+                    // scrollPosition(id:) 必须配套 scrollTargetLayout 才能定位条目
+                    .scrollTargetLayout()
                 }
                 .scrollPosition(id: .constant(viewModel.currentGameVariantListDisplay.firstIndex(where: {
                     $0.move.targetFenId == viewModel.currentFenId

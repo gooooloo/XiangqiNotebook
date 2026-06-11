@@ -67,9 +67,12 @@ struct MoveListView: View {
                         Divider()  // 添加分隔线
                     }
                 }
+                // scrollPosition(id:) 必须配套 scrollTargetLayout 才能定位条目
+                .scrollTargetLayout()
             }
+            // scrollPosition 必须挂在 ScrollView 上（原先挂在外层 VStack 上无效）
+            .scrollPosition(id: .constant(viewModel.currentGameStepDisplay))
         }
-        .scrollPosition(id: .constant(viewModel.currentGameStepDisplay))
         .padding() // 添加内边距，让内容不贴边
         .border(Color.gray)
     }
