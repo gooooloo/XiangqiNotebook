@@ -32,6 +32,14 @@ final class EvaluationQueueTests: XCTestCase {
         return (queue, mockService)
     }
 
+    /// 轮询等待条件成立（替代固定 sleep，降低负载波动下的 flake）
+    private func waitUntil(timeout: TimeInterval = 3.0, _ condition: () -> Bool) async throws {
+        let start = Date()
+        while !condition() && Date().timeIntervalSince(start) < timeout {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+    }
+
     func testEnqueueAndProcess() async throws {
         let (queue, mock) = makeQueue()
         var completedRequests: [EvaluationRequest] = []
@@ -118,7 +126,7 @@ final class EvaluationQueueTests: XCTestCase {
 
         // 在飞的旧任务退出前队列不算 idle（防止并发驱动引擎）；
         // 退出后转为 idle
-        try await Task.sleep(nanoseconds: 200_000_000)
+        try await waitUntil { queue.isIdle }
         XCTAssertTrue(queue.isIdle)
     }
 
@@ -134,7 +142,7 @@ final class EvaluationQueueTests: XCTestCase {
         // 旧任务还在退出途中时立即重新入队同一局面
         queue.enqueue(EvaluationRequest(fenId: 1, fen: "fen1 r", engineKey: "key", movetime: nil))
 
-        try await Task.sleep(nanoseconds: 600_000_000)
+        try await waitUntil { queue.state.isIdle && queue.state.completedCount == 1 }
 
         // 新请求被处理恰好一次；旧任务的收尾不得污染新队列的去重与状态
         XCTAssertEqual(queue.state.completedCount, 1)
