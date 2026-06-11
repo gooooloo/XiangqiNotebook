@@ -311,8 +311,9 @@ class ViewModel: ObservableObject {
         setupCurrentSessionObserver()
 
         // 3. 监听 iCloud 文件变更（使用单例）
-        iCloudFileCoordinator.shared.$databaseFileChanged
-            .filter { $0 == true } // 只处理变为 true 的情况
+        // 变更以单调递增计数发布，dropFirst 跳过订阅时的初始值
+        iCloudFileCoordinator.shared.$databaseFileChangeCount
+            .dropFirst()
             .sink { [weak self] _ in
                 guard let self = self else { return }
                 self.handleRemoteFileChange()
@@ -1194,9 +1195,6 @@ class ViewModel: ObservableObject {
     /// 处理远程文件变更（其他设备修改了 database.json）
     private func handleRemoteFileChange() {
         print("[ViewModel] 检测到远程文件变更")
-
-        // 重置 coordinator 的变更标志
-        iCloudFileCoordinator.shared.resetFileChangeFlag()
 
         // 检查是否有未保存的本地修改
         if session.databaseDirty {

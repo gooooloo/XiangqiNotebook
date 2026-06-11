@@ -11,8 +11,10 @@ class iCloudFileCoordinator: NSObject, ObservableObject, NSFilePresenter {
 
     // MARK: - Published Properties
 
-    /// 文件变更通知 - 当远程 database.json 被其他设备修改时触发
-    @Published var databaseFileChanged: Bool = false
+    /// 文件变更通知 - 当远程 database.json 被其他设备修改时单调递增。
+    /// 用计数代替 Bool：Bool 的「置位/复位」存在覆盖竞态（复位可能吞掉
+    /// 并发到达的新通知），计数只增不减，订阅方对每次递增各处理一次
+    @Published private(set) var databaseFileChangeCount: Int = 0
 
     // MARK: - NSFilePresenter Required Properties
 
@@ -31,8 +33,14 @@ class iCloudFileCoordinator: NSObject, ObservableObject, NSFilePresenter {
 
     private var cancellables = Set<AnyCancellable>()
 
-    /// 标记当前设备是否正在保存数据库文件（用于防止自己触发自己的变更通知）
-    private var isSavingDatabase: Bool = false
+    /// 标记当前设备是否正在保存数据库文件（用于防止自己触发自己的变更通知）。
+    /// 写于主线程（保存路径），读于 presenter 回调队列，用锁保护
+    private let stateLock = NSLock()
+    private var _isSavingDatabase = false
+    private var isSavingDatabase: Bool {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _isSavingDatabase }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _isSavingDatabase = newValue }
+    }
 
     // MARK: - Initialization
 
@@ -73,10 +81,13 @@ class iCloudFileCoordinator: NSObject, ObservableObject, NSFilePresenter {
         }
 
         print("[iCloudFileCoordinator] 检测到远程文件变更")
+        publishChange()
+    }
 
-        // 在主线程发布变更通知
+    /// 在主线程递增变更计数
+    private func publishChange() {
         DispatchQueue.main.async { [weak self] in
-            self?.databaseFileChanged = true
+            self?.databaseFileChangeCount += 1
         }
     }
 
@@ -128,9 +139,7 @@ class iCloudFileCoordinator: NSObject, ObservableObject, NSFilePresenter {
             print("[iCloudFileCoordinator] 冲突已解决")
 
             // 通知数据变更
-            DispatchQueue.main.async { [weak self] in
-                self?.databaseFileChanged = true
-            }
+            publishChange()
         } catch {
             print("[iCloudFileCoordinator] 错误: 无法解决文件冲突 - \(error.localizedDescription)")
         }
@@ -211,11 +220,11 @@ class iCloudFileCoordinator: NSObject, ObservableObject, NSFilePresenter {
         return FileManager.default.ubiquityIdentityToken != nil
     }
 
-    /// 重置文件变更标志
-    func resetFileChangeFlag() {
-        DispatchQueue.main.async { [weak self] in
-            self?.databaseFileChanged = false
-        }
+    /// 读取被监控文件当前的修改时间
+    private func currentFileModificationDate() -> Date? {
+        guard let url = presentedItemURL else { return nil }
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        return attrs?[.modificationDate] as? Date
     }
 
     // MARK: - Saving State Management
@@ -226,12 +235,22 @@ class iCloudFileCoordinator: NSObject, ObservableObject, NSFilePresenter {
         print("[iCloudFileCoordinator] 开始保存数据库，设置保存标志")
     }
 
-    /// 清除正在保存标志
-    /// 延迟一小段时间再清除标志，确保 iCloud 的通知已经被忽略
+    /// 清除正在保存标志。
+    /// 延迟一小段时间再清除，确保自己写入触发的通知已被忽略；
+    /// 窗口内到达的远程变更通知同样被丢弃，因此窗口结束时用写入后记录的
+    /// 文件修改时间做比对，发现文件已被远端改写则补发通知
     func endSavingDatabase() {
+        let checkpoint = currentFileModificationDate()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.isSavingDatabase = false
+            guard let self else { return }
+            self.isSavingDatabase = false
             print("[iCloudFileCoordinator] 清除保存标志")
+            if let checkpoint,
+               let current = self.currentFileModificationDate(),
+               current != checkpoint {
+                print("[iCloudFileCoordinator] 抑制窗口期间文件被远端改写，补发变更通知")
+                self.databaseFileChangeCount += 1
+            }
         }
     }
 }
