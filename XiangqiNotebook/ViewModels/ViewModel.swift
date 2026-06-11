@@ -363,8 +363,11 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.inputGame, text: "录入棋局", shortcuts: [.sequence(",i")], supportedModes: [.normal]) { self.showingGameInputView = true }
         actionDefinitions.registerAction(.browseGames, text: "棋局浏览器", shortcuts: [.sequence(",gB")], supportedModes: [.normal]) { self.showingGameBrowserView = true }
         actionDefinitions.registerAction(.importPGN, text: "导入PGN", shortcuts: [.sequence(",pi")], supportedModes: [.normal]) { self.showingPGNImportSheet = true }
+        // 导出 PGN 的实现使用 NSSavePanel，仅 macOS 提供；不加守卫 iOS 编译失败
+        #if os(macOS)
         actionDefinitions.registerAction(.exportPGNCurrentDatabaseView, text: "导出所有变着PGN...", shortcuts: [.sequence(",pa")], supportedModes: [.normal]) { self.exportPGNCurrentDatabaseView() }
         actionDefinitions.registerAction(.exportPGNCurrentGame, text: "导出当前棋局PGN...", shortcuts: [.sequence(",pc")], supportedModes: [.normal]) { self.exportPGNCurrentGame() }
+        #endif
 
         actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
         actionDefinitions.registerAction(.copyBoardText, text: "生成详细局面文本", shortcuts: [.sequence(",c")]) { self.showingBoardTextView = true }
