@@ -8,6 +8,18 @@ class MacOSPlatformService: PlatformService {
     private var currentRunningAlert: NSAlert?
     private var currentAlertDismissed = false
 
+    /// 主线程同步执行；非主线程调用时异步派发到主线程。
+    /// 弹窗会从后台任务的 catch 分支调用（如网络查分、引擎应招失败），
+    /// dismissCurrentAlert 触碰 AppKit（orderOut/stopModal）与共享状态，
+    /// 必须收敛到主线程执行
+    private func runOnMain(_ block: @escaping () -> Void) {
+        if Thread.isMainThread {
+            block()
+        } else {
+            DispatchQueue.main.async(execute: block)
+        }
+    }
+
     private func dismissCurrentAlert() {
         currentAlertWorkItem?.cancel()
         currentAlertWorkItem = nil
@@ -25,39 +37,45 @@ class MacOSPlatformService: PlatformService {
     }
 
     func showAlert(title: String, message: String) {
-        dismissCurrentAlert()
-        let workItem = DispatchWorkItem { [weak self] in
+        runOnMain { [weak self] in
             guard let self else { return }
-            self.currentAlertDismissed = false
-            let alert = NSAlert()
-            alert.messageText = title
-            alert.informativeText = message
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "确定")
-            self.currentRunningAlert = alert
-            alert.runModal()
-            self.currentRunningAlert = nil
+            self.dismissCurrentAlert()
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.currentAlertDismissed = false
+                let alert = NSAlert()
+                alert.messageText = title
+                alert.informativeText = message
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "确定")
+                self.currentRunningAlert = alert
+                alert.runModal()
+                self.currentRunningAlert = nil
+            }
+            self.currentAlertWorkItem = workItem
+            DispatchQueue.main.async(execute: workItem)
         }
-        currentAlertWorkItem = workItem
-        DispatchQueue.main.async(execute: workItem)
     }
 
     func showWarningAlert(title: String, message: String) {
-        dismissCurrentAlert()
-        let workItem = DispatchWorkItem { [weak self] in
+        runOnMain { [weak self] in
             guard let self else { return }
-            self.currentAlertDismissed = false
-            let alert = NSAlert()
-            alert.messageText = title
-            alert.informativeText = message
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "确定")
-            self.currentRunningAlert = alert
-            alert.runModal()
-            self.currentRunningAlert = nil
+            self.dismissCurrentAlert()
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.currentAlertDismissed = false
+                let alert = NSAlert()
+                alert.messageText = title
+                alert.informativeText = message
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "确定")
+                self.currentRunningAlert = alert
+                alert.runModal()
+                self.currentRunningAlert = nil
+            }
+            self.currentAlertWorkItem = workItem
+            DispatchQueue.main.async(execute: workItem)
         }
-        currentAlertWorkItem = workItem
-        DispatchQueue.main.async(execute: workItem)
     }
     
     func saveFile(defaultName: String, completion: @escaping (URL?) -> Void) {
@@ -149,30 +167,33 @@ class MacOSPlatformService: PlatformService {
     }
     
     func showConfirmAlert(title: String, message: String, completion: @escaping (Bool) throws -> Void) {
-        dismissCurrentAlert()
-        let workItem = DispatchWorkItem { [weak self] in
+        runOnMain { [weak self] in
             guard let self else { return }
-            self.currentAlertDismissed = false
-            let alert = NSAlert()
-            alert.messageText = title
-            alert.informativeText = message
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "保留本地")
-            alert.addButton(withTitle: "使用远程")
+            self.dismissCurrentAlert()
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.currentAlertDismissed = false
+                let alert = NSAlert()
+                alert.messageText = title
+                alert.informativeText = message
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "保留本地")
+                alert.addButton(withTitle: "使用远程")
 
-            self.currentRunningAlert = alert
-            let response = alert.runModal()
-            self.currentRunningAlert = nil
+                self.currentRunningAlert = alert
+                let response = alert.runModal()
+                self.currentRunningAlert = nil
 
-            guard !self.currentAlertDismissed else { return }
-            do {
-                try completion(response == .alertFirstButtonReturn)
-            } catch {
-                print("确认对话框回调错误：\(error)")
+                guard !self.currentAlertDismissed else { return }
+                do {
+                    try completion(response == .alertFirstButtonReturn)
+                } catch {
+                    print("确认对话框回调错误：\(error)")
+                }
             }
+            self.currentAlertWorkItem = workItem
+            DispatchQueue.main.async(execute: workItem)
         }
-        currentAlertWorkItem = workItem
-        DispatchQueue.main.async(execute: workItem)
     }
 } 
 #endif
