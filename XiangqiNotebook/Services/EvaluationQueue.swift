@@ -39,6 +39,9 @@ class EvaluationQueue: ObservableObject {
     private var pendingRequests: [EvaluationRequest] = []
     private var dedupSet: Set<String> = []
     private var processingTask: Task<Void, Never>?
+    /// 取消代数：cancelAll 时 +1。被取消的旧任务凭代数识别自己已过期，
+    /// 不得再触碰新一代队列的 dedupSet 与发布状态
+    private var generation = 0
     private var completedCount = 0
     private var totalEnqueued = 0
     private var lastDetail: String?
@@ -79,8 +82,12 @@ class EvaluationQueue: ObservableObject {
     }
 
     func cancelAll() {
+        generation += 1
         processingTask?.cancel()
-        processingTask = nil
+        // 注意：不立即置 nil processingTask。
+        // cancel 并不会中断在飞的 evaluatePosition；若此处立即释放槽位，
+        // 紧接着的 enqueue 会启动第二个处理任务，与旧任务并发驱动同一个
+        // 无锁的 PikafishService。旧任务退出时自行清理并按需重启处理
         pikafishService.stopCurrentSearch()
         pendingRequests.removeAll()
         dedupSet.removeAll()
@@ -115,15 +122,29 @@ class EvaluationQueue: ObservableObject {
 
     private func startProcessingIfNeeded() {
         guard processingTask == nil else { return }
+        let myGeneration = generation
         // 必须在 MainActor 上处理：回调会修改 Session/Database 数据，
         // 队列状态也与主线程的 enqueue/cancelAll 共享，否则产生数据竞争
         processingTask = Task { @MainActor [weak self] in
-            while let self = self, !Task.isCancelled {
+            while let self = self, !Task.isCancelled, self.generation == myGeneration {
                 guard !self.pendingRequests.isEmpty else { break }
-                await self.processNext()
+                await self.processNext(generation: myGeneration)
             }
-            guard let self = self, !Task.isCancelled else { return }
+            guard let self = self else { return }
+
+            // 无论正常结束还是被取消都要释放任务槽位
             self.processingTask = nil
+
+            if self.generation != myGeneration || Task.isCancelled {
+                // 被取消的旧任务退出：若取消后又有新请求入队，在此补启动处理
+                if !self.pendingRequests.isEmpty {
+                    self.startProcessingIfNeeded()
+                } else {
+                    self.updatePublishedState()
+                }
+                return
+            }
+
             self.state = EvaluationQueueState(
                 pendingCount: 0,
                 currentRequest: nil,
@@ -138,7 +159,7 @@ class EvaluationQueue: ObservableObject {
     }
 
     @MainActor
-    private func processNext() async {
+    private func processNext(generation myGeneration: Int) async {
         guard !pendingRequests.isEmpty else { return }
         let request = pendingRequests.removeFirst()
 
@@ -162,7 +183,7 @@ class EvaluationQueue: ObservableObject {
 
         do {
             if let result = try await pikafishService.evaluatePosition(fen: request.fen, movetime: request.movetime) {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, self.generation == myGeneration else { return }
                 lastDetail = Self.formatEvalDetail(result)
                 completedCount += 1
                 onEvaluationCompleted?(request, result)
@@ -173,6 +194,9 @@ class EvaluationQueue: ObservableObject {
             }
         }
 
+        // await 期间可能发生了 cancelAll：过期任务不得再触碰新一代队列的
+        // dedupSet 与发布状态（否则会把新队列中同一局面的去重键误删）
+        guard !Task.isCancelled, self.generation == myGeneration else { return }
         dedupSet.remove(dedupKey(request))
         updatePublishedState()
     }

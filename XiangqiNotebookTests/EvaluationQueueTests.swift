@@ -112,9 +112,34 @@ final class EvaluationQueueTests: XCTestCase {
 
         queue.cancelAll()
 
-        XCTAssertTrue(queue.isIdle)
+        // 队列内容立即清空
         XCTAssertEqual(queue.state.totalEnqueued, 0)
         XCTAssertEqual(queue.state.pendingCount, 0)
+
+        // 在飞的旧任务退出前队列不算 idle（防止并发驱动引擎）；
+        // 退出后转为 idle
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertTrue(queue.isIdle)
+    }
+
+    func testCancelAllThenReenqueue_ProcessesWithoutStatePollution() async throws {
+        let mock = MockPikafishService()
+        mock.evaluateDelay = 200_000_000 // 200ms
+        let (queue, _) = makeQueue(mockService: mock)
+
+        queue.enqueue(EvaluationRequest(fenId: 1, fen: "fen1 r", engineKey: "key", movetime: nil))
+        try await Task.sleep(nanoseconds: 50_000_000) // 让请求进入评估中
+
+        queue.cancelAll()
+        // 旧任务还在退出途中时立即重新入队同一局面
+        queue.enqueue(EvaluationRequest(fenId: 1, fen: "fen1 r", engineKey: "key", movetime: nil))
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        // 新请求被处理恰好一次；旧任务的收尾不得污染新队列的去重与状态
+        XCTAssertEqual(queue.state.completedCount, 1)
+        XCTAssertTrue(queue.state.isIdle)
+        XCTAssertEqual(queue.statusForFen(fenId: 1, engineKey: "key"), .idle)
     }
 
     func testStatusForFen() async throws {
