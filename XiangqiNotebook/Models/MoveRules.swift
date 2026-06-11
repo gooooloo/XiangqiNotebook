@@ -1,7 +1,19 @@
 struct MoveRules {
+    /// 完整合法走法：在伪合法走法基础上，过滤掉走完后己方被将军
+    /// （含将帅对脸暴露、王走入攻击线、送将）的着法
     static func getLegalDestinationSquares(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
         guard let piece = piecesBySquare[fromSquare] else { return [] }
-        
+        let pseudo = getPseudoDestinationSquares(fromSquare: fromSquare, piecesBySquare: piecesBySquare)
+        let isRed = piece.hasPrefix("r")
+        return pseudo.filter { to in
+            !isKingInCheck(isRed: isRed, piecesBySquare: simulateMove(from: fromSquare, to: to, piecesBySquare: piecesBySquare))
+        }
+    }
+
+    /// 伪合法走法：只考虑单子几何规则，不检查走后己方是否被将军
+    static func getPseudoDestinationSquares(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
+        guard let piece = piecesBySquare[fromSquare] else { return [] }
+
         // 根据棋子类型调用对应的规则函数
         switch piece {
         case "rR", "bR": // 红方和黑方的车
@@ -26,6 +38,50 @@ struct MoveRules {
     // 判断是否是己方棋子
     static func isSameColor(_ piece1: String, _ piece2: String) -> Bool {
         return piece1.prefix(1) == piece2.prefix(1)
+    }
+
+    /// 模拟走子后的局面（吃子即覆盖）
+    private static func simulateMove(from: String, to: String, piecesBySquare: [String: String]) -> [String: String] {
+        var board = piecesBySquare
+        board[to] = board[from]
+        board[from] = nil
+        return board
+    }
+
+    /// 己方王是否被将军（含将帅对脸）。
+    /// 测试/残局数据可能没有王，此时视为不被将军
+    static func isKingInCheck(isRed: Bool, piecesBySquare: [String: String]) -> Bool {
+        let kingCode = isRed ? "rK" : "bK"
+        let enemyKingCode = isRed ? "bK" : "rK"
+        guard let kingSquare = piecesBySquare.first(where: { $0.value == kingCode })?.key else {
+            return false
+        }
+
+        // 将帅对脸：同列且中间无子
+        if let enemyKingSquare = piecesBySquare.first(where: { $0.value == enemyKingCode })?.key {
+            let (col1, row1) = squareToCoordinate(kingSquare)
+            let (col2, row2) = squareToCoordinate(enemyKingSquare)
+            if col1 == col2 {
+                var blocked = false
+                for r in (min(row1, row2) + 1)..<max(row1, row2) {
+                    if piecesBySquare[coordinateToSquare(col: col1, row: r)] != nil {
+                        blocked = true
+                        break
+                    }
+                }
+                if !blocked { return true }
+            }
+        }
+
+        // 任一敌子的伪合法走法可吃到己方王
+        let enemyPrefix = isRed ? "b" : "r"
+        for (square, piece) in piecesBySquare where piece.hasPrefix(enemyPrefix) {
+            if piece == enemyKingCode { continue } // 对脸已单独判断
+            if getPseudoDestinationSquares(fromSquare: square, piecesBySquare: piecesBySquare).contains(kingSquare) {
+                return true
+            }
+        }
+        return false
     }
     
     // 判断目标位置是否可以移动（空格或敌方棋子）

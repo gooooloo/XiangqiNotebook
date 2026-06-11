@@ -77,15 +77,18 @@ struct XiangqiMoveRulesTests {
 
     @Test func testRookMoves_OpenFile() {
         var board = emptyBoardWithKings()
+        // 黑将挪到 d9：避免双王对脸把 e5 车变成绝对禁离线的「钉子」
+        board["e9"] = nil
+        board["d9"] = "bK"
         board["e5"] = "rR"  // 红车在 e5
 
         let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e5", piecesBySquare: board)
 
-        // 向上：e6,e7,e8（e9 是黑将，可以吃）
+        // 向上：e6,e7,e8,e9
         #expect(moves.contains("e6"))
         #expect(moves.contains("e7"))
         #expect(moves.contains("e8"))
-        #expect(moves.contains("e9"))  // 可以吃黑将
+        #expect(moves.contains("e9"))
 
         // 向下：e1,e2,e3,e4（e0 是红帅，同色不能走）
         #expect(moves.contains("e4"))
@@ -128,6 +131,9 @@ struct XiangqiMoveRulesTests {
 
     @Test func testKnightMoves_Center() {
         var board = emptyBoardWithKings()
+        // 黑将挪到 d9：e4 的马处在双王对脸线上，跳离即暴露对脸
+        board["e9"] = nil
+        board["d9"] = "bK"
         board["e4"] = "rN"  // 红马在 e4
 
         let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e4", piecesBySquare: board)
@@ -184,6 +190,9 @@ struct XiangqiMoveRulesTests {
 
     @Test func testRedElephantMoves_CannotCrossRiver() {
         var board = emptyBoardWithKings()
+        // 黑将挪到 d9：e0/e9 双王对脸时红方处于被将状态，相的任何走法都无法解除
+        board["e9"] = nil
+        board["d9"] = "bK"
         board["c0"] = "rB"  // 红相在 c0
 
         let moves = MoveRules.getLegalDestinationSquares(fromSquare: "c0", piecesBySquare: board)
@@ -226,6 +235,9 @@ struct XiangqiMoveRulesTests {
 
     @Test func testRedAdvisorMoves_StaysInPalace() {
         var board = emptyBoardWithKings()
+        // 黑将挪到 d9：e1 的仕处在双王对脸线上，离线即暴露对脸
+        board["e9"] = nil
+        board["d9"] = "bK"
         board["e1"] = "rA"  // 红仕在九宫中心
 
         let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e1", piecesBySquare: board)
@@ -379,6 +391,9 @@ struct XiangqiMoveRulesTests {
 
     @Test func testRedPawnMoves_AfterCrossRiver() {
         var board = emptyBoardWithKings()
+        // 黑将挪到 d9：e6 的兵处在双王对脸线上，横走即暴露对脸
+        board["e9"] = nil
+        board["d9"] = "bK"
         board["e6"] = "rP"  // 红兵在 e6（过河，进入 5-9 行）
 
         let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e6", piecesBySquare: board)
@@ -405,6 +420,9 @@ struct XiangqiMoveRulesTests {
 
     @Test func testBlackPawnMoves_AfterCrossRiver() {
         var board = emptyBoardWithKings()
+        // 黑将挪到 d9：e3 的卒处在双王对脸线上，横走即暴露对脸
+        board["e9"] = nil
+        board["d9"] = "bK"
         board["e3"] = "bP"  // 黑卒在 e3（过河，进入 0-4 行）
 
         let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e3", piecesBySquare: board)
@@ -443,5 +461,82 @@ struct XiangqiMoveRulesTests {
 
         let moves = MoveRules.getLegalDestinationSquares(fromSquare: "a5", piecesBySquare: board)
         #expect(moves.isEmpty)
+    }
+
+    // MARK: - 送将/自将过滤（issue #165 语义钉住）
+
+    @Test func testPinnedPiece_CannotExposeFlyingGenerals() {
+        // e0 帅、e9 将之间只有 e5 红车：车横走即暴露对脸，必须被过滤
+        var board = emptyBoardWithKings()
+        board["e5"] = "rR"
+
+        let legal = MoveRules.getLegalDestinationSquares(fromSquare: "e5", piecesBySquare: board)
+        let pseudo = MoveRules.getPseudoDestinationSquares(fromSquare: "e5", piecesBySquare: board)
+
+        // 几何上横走可行，合法走法中被剔除
+        #expect(pseudo.contains("a5"))
+        #expect(!legal.contains("a5"))
+        #expect(!legal.contains("i5"))
+        // 沿 e 线移动与吃将仍合法
+        #expect(legal.contains("e6"))
+        #expect(legal.contains("e9"))
+    }
+
+    @Test func testKing_CannotMoveIntoRookAttackLine() {
+        var board = emptyBoardWithKings()
+        board["e9"] = nil
+        board["d9"] = "bK"
+        board["d5"] = "bR"  // 黑车控制 d 线
+
+        let legal = MoveRules.getLegalDestinationSquares(fromSquare: "e0", piecesBySquare: board)
+        #expect(!legal.contains("d0"))  // 走入车的攻击线 = 送将
+        #expect(legal.contains("f0"))
+        #expect(legal.contains("e1"))
+    }
+
+    @Test func testPinnedBlocker_CannotLeaveCheckLine() {
+        // 黑车 e5 将军被 e3 红仕…不在线上；改用：黑车 e5，红仕 e1 挡在帅前
+        var board = emptyBoardWithKings()
+        board["e9"] = nil
+        board["d9"] = "bK"
+        board["e5"] = "bR"  // 黑车瞄准 e0 红帅
+        board["e1"] = "rA"  // 红仕挡驾，被钉住
+
+        let legal = MoveRules.getLegalDestinationSquares(fromSquare: "e1", piecesBySquare: board)
+        #expect(legal.isEmpty)  // 仕斜走必然离开 e 线，送将
+    }
+
+    @Test func testInCheck_OnlyMovesResolvingCheckAreLegal() {
+        var board = emptyBoardWithKings()
+        board["e9"] = nil
+        board["d9"] = "bK"
+        board["e5"] = "bR"  // 黑车将军
+        board["a1"] = "rR"  // 红车在远处
+
+        // 红车合法走法只剩挡驾（e1）或吃不到车的其他选择被全部过滤
+        let legal = MoveRules.getLegalDestinationSquares(fromSquare: "a1", piecesBySquare: board)
+        #expect(legal == ["e1"])  // 唯一解将着法：垫车
+    }
+
+    @Test func testIsKingInCheck_RookAttack() {
+        var board = emptyBoardWithKings()
+        board["e9"] = nil
+        board["d9"] = "bK"
+        board["e5"] = "bR"
+        #expect(MoveRules.isKingInCheck(isRed: true, piecesBySquare: board) == true)
+        #expect(MoveRules.isKingInCheck(isRed: false, piecesBySquare: board) == false)
+    }
+
+    @Test func testIsKingInCheck_FlyingGenerals() {
+        let board = emptyBoardWithKings()  // e0/e9 之间无子
+        #expect(MoveRules.isKingInCheck(isRed: true, piecesBySquare: board) == true)
+        #expect(MoveRules.isKingInCheck(isRed: false, piecesBySquare: board) == true)
+    }
+
+    @Test func testIsKingInCheck_NoCheck() {
+        var board = emptyBoardWithKings()
+        board["e5"] = "rP"  // 有子隔开
+        #expect(MoveRules.isKingInCheck(isRed: true, piecesBySquare: board) == false)
+        #expect(MoveRules.isKingInCheck(isRed: false, piecesBySquare: board) == false)
     }
 }
