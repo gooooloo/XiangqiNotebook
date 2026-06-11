@@ -289,6 +289,73 @@ struct PGNImportTests {
     }
 }
 
+// MARK: - PGN 解析健壮性
+
+struct PGNParserRobustnessTests {
+
+    @Test func testParseFile_GameAndEventHeaders_NotSplitIntoTwoGames() {
+        let pgn = """
+        [Game "Chinese Chess"]
+        [Event "某比赛"]
+        [Red "甲"]
+        [Black "乙"]
+        [Result "1-0"]
+
+        1. h7e7 h0g2 1-0
+
+        [Game "Chinese Chess"]
+        [Event "某比赛"]
+        [Red "丙"]
+        [Black "丁"]
+        [Result "0-1"]
+
+        1. b7e7 b0c2 0-1
+        """
+        let games = PGNParser.parseFile(pgn)
+        // 修复前每局被 [Game]+[Event] 双头拆成"幽灵局 + 真实局"共 4 局
+        #expect(games.count == 2)
+        #expect(games[0].coordinateMoves == ["h7e7", "h0g2"])
+        #expect(games[0].headers["Red"] == "甲")
+        #expect(games[1].coordinateMoves == ["b7e7", "b0c2"])
+        #expect(games[1].headers["Red"] == "丙")
+    }
+
+    @Test func testParseFile_CommentsAndVariationsStripped() {
+        let pgn = """
+        [Game "Chinese Chess"]
+
+        1. h7e7 { h2e2 better } h0g2 (1... i9h9 2. a0a1 b0c2) 2. h9g7 1-0
+        """
+        let games = PGNParser.parseFile(pgn)
+        #expect(games.count == 1)
+        // 注释与变着中的坐标 token 不得混入主线
+        #expect(games[0].coordinateMoves == ["h7e7", "h0g2", "h9g7"])
+    }
+
+    @Test func testParseFile_MultiLineCommentStripped() {
+        let pgn = """
+        [Game "Chinese Chess"]
+
+        1. h7e7 { 这是一条
+        跨行注释 i9h9 也不能混入
+        } h0g2 1-0
+        """
+        let games = PGNParser.parseFile(pgn)
+        #expect(games.count == 1)
+        #expect(games[0].coordinateMoves == ["h7e7", "h0g2"])
+    }
+
+    @Test func testParseDate_GregorianRegardlessOfLocale() {
+        let date = PGNParser.parseDate("2026.02.21")
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        let comps = calendar.dateComponents([.year, .month, .day], from: date)
+        #expect(comps.year == 2026)
+        #expect(comps.month == 2)
+        #expect(comps.day == 21)
+    }
+}
+
 // MARK: - FEN 结构校验与畸形输入防御
 
 struct FenValidationTests {

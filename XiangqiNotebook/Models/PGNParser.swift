@@ -25,10 +25,39 @@ enum PGNParser {
 
     // MARK: - File Parsing
 
+    /// 剥离 movetext 中的 {} 注释与 () 变着（状态跨行保持，圆括号可嵌套）。
+    /// 注释/变着里形如坐标的 token（如 "{ h2e2 better }"）绝不能混入主线着法
+    private struct MovetextFilter {
+        private var braceDepth = 0
+        private var parenDepth = 0
+
+        mutating func strip(_ line: String) -> String {
+            var result = ""
+            for ch in line {
+                switch ch {
+                case "{":
+                    braceDepth += 1
+                case "}":
+                    braceDepth = max(0, braceDepth - 1)
+                case "(" where braceDepth == 0:
+                    parenDepth += 1
+                case ")" where braceDepth == 0:
+                    parenDepth = max(0, parenDepth - 1)
+                default:
+                    if braceDepth == 0 && parenDepth == 0 {
+                        result.append(ch)
+                    }
+                }
+            }
+            return result
+        }
+    }
+
     /// Parse a PGN file containing one or more games
     static func parseFile(_ content: String) -> [PGNGame] {
         var games: [PGNGame] = []
         var currentGame: PGNGame? = nil
+        var movetextFilter = MovetextFilter()
 
         for line in content.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -41,11 +70,14 @@ enum PGNParser {
                 // Header line
                 if let (key, value) = parseHeader(trimmed) {
                     if key == "Game" || key == "Event" {
-                        // Start of a new game — save previous if exists
-                        if let game = currentGame {
+                        // 仅当当前棋局已读到着法时才视为新棋局开始：
+                        // 标准 PGN 同一局常同时含 [Game] 与 [Event] 两个头，
+                        // 无条件开新局会把每局拆成"幽灵局 + 真实局"两份
+                        if let game = currentGame, !game.coordinateMoves.isEmpty {
                             games.append(game)
+                            currentGame = PGNGame()
+                            movetextFilter = MovetextFilter()
                         }
-                        currentGame = PGNGame()
                     }
                     if currentGame == nil {
                         currentGame = PGNGame()
@@ -60,7 +92,7 @@ enum PGNParser {
                 if currentGame == nil {
                     currentGame = PGNGame()
                 }
-                let moves = parseMoves(trimmed)
+                let moves = parseMoves(movetextFilter.strip(trimmed))
                 currentGame?.coordinateMoves.append(contentsOf: moves)
             }
         }
@@ -316,6 +348,8 @@ enum PGNParser {
     static func parseDate(_ dateString: String?, time timeString: String? = nil) -> Date {
         guard let dateString = dateString else { return Date() }
         let formatter = DateFormatter()
+        // 固定 locale：系统日历为非公历（和历/佛历等）时按设备 locale 解析会出错
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         if let timeString = timeString {
             formatter.dateFormat = "yyyy.MM.dd HH:mm:ss"
             if let date = formatter.date(from: "\(dateString) \(timeString)") {
