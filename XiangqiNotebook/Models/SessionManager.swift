@@ -66,13 +66,35 @@ class SessionManager: ObservableObject {
 
     // MARK: - 过滤切换
 
+    /// setFilters 中 specificGameId/specificBookId 的更新语义。
+    /// 用 Optional 表达时 nil 无法区分「保留旧值」与「显式清除」，
+    /// 导致 deleteGame 后残留的 id 仍可被 toggle 回已删棋局的视图
+    enum IdUpdate {
+        /// 保留上一次的值
+        case keep
+        /// 显式清除
+        case clear
+        /// 设置为新值
+        case set(UUID)
+
+        func resolve(old: UUID?) -> UUID? {
+            switch self {
+            case .keep: return old
+            case .clear: return nil
+            case .set(let id): return id
+            }
+        }
+    }
+
     /// 设置过滤器（创建新 Session 并迁移状态）
     /// - Parameters:
     ///   - filters: 目标过滤器数组（空数组表示 Full 视图）
     ///   - focusedPath: 专注练习模式的路径（仅当 filters 包含 filterFocusedPractice 时使用）
-    ///   - specificGameId: 特定棋局ID（仅当 filters 包含 filterSpecificGame 时使用）
-    ///   - specificBookId: 特定棋谱ID（仅当 filters 包含 filterSpecificBook 时使用）
-    func setFilters(_ filters: [String], focusedPath: [Int]? = nil, specificGameId: UUID? = nil, specificBookId: UUID? = nil) {
+    ///   - specificGameId: 特定棋局ID 的更新语义（仅当 filters 包含 filterSpecificGame 时生效）
+    ///   - specificBookId: 特定棋谱ID 的更新语义（仅当 filters 包含 filterSpecificBook 时生效）
+    func setFilters(_ filters: [String], focusedPath: [Int]? = nil, specificGameId: IdUpdate = .keep, specificBookId: IdUpdate = .keep) {
+        let resolvedGameId = specificGameId.resolve(old: mainSession.sessionData.specificGameId)
+        let resolvedBookId = specificBookId.resolve(old: mainSession.sessionData.specificBookId)
         // 注意：即使目标 filters 与当前 filters 相同，也不能快速退出。
         // 因为底层数据可能已变化（如用户将当前位置移出开局库），需要重新构建 DatabaseView 并裁剪游戏。
 
@@ -107,9 +129,8 @@ class SessionManager: ObservableObject {
         newSessionData.gameBrowserExpandedBookIds = mainSession.sessionData.gameBrowserExpandedBookIds
         newSessionData.gameBrowserSelectedBookId = mainSession.sessionData.gameBrowserSelectedBookId
         newSessionData.gameBrowserSelectedGameId = mainSession.sessionData.gameBrowserSelectedGameId
-        // 保留上一次的 specificGameId/specificBookId，除非明确传入了新值
-        newSessionData.specificGameId = specificGameId ?? mainSession.sessionData.specificGameId
-        newSessionData.specificBookId = specificBookId ?? mainSession.sessionData.specificBookId
+        newSessionData.specificGameId = resolvedGameId
+        newSessionData.specificBookId = resolvedBookId
 
         // 根据 filters 类型设置 allowAddingNewMoves
         if filters.isEmpty {
@@ -118,7 +139,7 @@ class SessionManager: ObservableObject {
         } else if filters.contains(Session.filterSpecificGame) {
             // 特定棋局：根据 isFullyRecorded 决定
             let fullView = DatabaseView.full(database: database)
-            if let gameId = specificGameId,
+            if let gameId = resolvedGameId,
                let game = fullView.getGameObject(gameId),
                game.isFullyRecorded {
                 newSessionData.allowAddingNewMoves = false
@@ -134,7 +155,7 @@ class SessionManager: ObservableObject {
         }
 
         // 2. 根据 filters 构造相应的 DatabaseView
-        let databaseView = Self.createDatabaseView(for: filters, focusedPath: focusedPath, specificGameId: specificGameId, specificBookId: specificBookId, database: database)
+        let databaseView = Self.createDatabaseView(for: filters, focusedPath: focusedPath, specificGameId: resolvedGameId, specificBookId: resolvedBookId, database: database)
 
         // 3. 切回全库视图时，如果当前路径的根节点不是标准起始局面（如从中局棋局切回），
         //    则重置到标准起始局面，避免留在一个与开局库断开的孤立位置
@@ -229,7 +250,7 @@ class SessionManager: ObservableObject {
     /// - Parameter gameId: 要加载的棋局 ID
     func loadGame(_ gameId: UUID) {
         // 切换到特定棋局视图
-        setFilters([Session.filterSpecificGame], specificGameId: gameId)
+        setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
 
         // 调用 mainSession 的 loadGame
         mainSession.loadGame(gameId)
@@ -239,7 +260,7 @@ class SessionManager: ObservableObject {
     /// - Parameter bookId: 要加载的棋谱 ID
     func loadBook(_ bookId: UUID) {
         // 切换到特定棋谱视图
-        setFilters([Session.filterSpecificBook], specificBookId: bookId)
+        setFilters([Session.filterSpecificBook], specificBookId: .set(bookId))
 
         // 调用 mainSession 的 loadBook
         mainSession.loadBook(bookId)

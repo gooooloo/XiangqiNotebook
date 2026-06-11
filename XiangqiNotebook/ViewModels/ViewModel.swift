@@ -916,12 +916,11 @@ class ViewModel: ObservableObject {
             newFilters.append(filter)
         }
 
-        // 显式传递当前的 specificGameId 和 specificBookId，避免依赖隐式保留逻辑
         sessionManager.setFilters(
             newFilters,
             focusedPath: session.sessionData.focusedPracticeGamePath,
-            specificGameId: session.sessionData.specificGameId,
-            specificBookId: session.sessionData.specificBookId
+            specificGameId: .keep,
+            specificBookId: .keep
         )
     }
 
@@ -958,13 +957,13 @@ class ViewModel: ObservableObject {
         if newFilters.contains(Session.filterSpecificGame) {
             newFilters.removeAll { $0 == Session.filterSpecificGame }
             // 关闭时显式清除 specificGameId
-            sessionManager.setFilters(newFilters, specificGameId: nil)
+            sessionManager.setFilters(newFilters, specificGameId: .clear)
         } else {
             if let gameId = session.sessionData.specificGameId {
                 // 互斥：选中"特定棋局"时，取消"特定棋书"
                 newFilters.removeAll { $0 == Session.filterSpecificBook }
                 newFilters.append(Session.filterSpecificGame)
-                sessionManager.setFilters(newFilters, specificGameId: gameId)
+                sessionManager.setFilters(newFilters, specificGameId: .set(gameId))
             }
         }
     }
@@ -976,13 +975,13 @@ class ViewModel: ObservableObject {
         if newFilters.contains(Session.filterSpecificBook) {
             newFilters.removeAll { $0 == Session.filterSpecificBook }
             // 关闭时显式清除 specificBookId
-            sessionManager.setFilters(newFilters, specificBookId: nil)
+            sessionManager.setFilters(newFilters, specificBookId: .clear)
         } else {
             if let bookId = session.sessionData.specificBookId {
                 // 互斥：选中"特定棋书"时，取消"特定棋局"
                 newFilters.removeAll { $0 == Session.filterSpecificGame }
                 newFilters.append(Session.filterSpecificBook)
-                sessionManager.setFilters(newFilters, specificBookId: bookId)
+                sessionManager.setFilters(newFilters, specificBookId: .set(bookId))
             }
         }
     }
@@ -2114,7 +2113,19 @@ class ViewModel: ObservableObject {
     }
 
     func deleteBook(_ bookId: UUID) {
+        // 如果当前正在查看被删除的棋书，先切换到全库视图，避免 DatabaseView 筛选失效
+        if currentFilters.contains(Session.filterSpecificBook),
+           session.sessionData.specificBookId == bookId {
+            sessionManager.setFilters([], specificBookId: .clear)
+        } else if session.sessionData.specificBookId == bookId {
+            sessionManager.setFilters(currentFilters, specificBookId: .clear)
+        }
         session.deleteBook(bookId)
+        // 棋书删除会级联删除其下棋局，残留的 specificGameId 可能指向已删棋局
+        if let gameId = session.sessionData.specificGameId,
+           session.databaseView.getGameObjectUnfiltered(gameId) == nil {
+            sessionManager.setFilters(currentFilters, specificGameId: .clear)
+        }
     }
 
     func getBookObjectUnfiltered(_ bookId: UUID) -> BookObject? {
@@ -2133,7 +2144,10 @@ class ViewModel: ObservableObject {
         // 如果当前正在查看被删除的棋局，先切换到全库视图，避免 DatabaseView 筛选失效导致崩溃
         if currentFilters.contains(Session.filterSpecificGame),
            session.sessionData.specificGameId == gameId {
-            sessionManager.setFilters([], specificGameId: nil)
+            sessionManager.setFilters([], specificGameId: .clear)
+        } else if session.sessionData.specificGameId == gameId {
+            // 不在特定棋局视图但残留的 id 指向被删棋局：清除，避免之后 toggle 回已删棋局
+            sessionManager.setFilters(currentFilters, specificGameId: .clear)
         }
         session.deleteGame(gameId)
     }

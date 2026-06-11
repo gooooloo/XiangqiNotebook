@@ -206,7 +206,7 @@ struct ViewModelTests {
 
         let (vm, _) = createViewModel(database: database, filters: [Session.filterSpecificGame], specificGameId: gameId)
         // 需要 setFilters 让 session 有正确的 filter
-        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: gameId)
+        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
         #expect(vm.windowTitle.contains("测试棋局"))
     }
 
@@ -217,7 +217,7 @@ struct ViewModelTests {
         database.databaseData.bookObjects[bookId] = book
 
         let (vm, _) = createViewModel(database: database)
-        vm.sessionManager.setFilters([Session.filterSpecificBook], specificBookId: bookId)
+        vm.sessionManager.setFilters([Session.filterSpecificBook], specificBookId: .set(bookId))
         #expect(vm.windowTitle.contains("测试棋书"))
     }
 
@@ -228,7 +228,7 @@ struct ViewModelTests {
         database.databaseData.bookObjects[bookId] = book
 
         let (vm, _) = createViewModel(database: database)
-        vm.sessionManager.setFilters([Session.filterSpecificBook], specificBookId: bookId)
+        vm.sessionManager.setFilters([Session.filterSpecificBook], specificBookId: .set(bookId))
         #expect(vm.windowTitle.contains("棋书"))
     }
 
@@ -259,7 +259,7 @@ struct ViewModelTests {
 
         // 先选棋书筛选
         vm.session.sessionData.specificBookId = bookId
-        vm.sessionManager.setFilters([Session.filterSpecificBook], specificBookId: bookId)
+        vm.sessionManager.setFilters([Session.filterSpecificBook], specificBookId: .set(bookId))
         #expect(vm.currentFilters.contains(Session.filterSpecificBook))
 
         // 再选棋局筛选 — 应该互斥移除棋书
@@ -285,7 +285,7 @@ struct ViewModelTests {
 
         // 先选棋局筛选
         vm.session.sessionData.specificGameId = gameId
-        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: gameId)
+        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
         #expect(vm.currentFilters.contains(Session.filterSpecificGame))
 
         // 再选棋书筛选 — 应该互斥移除棋局
@@ -305,7 +305,7 @@ struct ViewModelTests {
 
         let (vm, _) = createViewModel(database: database)
         vm.session.sessionData.specificGameId = gameId
-        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: gameId)
+        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
         #expect(vm.currentFilters.contains(Session.filterSpecificGame))
 
         // 关闭筛选
@@ -325,7 +325,7 @@ struct ViewModelTests {
 
         let (vm, _) = createViewModel(database: database)
         vm.session.sessionData.specificGameId = gameId
-        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: gameId)
+        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
         #expect(vm.currentFilters.contains(Session.filterSpecificGame))
 
         // 删除当前查看的棋局
@@ -350,7 +350,7 @@ struct ViewModelTests {
 
         let (vm, _) = createViewModel(database: database)
         vm.session.sessionData.specificGameId = gameId1
-        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: gameId1)
+        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId1))
 
         // 删除另一个棋局
         vm.deleteGame(gameId2)
@@ -454,7 +454,7 @@ struct ViewModelTests {
 
         let (vm, _) = createViewModel(database: database)
         vm.session.sessionData.specificGameId = gameId
-        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: gameId)
+        vm.sessionManager.setFilters([Session.filterSpecificGame], specificGameId: .set(gameId))
 
         // 在特定棋局模式下，normal 模式，removeMoveFromGame 应可见
         #expect(vm.currentAppMode == .normal)

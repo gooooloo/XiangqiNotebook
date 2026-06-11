@@ -127,6 +127,28 @@ struct SessionManagerTests {
         #expect(manager.mainSession.sessionData.isBlackOrientation == false)
     }
 
+    @Test func testSetFilters_IdUpdateSemantics_KeepClearSet() {
+        let database = createTestDatabase()
+        let manager = createSessionManager(database: database)
+        let gameId = UUID()
+        let bookId = UUID()
+
+        // .set 设置新值
+        manager.setFilters([], specificGameId: .set(gameId), specificBookId: .set(bookId))
+        #expect(manager.mainSession.sessionData.specificGameId == gameId)
+        #expect(manager.mainSession.sessionData.specificBookId == bookId)
+
+        // .keep（默认）保留旧值
+        manager.setFilters([Session.filterRedOpeningOnly])
+        #expect(manager.mainSession.sessionData.specificGameId == gameId)
+        #expect(manager.mainSession.sessionData.specificBookId == bookId)
+
+        // .clear 显式清除
+        manager.setFilters([], specificGameId: .clear, specificBookId: .clear)
+        #expect(manager.mainSession.sessionData.specificGameId == nil)
+        #expect(manager.mainSession.sessionData.specificBookId == nil)
+    }
+
     @Test func testSetFilters_BlackOpening_SetsBlackOrientation() {
         let database = createTestDatabase()
         let manager = createSessionManager(database: database)
