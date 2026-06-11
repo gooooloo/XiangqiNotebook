@@ -94,6 +94,38 @@ struct PikafishServiceTests {
         let move = PikafishService.parseBestMove(from: response)
         #expect(move == nil)
     }
+
+    // MARK: - completedPortion（整行匹配）
+
+    @Test func testCompletedPortion_keywordInCompleteLine() {
+        let buffer = "info depth 18 score cp 35\nbestmove h2e2 ponder h9g7\n"
+        let result = PikafishService.completedPortion(of: buffer, containing: "bestmove")
+        #expect(result == buffer)
+    }
+
+    @Test func testCompletedPortion_truncatedLine_NotMatched() {
+        // 管道半行送达："bestmove h2" 尚未换行，不应匹配
+        let buffer = "info depth 18 score cp 35\nbestmove h2"
+        let result = PikafishService.completedPortion(of: buffer, containing: "bestmove")
+        #expect(result == nil)
+    }
+
+    @Test func testCompletedPortion_truncatedTailExcluded() {
+        // 关键字行已完整，后续半行不包含在返回值中
+        let buffer = "bestmove h2e2\ninfo dep"
+        let result = PikafishService.completedPortion(of: buffer, containing: "bestmove")
+        #expect(result == "bestmove h2e2\n")
+    }
+
+    @Test func testCompletedPortion_noNewline_ReturnsNil() {
+        let result = PikafishService.completedPortion(of: "bestmove h2e2", containing: "bestmove")
+        #expect(result == nil)
+    }
+
+    @Test func testCompletedPortion_keywordAbsent_ReturnsNil() {
+        let result = PikafishService.completedPortion(of: "readyok\n", containing: "bestmove")
+        #expect(result == nil)
+    }
 }
 
 // MARK: - UCI Move to FEN Tests

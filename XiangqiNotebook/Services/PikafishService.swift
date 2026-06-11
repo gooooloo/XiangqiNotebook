@@ -142,14 +142,23 @@ class PikafishService: @unchecked Sendable {
         }
     }
 
-    /// 停止引擎进程
+    /// 停止引擎进程。
+    /// waitUntilExit 无超时会在引擎卡死时挂死 app 退出，
+    /// 这里轮询等待最多 2 秒，超时强制 terminate
     func stop() {
         guard let proc = process, proc.isRunning else {
             cleanup()
             return
         }
         sendCommand("quit")
-        proc.waitUntilExit()
+        let deadline = Date().addingTimeInterval(2.0)
+        while proc.isRunning && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        if proc.isRunning {
+            print("[Pikafish] quit 超时，强制终止引擎进程")
+            proc.terminate()
+        }
         cleanup()
     }
 
@@ -314,20 +323,33 @@ class PikafishService: @unchecked Sendable {
 
                     let availableData = fileHandle.availableData
                     if availableData.isEmpty {
-                        continue
+                        // poll 报告可读但读到 0 字节 = EOF（POLLHUP），引擎进程已死。
+                        // 立即报错，避免在此热循环空转直至超时
+                        continuation.resume(throwing: PikafishError.engineTerminated)
+                        return
                     }
 
                     if let text = String(data: availableData, encoding: .utf8) {
                         self.outputBuffer += text
 
-                        if self.outputBuffer.contains(keyword) {
-                            continuation.resume(returning: self.outputBuffer)
+                        // 只在完整行中匹配关键字：管道可能半行送达，
+                        // 直接 contains 会在 "bestmove h2" 截断时提前返回并解析出残缺着法
+                        if let completed = Self.completedPortion(of: self.outputBuffer, containing: keyword) {
+                            continuation.resume(returning: completed)
                             return
                         }
                     }
                 }
             }
         }
+    }
+
+    /// 返回缓冲区中以换行结尾的完整部分；仅当该部分包含关键字时返回，否则 nil。
+    /// 关键字只在完整行中匹配，最后一段未换行的半行不参与匹配
+    static func completedPortion(of buffer: String, containing keyword: String) -> String? {
+        guard let lastNewline = buffer.range(of: "\n", options: .backwards) else { return nil }
+        let completed = String(buffer[..<lastNewline.upperBound])
+        return completed.contains(keyword) ? completed : nil
     }
 
     // MARK: - Error Types
@@ -337,6 +359,7 @@ class PikafishService: @unchecked Sendable {
         case notRunning
         case timeout
         case evaluationFailed
+        case engineTerminated
 
         var errorDescription: String? {
             switch self {
@@ -344,6 +367,7 @@ class PikafishService: @unchecked Sendable {
             case .notRunning: return "引擎未运行"
             case .timeout: return "引擎响应超时"
             case .evaluationFailed: return "评估失败"
+            case .engineTerminated: return "引擎进程已退出"
             }
         }
     }
