@@ -60,9 +60,22 @@ class EngineScoreStorage {
         }
     }
 
+    // MARK: - Merging
+
+    /// 把远端分数合并进本地：远端仅补充本地缺失的 fenId（本地为较新评估，冲突时本地优先），
+    /// dataVersion 取较大者。分数按 fenId 是 append-only 字典，合并是安全的
+    static func merge(remote: EngineScoreData, into local: EngineScoreData) {
+        for (fenId, score) in remote.scores where local.scores[fenId] == nil {
+            local.scores[fenId] = score
+        }
+        local.dataVersion = max(local.dataVersion, remote.dataVersion)
+    }
+
     // MARK: - Saving
 
-    /// 保存引擎分数到指定 engineKey 的文件
+    /// 保存引擎分数到指定 engineKey 的文件。
+    /// 写入前先读取远端同名文件并按 fenId 合并：整文件覆盖会抹掉
+    /// 另一台设备新增的评估结果（本机评估后保存 = 静默丢弃远端数据）
     static func saveEngineScore(_ engineScoreData: EngineScoreData, engineKey: String) throws {
         guard let url = getEngineScoreURL(engineKey: engineKey) else {
             throw EngineScoreStorageError.urlUnavailable
@@ -73,6 +86,11 @@ class EngineScoreStorage {
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+
+        // 合并远端（engineScoreData 是引用类型，内存中的数据同时获得远端补充）
+        if let remote = loadEngineScore(engineKey: engineKey) {
+            merge(remote: remote, into: engineScoreData)
+        }
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -93,12 +111,17 @@ class EngineScoreStorage {
     static func listEngineKeys() -> [String] {
         guard let dirURL = getEngineScoresDirectoryURL() else { return [] }
 
+        // 不跳过隐藏文件：iCloud 未下载的占位文件形如 ".<name>.json.icloud"
         guard let contents = try? FileManager.default.contentsOfDirectory(
             at: dirURL,
-            includingPropertiesForKeys: nil,
-            options: .skipsHiddenFiles
+            includingPropertiesForKeys: nil
         ) else {
             return []
+        }
+
+        // 对占位文件触发下载，下次加载时即可读到内容
+        for url in contents where url.pathExtension == "icloud" {
+            try? FileManager.default.startDownloadingUbiquitousItem(at: url)
         }
 
         return contents

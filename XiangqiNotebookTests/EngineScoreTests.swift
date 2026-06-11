@@ -111,4 +111,34 @@ struct EngineScoreStorageTests {
         #expect(decoded.scores[2] == -50)
         #expect(decoded.scores[3] == 0)
     }
+
+    // MARK: - 跨设备合并（issue #161）
+
+    @Test func testMerge_RemoteOnlyEntriesAreAdded() {
+        let local = EngineScoreData()
+        local.dataVersion = 3
+        local.scores = [1: 100, 2: -50]
+
+        let remote = EngineScoreData()
+        remote.dataVersion = 5
+        remote.scores = [2: -999, 3: 30]  // 2 与本地冲突，3 为远端独有
+
+        EngineScoreStorage.merge(remote: remote, into: local)
+
+        #expect(local.scores[1] == 100)   // 本地独有保留
+        #expect(local.scores[2] == -50)   // 冲突时本地优先
+        #expect(local.scores[3] == 30)    // 远端独有补充
+        #expect(local.dataVersion == 5)   // 版本取较大者
+    }
+
+    @Test func testMerge_EmptyRemote_NoChange() {
+        let local = EngineScoreData()
+        local.dataVersion = 3
+        local.scores = [1: 100]
+
+        EngineScoreStorage.merge(remote: EngineScoreData(), into: local)
+
+        #expect(local.scores == [1: 100])
+        #expect(local.dataVersion == 3)
+    }
 }
