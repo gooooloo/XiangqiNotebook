@@ -1422,6 +1422,13 @@ class ViewModel: ObservableObject {
         queue.onEvaluationCompleted = { [weak self] request, result in
             self?.session.updateEngineScore(request.fenId, score: result.score, engineKey: request.engineKey)
         }
+        // 转发队列状态变化：视图经 viewModel.evaluationQueue.state 读取进度，
+        // 但没有任何视图直接观察 EvaluationQueue，不转发则进度条与取消按钮
+        // 不会即时刷新（如取消后进度条悬挂到下一次无关更新）
+        queue.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
         evaluationQueue = queue
         return queue
     }
