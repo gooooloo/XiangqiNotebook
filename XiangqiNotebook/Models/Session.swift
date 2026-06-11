@@ -668,8 +668,9 @@ class Session: ObservableObject {
             if goodMoves.count == 1, let goodMove = goodMoves.first {
                 // 只有一个好招法的局面（可能总共有多个招法）
                 singleGoodMoveCount += 1
+                // 数据缺失时跳过该局面继续处理，不能中止整个批量操作
                 guard let targetFenId = goodMove.targetFenId,
-                      let targetFenObject = databaseView.getFenObject(targetFenId) else { return (redAdded, blackAdded) }
+                      let targetFenObject = databaseView.getFenObject(targetFenId) else { continue }
                 
                 // 红方走棋的局面（黑方刚走完）
                 if fenObject.blackJustPlayed && !targetFenObject.isInRedOpening {
