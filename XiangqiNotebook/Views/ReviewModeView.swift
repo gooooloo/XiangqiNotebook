@@ -33,11 +33,12 @@ struct ReviewModeView: View {
                 .buttonStyle(.borderless)
             }
 
-            // 当前复习项描述
-            let item = viewModel.reviewQueue[viewModel.currentReviewIndex]
-            Text(viewModel.reviewItemDescription(fenId: item.fenId))
-                .lineLimit(2)
-                .foregroundColor(.secondary)
+            // 当前复习项描述（评最后一项后索引可能短暂越界，安全取值）
+            if let item = viewModel.currentReviewItem {
+                Text(viewModel.reviewItemDescription(fenId: item.fenId))
+                    .lineLimit(2)
+                    .foregroundColor(.secondary)
+            }
 
             // 进度
             Text("进度: \(viewModel.reviewProgress)")

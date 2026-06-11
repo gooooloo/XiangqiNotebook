@@ -113,10 +113,12 @@ struct iPhoneReviewModeView: View {
 
     private var reviewInProgressView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            let item = viewModel.reviewQueue[viewModel.currentReviewIndex]
-            Text(viewModel.reviewItemDescription(fenId: item.fenId))
-                .lineLimit(2)
-                .padding(.horizontal)
+            // 评最后一项后索引可能短暂越界，安全取值
+            if let item = viewModel.currentReviewItem {
+                Text(viewModel.reviewItemDescription(fenId: item.fenId))
+                    .lineLimit(2)
+                    .padding(.horizontal)
+            }
 
             Text("进度: \(viewModel.reviewProgress)")
                 .font(.caption)

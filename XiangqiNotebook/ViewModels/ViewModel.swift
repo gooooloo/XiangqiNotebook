@@ -1819,6 +1819,15 @@ class ViewModel: ObservableObject {
         !reviewQueue.isEmpty && currentReviewIndex >= reviewQueue.count
     }
 
+    /// 当前复习项；索引越界时返回 nil。
+    /// 给最后一项评分后 currentReviewIndex 会等于 reviewQueue.count，
+    /// SwiftUI 可能在父视图切换到完成态之前重算进行中视图的 body，
+    /// 视图必须经由本属性安全取值，不可直接下标访问 reviewQueue
+    var currentReviewItem: (fenId: Int, srsData: SRSData)? {
+        guard currentReviewIndex >= 0, currentReviewIndex < reviewQueue.count else { return nil }
+        return reviewQueue[currentReviewIndex]
+    }
+
     /// 复习进度显示
     var reviewProgress: String {
         "\(min(currentReviewIndex + 1, reviewQueue.count))/\(reviewQueue.count)"
