@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    name: iOS 构建检查
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # 防止 macOS-only API 漏进共享代码（macOS 端的日常构建与测试查不出
+      # 这类问题，见 issue #171）。模拟器构建用 ad-hoc 签名，无需开发者证书
+      - name: Build for iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project XiangqiNotebook.xcodeproj \
+            -scheme XiangqiNotebook \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGN_IDENTITY=- > build.log 2>&1 || {
+              echo "::error::iOS 构建失败"
+              grep -E "error:" build.log | head -40
+              tail -60 build.log
+              exit 1
+            }
+          grep -E "BUILD SUCCEEDED" build.log
