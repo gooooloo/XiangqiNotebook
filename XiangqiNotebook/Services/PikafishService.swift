@@ -79,8 +79,14 @@ class PikafishService: @unchecked Sendable {
     // MARK: - Engine Lifecycle
 
     /// 启动引擎进程
+    /// 进程引用存在但已死（引擎崩溃/上次启动失败残留）时清理后重新启动，
+    /// 否则 evaluatePosition 的重启路径会拿着死管道反复超时，引擎永久失效
     func start() async throws {
-        guard process == nil else { return }
+        if let existing = process {
+            if existing.isRunning { return }
+            print("[Pikafish] 检测到引擎进程已退出，清理并重新启动")
+            cleanup()
+        }
 
         guard let executableURL = Bundle.main.url(forResource: "pikafish", withExtension: nil) else {
             throw PikafishError.engineNotFound
@@ -108,25 +114,32 @@ class PikafishService: @unchecked Sendable {
         self.outputBuffer = ""
         self.isReady = false
 
-        try proc.run()
+        do {
+            try proc.run()
 
-        // Send UCI init
-        sendCommand("uci")
-        _ = try await waitForResponse(containing: "uciok", timeout: 5.0)
+            // Send UCI init
+            sendCommand("uci")
+            _ = try await waitForResponse(containing: "uciok", timeout: 5.0)
 
-        // Set NNUE file if found
-        if let nnuePath = nnueURL?.path {
-            sendCommand("setoption name EvalFile value \(nnuePath)")
+            // Set NNUE file if found
+            if let nnuePath = nnueURL?.path {
+                sendCommand("setoption name EvalFile value \(nnuePath)")
+            }
+
+            // 使用多线程加速搜索
+            let threadCount = max(1, ProcessInfo.processInfo.activeProcessorCount / 2)
+            sendCommand("setoption name Threads value \(threadCount)")
+            sendCommand("setoption name Hash value 4096")
+
+            sendCommand("isready")
+            _ = try await waitForResponse(containing: "readyok", timeout: 5.0)
+            isReady = true
+        } catch {
+            // 启动失败不留半初始化状态，下次 start() 可干净重试
+            if proc.isRunning { proc.terminate() }
+            cleanup()
+            throw error
         }
-
-        // 使用多线程加速搜索
-        let threadCount = max(1, ProcessInfo.processInfo.activeProcessorCount / 2)
-        sendCommand("setoption name Threads value \(threadCount)")
-        sendCommand("setoption name Hash value 4096")
-
-        sendCommand("isready")
-        _ = try await waitForResponse(containing: "readyok", timeout: 5.0)
-        isReady = true
     }
 
     /// 停止引擎进程
