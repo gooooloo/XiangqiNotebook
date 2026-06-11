@@ -62,29 +62,31 @@ class SessionData: Codable {
         case gameBrowserSelectedGameId = "game_browser_selected_game_id"
     }
 
+    /// 所有字段都用 decodeIfPresent + 默认值：会话文件是可丢弃的 UI 状态，
+    /// schema 演进（新增/删除字段）时任一字段缺失都不应导致整体解码失败而重置全部会话
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        currentGame2 = try container.decode([Int].self, forKey: .currentGame2)
-        currentGameStep = try container.decode(Int.self, forKey: .currentGameStep)
+        currentGame2 = try container.decodeIfPresent([Int].self, forKey: .currentGame2) ?? [1]
+        currentGameStep = try container.decodeIfPresent(Int.self, forKey: .currentGameStep) ?? 0
         lockedStep = try container.decodeIfPresent(Int.self, forKey: .lockedStep)
         filters = try container.decodeIfPresent([String].self, forKey: .filters) ?? []
-        isBlackOrientation = try container.decode(Bool.self, forKey: .isBlackOrientation)
-        isHorizontalFlipped = try container.decode(Bool.self, forKey: .isHorizontalFlipped)
+        isBlackOrientation = try container.decodeIfPresent(Bool.self, forKey: .isBlackOrientation) ?? false
+        isHorizontalFlipped = try container.decodeIfPresent(Bool.self, forKey: .isHorizontalFlipped) ?? false
         gameHistory = try container.decodeIfPresent([[Int]].self, forKey: .gameHistory)
         gameStepLimitation = try container.decodeIfPresent(Int.self, forKey: .gameStepLimitation)
-        canNavigateBeforeLockedStep = try container.decode(Bool.self, forKey: .canNavigateBeforeLockedStep)
-        showPath = try container.decode(Bool.self, forKey: .showPath)
+        canNavigateBeforeLockedStep = try container.decodeIfPresent(Bool.self, forKey: .canNavigateBeforeLockedStep) ?? false
+        showPath = try container.decodeIfPresent(Bool.self, forKey: .showPath) ?? true
         showAllNextMoves = try container.decodeIfPresent(Bool.self, forKey: .showAllNextMoves) ?? false
         showLastMove = try container.decodeIfPresent(Bool.self, forKey: .showLastMove) ?? true
         showRealGameList = try container.decodeIfPresent(Bool.self, forKey: .showRealGameList) ?? false
-        autoExtendGameWhenPlayingBoardFen = try container.decode(Bool.self, forKey: .autoExtendGameWhenPlayingBoardFen)
-        isCommentEditing = try container.decode(Bool.self, forKey: .isCommentEditing)
+        autoExtendGameWhenPlayingBoardFen = try container.decodeIfPresent(Bool.self, forKey: .autoExtendGameWhenPlayingBoardFen) ?? true
+        isCommentEditing = try container.decodeIfPresent(Bool.self, forKey: .isCommentEditing) ?? false
         focusedPracticeGamePath = try container.decodeIfPresent([Int].self, forKey: .focusedPracticeGamePath)
         specificGameId = try container.decodeIfPresent(UUID.self, forKey: .specificGameId)
         specificBookId = try container.decodeIfPresent(UUID.self, forKey: .specificBookId)
         // 兼容已持久化的 "review" 值：回退为 .normal
-        let modeString = try container.decode(String.self, forKey: .currentMode)
+        let modeString = try container.decodeIfPresent(String.self, forKey: .currentMode) ?? AppMode.normal.rawValue
         if modeString == "review" {
             currentMode = .normal
         } else {

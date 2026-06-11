@@ -193,4 +193,16 @@ struct SessionDataTests {
         #expect(decoded.allowAddingNewMoves == true) // 默认 true
         #expect(decoded.lockedStep == nil)
     }
+
+    @Test func testSessionData_EmptyJSON_AllDefaults() throws {
+        // schema 演进健壮性：任意字段缺失（极端情况：全部缺失）都不应整体解码失败
+        let decoded = try JSONDecoder().decode(SessionData.self, from: Data("{}".utf8))
+
+        #expect(decoded.currentGame2 == [1])
+        #expect(decoded.currentGameStep == 0)
+        #expect(decoded.isBlackOrientation == false)
+        #expect(decoded.showPath == true)
+        #expect(decoded.autoExtendGameWhenPlayingBoardFen == true)
+        #expect(decoded.currentMode == .normal)
+    }
 }

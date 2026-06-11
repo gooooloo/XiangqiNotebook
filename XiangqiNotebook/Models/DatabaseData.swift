@@ -15,6 +15,23 @@ class DatabaseData: Codable {
     var myRealBlackGameStatisticsByFenId: [Int: GameResultStatistics] = [:]
     var dataVersion: Int = 0
 
+    /// 当前代码支持的数据库 schema 版本。
+    /// 与 dataVersion（数据内容版本，每次保存递增）不同，
+    /// schemaVersion 标识文件结构本身，仅在结构不兼容演进时递增
+    static let currentSchemaVersion = 1
+    var schemaVersion: Int = DatabaseData.currentSchemaVersion
+
+    enum SchemaError: Error, LocalizedError {
+        case newerSchema(found: Int, supported: Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .newerSchema(let found, let supported):
+                return "数据库文件 schema 版本 \(found) 高于本版本应用支持的 \(supported)，请升级应用后再打开"
+            }
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
         case fenObjects2 = "fenObjects2"
         case moveObjects = "MoveObjects"
@@ -26,6 +43,7 @@ class DatabaseData: Codable {
         case myRealRedGameStatisticsByFenId = "my_real_red_game_statistics_by_fen_id"
         case myRealBlackGameStatisticsByFenId = "my_real_black_game_statistics_by_fen_id"
         case dataVersion = "data_version"
+        case schemaVersion = "schema_version"
     }
 
     // MARK: - Initialization
@@ -38,6 +56,13 @@ class DatabaseData: Codable {
 
     required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // 迁移判断：无该字段的存量文件视为版本 1；
+        // 文件来自更新版本的应用（schema 更高）时显式报错，避免静默误读
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        guard schemaVersion <= Self.currentSchemaVersion else {
+            throw SchemaError.newerSchema(found: schemaVersion, supported: Self.currentSchemaVersion)
+        }
 
         fenObjects2 = try container.decode([Int: FenObject].self, forKey: .fenObjects2)
         moveObjects = try container.decode([Int: Move].self, forKey: .moveObjects)

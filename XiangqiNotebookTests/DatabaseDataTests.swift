@@ -169,6 +169,34 @@ struct DatabaseDataTests {
         #expect(decoded.moveObjects.isEmpty)
         #expect(decoded.dataVersion == 5)
         #expect(decoded.reviewItems.isEmpty)  // 默认空
+        #expect(decoded.schemaVersion == 1)   // 存量文件无 schema_version 视为版本 1
+    }
+
+    @Test func testDatabaseData_SchemaVersionRoundTrip() throws {
+        let db = DatabaseData()
+        let data = try JSONEncoder().encode(db)
+        let decoded = try JSONDecoder().decode(DatabaseData.self, from: data)
+        #expect(decoded.schemaVersion == DatabaseData.currentSchemaVersion)
+    }
+
+    @Test func testDatabaseData_NewerSchemaVersion_Throws() throws {
+        // 文件来自更新版本应用时显式报错，不静默误读
+        let json = """
+        {
+            "schema_version": \(DatabaseData.currentSchemaVersion + 1),
+            "fenObjects2": {},
+            "MoveObjects": {},
+            "game_objects": [],
+            "book_objects": [],
+            "bookmarks": [],
+            "my_real_red_game_statistics_by_fen_id": {},
+            "my_real_black_game_statistics_by_fen_id": {},
+            "data_version": 5
+        }
+        """
+        #expect(throws: (any Error).self) {
+            try JSONDecoder().decode(DatabaseData.self, from: Data(json.utf8))
+        }
     }
 
     @Test func testDatabaseDataDecoding_WithStatistics() throws {
