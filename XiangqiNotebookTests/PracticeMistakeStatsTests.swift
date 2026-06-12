@@ -6,13 +6,7 @@ struct PracticeMistakeStatsTests {
 
     /// 创建一个空的测试数据库，并塞入若干 fenId
     private func createTestDatabase(with fenIds: [Int]) -> Database {
-        let data = DatabaseData()
-        let db = Database(testDatabaseData: data)
-        for id in fenIds {
-            let fen = FenObject(fen: "fen\(id)", fenId: id)
-            db.databaseData.fenObjects2[id] = fen
-        }
-        return db
+        TestDatabaseBuilder().addFens(fenIds).build()
     }
 
     @Test

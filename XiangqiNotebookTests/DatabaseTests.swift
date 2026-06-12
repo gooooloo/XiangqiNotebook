@@ -7,12 +7,9 @@ struct DatabaseTests {
     // MARK: - 辅助方法
 
     private func createTestDatabase() -> Database {
-        let data = DatabaseData()
-        let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
-        let fenObject = FenObject(fen: startFen, fenId: 1)
-        data.fenObjects2[1] = fenObject
-        data.fenToId[startFen] = 1
-        return Database(testDatabaseData: data)
+        TestDatabaseBuilder()
+            .addFen(1, fen: "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1")
+            .build()
     }
 
     // MARK: - markDirty / markClean Tests

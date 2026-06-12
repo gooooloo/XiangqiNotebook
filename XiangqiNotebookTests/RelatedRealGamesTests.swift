@@ -10,33 +10,13 @@ struct RelatedRealGamesTests {
 
     /// 创建测试用的数据库
     private func createTestDatabase() -> Database {
-        let testDatabaseData = DatabaseData()
-        let database = Database(testDatabaseData: testDatabaseData)
-
-        // 创建测试局面：fenId 1-5
-        for i in 1...5 {
-            let fenObject = FenObject(fen: "fen\(i)", fenId: i)
-            database.databaseData.fenObjects2[i] = fenObject
-            database.databaseData.fenToId["fen\(i)"] = i
-        }
-
-        // 创建一些测试着法
-        // Move 1: 1 -> 2
-        let move1 = Move(sourceFenId: 1, targetFenId: 2)
-        database.databaseData.moveObjects[1] = move1
-        database.databaseData.moveToId[[1, 2]] = 1
-
-        // Move 2: 2 -> 3
-        let move2 = Move(sourceFenId: 2, targetFenId: 3)
-        database.databaseData.moveObjects[2] = move2
-        database.databaseData.moveToId[[2, 3]] = 2
-
-        // Move 3: 3 -> 4
-        let move3 = Move(sourceFenId: 3, targetFenId: 4)
-        database.databaseData.moveObjects[3] = move3
-        database.databaseData.moveToId[[3, 4]] = 3
-
-        return database
+        // fenId 1-5，链式着法 1→2→3→4
+        TestDatabaseBuilder()
+            .addFens(1...5)
+            .addMove(from: 1, to: 2)
+            .addMove(from: 2, to: 3)
+            .addMove(from: 3, to: 4)
+            .build()
     }
 
     /// 创建一个测试游戏

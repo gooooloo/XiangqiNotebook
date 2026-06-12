@@ -7,39 +7,14 @@ struct GameOperationsTests {
     // MARK: - Helper Methods
 
     private func createTestDatabase() -> Database {
-        let testDatabaseData = DatabaseData()
-        let database = Database(testDatabaseData: testDatabaseData)
-
-        // 创建 fenId 1-5
-        // 1 -> 2 -> 4
-        //   -> 3 -> 5
-        for i in 1...5 {
-            let fenObject = FenObject(fen: "fen\(i)", fenId: i)
-            database.databaseData.fenObjects2[i] = fenObject
-            database.databaseData.fenToId["fen\(i)"] = i
-        }
-
-        let move1to2 = Move(sourceFenId: 1, targetFenId: 2)
-        database.databaseData.fenObjects2[1]!.addMoveIfNeeded(move: move1to2)
-        database.databaseData.moveObjects[1] = move1to2
-        database.databaseData.moveToId[[1, 2]] = 1
-
-        let move1to3 = Move(sourceFenId: 1, targetFenId: 3)
-        database.databaseData.fenObjects2[1]!.addMoveIfNeeded(move: move1to3)
-        database.databaseData.moveObjects[2] = move1to3
-        database.databaseData.moveToId[[1, 3]] = 2
-
-        let move2to4 = Move(sourceFenId: 2, targetFenId: 4)
-        database.databaseData.fenObjects2[2]!.addMoveIfNeeded(move: move2to4)
-        database.databaseData.moveObjects[3] = move2to4
-        database.databaseData.moveToId[[2, 4]] = 3
-
-        let move3to5 = Move(sourceFenId: 3, targetFenId: 5)
-        database.databaseData.fenObjects2[3]!.addMoveIfNeeded(move: move3to5)
-        database.databaseData.moveObjects[4] = move3to5
-        database.databaseData.moveToId[[3, 5]] = 4
-
-        return database
+        // fenId 1-5 钻石结构：1→2→4 与 1→3→5
+        TestDatabaseBuilder()
+            .addFens(1...5)
+            .addMove(from: 1, to: 2)  // moveId 1
+            .addMove(from: 1, to: 3)  // moveId 2
+            .addMove(from: 2, to: 4)  // moveId 3
+            .addMove(from: 3, to: 5)  // moveId 4
+            .build()
     }
 
     // MARK: - autoExtendGame Tests

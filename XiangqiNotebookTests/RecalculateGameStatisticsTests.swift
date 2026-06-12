@@ -9,37 +9,14 @@ struct RecalculateGameStatisticsTests {
 
     /// 创建测试用 Database，包含基本的局面和着法
     private func createTestDatabase() -> Database {
-        let testDatabaseData = DatabaseData()
-        let database = Database(testDatabaseData: testDatabaseData)
-
-        // fenId 1: 起始局面
-        let fen1 = FenObject(fen: "startFen - - 1 1", fenId: 1)
-        database.databaseData.fenObjects2[1] = fen1
-        database.databaseData.fenToId["startFen - - 1 1"] = 1
-
-        // fenId 2: 后续局面
-        let fen2 = FenObject(fen: "fen2 - - 1 1", fenId: 2)
-        database.databaseData.fenObjects2[2] = fen2
-        database.databaseData.fenToId["fen2 - - 1 1"] = 2
-
-        // fenId 3: 另一个后续局面
-        let fen3 = FenObject(fen: "fen3 - - 1 1", fenId: 3)
-        database.databaseData.fenObjects2[3] = fen3
-        database.databaseData.fenToId["fen3 - - 1 1"] = 3
-
-        // move 1->2
-        let move1to2 = Move(sourceFenId: 1, targetFenId: 2)
-        fen1.addMoveIfNeeded(move: move1to2)
-        database.databaseData.moveObjects[1] = move1to2
-        database.databaseData.moveToId[[1, 2]] = 1
-
-        // move 2->3
-        let move2to3 = Move(sourceFenId: 2, targetFenId: 3)
-        fen2.addMoveIfNeeded(move: move2to3)
-        database.databaseData.moveObjects[2] = move2to3
-        database.databaseData.moveToId[[2, 3]] = 2
-
-        return database
+        // fenId 1-3，链式着法 1→2→3
+        TestDatabaseBuilder()
+            .addFen(1, fen: "startFen - - 1 1")
+            .addFen(2, fen: "fen2 - - 1 1")
+            .addFen(3, fen: "fen3 - - 1 1")
+            .addMove(from: 1, to: 2)
+            .addMove(from: 2, to: 3)
+            .build()
     }
 
     /// 创建一个 GameObject 并添加到数据库
