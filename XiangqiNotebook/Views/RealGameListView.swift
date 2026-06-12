@@ -68,7 +68,7 @@ private struct RealGameListItemView: View {
                     .monospacedDigit()
             }
             Text(game.gameResult.rawValue)
-                .foregroundColor(resultColor(game.gameResult))
+                .foregroundColor(game.gameResult.displayColor)
         }
         .padding(.vertical, 2)
         .padding(.horizontal, 4)
@@ -81,15 +81,6 @@ private struct RealGameListItemView: View {
             } label: {
                 Label("筛选此棋局", systemImage: "line.3.horizontal.decrease.circle")
             }
-        }
-    }
-
-    private func resultColor(_ result: GameResult) -> Color {
-        switch result {
-        case .redWin: return .red
-        case .blackWin: return .primary
-        case .draw: return .blue
-        case .notFinished, .unknown: return .secondary
         }
     }
 }
