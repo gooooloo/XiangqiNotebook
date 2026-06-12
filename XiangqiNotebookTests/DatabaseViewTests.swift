@@ -390,6 +390,122 @@ struct DatabaseViewTests {
         #expect(newMoveId != moveId)
     }
 
+    // MARK: - specificGame / specificBook / 组合视图（issue #167 关键链路补测）
+
+    /// 在测试库上创建一个覆盖 1→2 的棋局
+    private func addTestGame(to database: Database) -> GameObject {
+        let move = Move(sourceFenId: 1, targetFenId: 2)
+        database.databaseData.moveObjects[100] = move
+        database.databaseData.moveToId[[1, 2]] = 100
+        let game = GameObject(id: UUID())
+        game.startingFenId = 1
+        game.moveIds = [100]
+        database.databaseData.gameObjects[game.id] = game
+        return game
+    }
+
+    @Test func testSpecificGameView_OnlyGamePathInScope() {
+        let database = createTestDatabase()
+        let game = addTestGame(to: database)
+
+        let view = DatabaseView.specificGame(database: database, gameId: game.id)
+        #expect(view.containsFenId(1) == true)
+        #expect(view.containsFenId(2) == true)
+        #expect(view.containsFenId(3) == false)
+        #expect(view.containsFenId(4) == false)
+        #expect(view.containsFenId(5) == false)
+    }
+
+    @Test func testSpecificGameView_DeletedGame_EmptyScope() {
+        let database = createTestDatabase()
+        // 指向不存在（已删除）的棋局：范围应为空而不是崩溃或放行
+        let view = DatabaseView.specificGame(database: database, gameId: UUID())
+        for fenId in 1...5 {
+            #expect(view.containsFenId(fenId) == false)
+        }
+    }
+
+    @Test func testSpecificBookView_CollectsGameData() {
+        let database = createTestDatabase()
+        let game = addTestGame(to: database)
+        let book = BookObject(id: UUID(), name: "测试书")
+        book.gameIds = [game.id]
+        database.databaseData.bookObjects[book.id] = book
+
+        let view = DatabaseView.specificBook(database: database, bookId: book.id)
+        #expect(view.containsFenId(1) == true)
+        #expect(view.containsFenId(2) == true)
+        #expect(view.containsFenId(3) == false)
+        #expect(view.getGameObject(game.id) != nil)
+    }
+
+    @Test func testSpecificBookView_SubBookGamesIncluded() {
+        let database = createTestDatabase()
+        let game = addTestGame(to: database)
+        let subBook = BookObject(id: UUID(), name: "子书")
+        subBook.gameIds = [game.id]
+        let parent = BookObject(id: UUID(), name: "父书")
+        parent.subBookIds = [subBook.id]
+        database.databaseData.bookObjects[subBook.id] = subBook
+        database.databaseData.bookObjects[parent.id] = parent
+
+        // 父书视图应递归包含子书的棋局数据
+        let view = DatabaseView.specificBook(database: database, bookId: parent.id)
+        #expect(view.containsFenId(1) == true)
+        #expect(view.containsFenId(2) == true)
+    }
+
+    @Test func testWithStepLimit_IntersectsBaseScope() {
+        let database = createTestDatabase()
+        let base = DatabaseView.redOpening(database: database)  // 范围 {1, 3}
+
+        let view = DatabaseView.withStepLimit(base, reachableFenIds: [1, 2])
+        #expect(view.containsFenId(1) == true)   // base ∩ 可达
+        #expect(view.containsFenId(3) == false)  // 在 base 但不可达
+        #expect(view.containsFenId(2) == false)  // 可达但不在 base
+    }
+
+    @Test func testWithLock_IntersectsBaseScope() {
+        let database = createTestDatabase()
+        let base = DatabaseView.full(database: database)
+
+        let view = DatabaseView.withLock(base, reachableFenIds: [3, 5])
+        #expect(view.containsFenId(3) == true)
+        #expect(view.containsFenId(5) == true)
+        #expect(view.containsFenId(1) == false)
+    }
+
+    @Test func testCombined_MultipleFilters_ANDSemantics() {
+        let database = createTestDatabase()
+        // 红方开局 {1, 3} ∩ 黑方开局 {2, 3} = {3}
+        let view = DatabaseView.combined(
+            database: database,
+            filters: [Session.filterRedOpeningOnly, Session.filterBlackOpeningOnly]
+        )
+        #expect(view.containsFenId(3) == true)
+        #expect(view.containsFenId(1) == false)
+        #expect(view.containsFenId(2) == false)
+    }
+
+    @Test func testCombined_EmptyFilters_FullView() {
+        let database = createTestDatabase()
+        let view = DatabaseView.combined(database: database, filters: [])
+        for fenId in 1...5 {
+            #expect(view.containsFenId(fenId) == true)
+        }
+    }
+
+    @Test func testCombined_SpecificGameWithoutId_NoOpFilter() {
+        let database = createTestDatabase()
+        // filters 含 specificGame 但未传 id：该过滤器被忽略（不收窄范围）
+        let view = DatabaseView.combined(
+            database: database,
+            filters: [Session.filterSpecificGame],
+            specificGameId: nil
+        )
+        #expect(view.containsFenId(1) == true)
+    }
+
     @Test func testGetGamesInBookUnfiltered_DanglingGameId_DoesNotCrash() {
         let database = createTestDatabase()
         let view = DatabaseView.full(database: database)

@@ -1791,7 +1791,16 @@ extension Session {
         loadShiQingYaQuDataIfNeeded()
     }
 
-    private func loadShiQingYaQuDataIfNeeded() {
+    /// 测试开关：测试进程默认跳过《适情雅趣》550 局静默导入。
+    /// 每个 Session init 都触发一次导入，全套件 100+ 次重复支付，
+    /// 且把测试数据的 fenId 空间挤到边缘。需要该数据的测试用 force: true 显式导入
+    static let skipBuiltInPuzzleImport: Bool =
+        NSClassFromString("XCTestCase") != nil ||
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+        ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil
+
+    func loadShiQingYaQuDataIfNeeded(force: Bool = false) {
+        guard force || !Self.skipBuiltInPuzzleImport else { return }
         guard let book = databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId),
               book.gameIds.isEmpty else { return }
 

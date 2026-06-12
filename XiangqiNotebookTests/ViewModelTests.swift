@@ -180,13 +180,20 @@ struct ViewModelTests {
         #expect(vm.currentVariationIndex == 0)
     }
 
-    @Test func testCurrentVariationIndex_AfterMove_ReturnsCorrectIndex() {
-        let (vm, _) = createViewModel()
-        // Navigate forward to get a current move
+    @Test func testCurrentVariationIndex_AfterMove_ReturnsCorrectIndex() throws {
+        // 显式路径保证 currentMove 确定为 1 → 2
+        let database = createTestDatabase()
+        let sm = createSessionManager(database: database, gamePath: [1, 2, 3])
+        let vm = ViewModel(sessionManager: sm, platformService: MockPlatformService())
         vm.stepForward()
-        // currentMove should be the move from fenId 1 → fenId 2
-        // variants from fenId 1 include moves to fenId 2 and fenId 4
-        #expect(vm.currentVariationIndex >= 0)
+
+        // 返回的序号必须指向变着列表中目标为 fenId 2 的那一项
+        // （实现对无效情况以 ?? 0 兜底，仅断言 >= 0 永远无法失败）
+        let variants = vm.sessionManager.currentSession.currentGameVariantMoves
+        try #require(!variants.isEmpty)
+        let index = vm.currentVariationIndex
+        try #require(variants.indices.contains(index))
+        #expect(variants[index].targetFenId == 2)
     }
 
     // MARK: - windowTitle
@@ -991,11 +998,11 @@ struct ViewModelTests {
 
         vm.jumpToNextOpeningGap()
 
-        // 如果找到缺口：锁应解除、filter 应清空
-        if mock.lastAlertTitle != "完成" {
-            #expect(vm.isAnyMoveLocked == false)
-            #expect(vm.currentFilters.isEmpty)
-        }
+        // 必须找到缺口（断言不能包在 if 里，否则测试永远无法失败），
+        // 找到后：锁应解除、filter 应清空
+        #expect(mock.lastAlertTitle != "完成")
+        #expect(vm.isAnyMoveLocked == false)
+        #expect(vm.currentFilters.isEmpty)
     }
 
     // MARK: - performAutoAddToOpening

@@ -79,8 +79,9 @@ struct SessionManagerTests {
 
         let manager = SessionManager.create(from: sessionData, database: database)
 
-        // 应该成功创建，即使使用默认值
-        #expect(manager.currentSession.sessionData.currentGameStep >= 0)
+        // 应该成功创建：默认会话从起始局面（fenId 1）开始、游标在第 0 步
+        #expect(manager.currentSession.sessionData.currentGame2.first == 1)
+        #expect(manager.currentSession.sessionData.currentGameStep == 0)
     }
 
     @Test func testCreate_WithFilters_AppliesFilters() {

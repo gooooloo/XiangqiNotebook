@@ -398,6 +398,9 @@ struct RelatedCoursesTests {
         let database = createTestDatabase()
         let session = try createTestSession(database: database)
 
+        // 测试进程默认跳过静默导入，这里显式导入
+        session.loadShiQingYaQuDataIfNeeded(force: true)
+
         // 验证《适情雅趣》中已加载棋局数据
         let book = session.databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId)
         #expect(book != nil)
@@ -411,12 +414,14 @@ struct RelatedCoursesTests {
     @Test func testShiQingYaQuDataNotReloaded() throws {
         let database = createTestDatabase()
         let session = try createTestSession(database: database)
+        session.loadShiQingYaQuDataIfNeeded(force: true)
 
         let book = session.databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId)
         let initialCount = book!.gameIds.count
 
-        // 再次创建 Session 不应重复加载
+        // 已有数据时再次导入（即使 force）不应重复加载
         let session2 = try Session(sessionData: SessionData(), databaseView: DatabaseView.full(database: database))
+        session2.loadShiQingYaQuDataIfNeeded(force: true)
         let book2 = session2.databaseView.getBookObjectUnfiltered(Session.xiangqiyashiuBookId)
         #expect(book2!.gameIds.count == initialCount)
     }
