@@ -539,4 +539,109 @@ struct XiangqiMoveRulesTests {
         #expect(MoveRules.isKingInCheck(isRed: true, piecesBySquare: board) == false)
         #expect(MoveRules.isKingInCheck(isRed: false, piecesBySquare: board) == false)
     }
+
+    // MARK: - 规则覆盖补充（issue #167：蹩马腿四条腿、塞象眼两方向、黑王、底线兵）
+
+    /// 马在 e4 的八个跳点：d6/f6(上) c5/c3(左) g5/g3(右) d2/f2(下)。
+    /// 把黑将挪到 d9 让双王不同列，排除对脸过滤干扰
+    private func boardWithKnightAtE4() -> [String: String] {
+        var board = emptyBoardWithKings()
+        board["e9"] = nil
+        board["d9"] = "bK"
+        board["e4"] = "rN"
+        return board
+    }
+
+    @Test func testKnightMoves_BlockedByDownLeg() {
+        var board = boardWithKnightAtE4()
+        board["e3"] = "rP"  // 下方马腿
+
+        let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e4", piecesBySquare: board)
+        #expect(!moves.contains("d2"))
+        #expect(!moves.contains("f2"))
+        // 其余方向不受影响
+        #expect(moves.contains("d6"))
+        #expect(moves.contains("f6"))
+        #expect(moves.count == 6)
+    }
+
+    @Test func testKnightMoves_BlockedByLeftLeg() {
+        var board = boardWithKnightAtE4()
+        board["d4"] = "rP"  // 左方马腿
+
+        let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e4", piecesBySquare: board)
+        #expect(!moves.contains("c5"))
+        #expect(!moves.contains("c3"))
+        #expect(moves.contains("g5"))
+        #expect(moves.contains("g3"))
+        #expect(moves.count == 6)
+    }
+
+    @Test func testKnightMoves_BlockedByRightLeg() {
+        var board = boardWithKnightAtE4()
+        board["f4"] = "rP"  // 右方马腿
+
+        let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e4", piecesBySquare: board)
+        #expect(!moves.contains("g5"))
+        #expect(!moves.contains("g3"))
+        #expect(moves.contains("c5"))
+        #expect(moves.contains("c3"))
+        #expect(moves.count == 6)
+    }
+
+    /// 红相 c0 的两个田心：a2 经 b1、e2 经 d1。现有测试只覆盖 d1 堵 e2，这里补 b1 堵 a2
+    @Test func testElephantMoves_BlockedByLeftEye() {
+        var board = emptyBoardWithKings()
+        // 黑将挪到 d9：避免 e0/e9 对脸使红方处于被将而过滤掉所有走法（测试空过）
+        board["e9"] = nil
+        board["d9"] = "bK"
+        board["c0"] = "rB"
+        board["b1"] = "rP"  // 左上田心被堵
+
+        let moves = MoveRules.getLegalDestinationSquares(fromSquare: "c0", piecesBySquare: board)
+        #expect(!moves.contains("a2"))  // 田心被塞
+        #expect(moves.contains("e2"))   // 另一侧田心通畅
+    }
+
+    @Test func testBlackKingMoves_StaysInPalace() {
+        var board = [String: String]()
+        board["e8"] = "bK"  // 黑将在九宫
+        board["e0"] = "rK"
+
+        let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e8", piecesBySquare: board)
+
+        #expect(!moves.isEmpty)
+        for move in moves {
+            let (col, row) = MoveRules.squareToCoordinate(move)
+            #expect(col >= 3 && col <= 5)  // d-f 列
+            #expect(row >= 7 && row <= 9)  // 黑方九宫 7-9 行
+        }
+    }
+
+    @Test func testRedPawnMoves_BottomRank_OnlySideways() {
+        var board = [String: String]()
+        board["e0"] = "rK"
+        board["a9"] = "bK"   // 黑将远离 e 线，红方不被将
+        board["e9"] = "rP"   // 红兵已到底线（最高行）
+
+        let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e9", piecesBySquare: board)
+
+        // 不能再前进（越界），只能横走
+        #expect(moves.contains("d9"))
+        #expect(moves.contains("f9"))
+        #expect(moves.count == 2)
+    }
+
+    @Test func testBlackPawnMoves_BottomRank_OnlySideways() {
+        var board = [String: String]()
+        board["e9"] = "bK"
+        board["a0"] = "rK"   // 红将远离 e 线，黑方不被将
+        board["e0"] = "bP"   // 黑卒已到底线（最低行）
+
+        let moves = MoveRules.getLegalDestinationSquares(fromSquare: "e0", piecesBySquare: board)
+
+        #expect(moves.contains("d0"))
+        #expect(moves.contains("f0"))
+        #expect(moves.count == 2)
+    }
 }
