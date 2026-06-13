@@ -41,56 +41,20 @@ struct ViewModelTests {
 
     /// 创建包含起始局面和一些着法的测试数据库
     private func createTestDatabase() -> Database {
-        let data = DatabaseData()
-
-        // fenId 1: 起始局面 (红方走)
-        let fen1 = FenObject(fen: Self.startFen, fenId: 1)
-        fen1.inRedOpening = true
-        fen1.inBlackOpening = true
-        data.fenObjects2[1] = fen1
-        data.fenToId[Self.startFen] = 1
-
-        // fenId 2: 红方走后局面 (黑方走)
+        // 真实 FEN 串，含走子方标记；着法 1→2(主线)、1→4(变着)、2→3
+        // moveId 需固定（部分测试按 moveId 取着法）：1→2=1、2→3=2、1→4=3
         let fen2Str = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C2C1/9/RNBAKABNR b - - 1 1"
-        let fen2 = FenObject(fen: fen2Str, fenId: 2)
-        fen2.inRedOpening = true
-        fen2.inBlackOpening = true
-        data.fenObjects2[2] = fen2
-        data.fenToId[fen2Str] = 2
-
-        // fenId 3: 黑方应对后局面 (红方走)
         let fen3Str = "rnbakabnr/9/7c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C2C1/9/RNBAKABNR r - - 2 2"
-        let fen3 = FenObject(fen: fen3Str, fenId: 3)
-        fen3.inRedOpening = true
-        data.fenObjects2[3] = fen3
-        data.fenToId[fen3Str] = 3
-
-        // fenId 4: 变着 (另一条线路, 红方走后黑方走)
         let fen4Str = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/2P6/P3P1P1P/1C5C1/9/RNBAKABNR b - - 1 1"
-        let fen4 = FenObject(fen: fen4Str, fenId: 4)
-        fen4.inRedOpening = true
-        data.fenObjects2[4] = fen4
-        data.fenToId[fen4Str] = 4
-
-        // 着法: 1 → 2 (主线)
-        let move1 = Move(sourceFenId: 1, targetFenId: 2)
-        data.moveObjects[1] = move1
-        data.moveToId[[1, 2]] = 1
-        fen1.moves.append(move1)
-
-        // 着法: 1 → 4 (变着)
-        let move3 = Move(sourceFenId: 1, targetFenId: 4)
-        data.moveObjects[3] = move3
-        data.moveToId[[1, 4]] = 3
-        fen1.moves.append(move3)
-
-        // 着法: 2 → 3
-        let move2 = Move(sourceFenId: 2, targetFenId: 3)
-        data.moveObjects[2] = move2
-        data.moveToId[[2, 3]] = 2
-        fen2.moves.append(move2)
-
-        return Database(testDatabaseData: data)
+        return TestDatabaseBuilder()
+            .addFen(1, fen: Self.startFen, inRedOpening: true, inBlackOpening: true)
+            .addFen(2, fen: fen2Str, inRedOpening: true, inBlackOpening: true)
+            .addFen(3, fen: fen3Str, inRedOpening: true)
+            .addFen(4, fen: fen4Str, inRedOpening: true)
+            .addMove(from: 1, to: 2, moveId: 1)
+            .addMove(from: 1, to: 4, moveId: 3)
+            .addMove(from: 2, to: 3, moveId: 2)
+            .build()
     }
 
     /// 创建 SessionManager

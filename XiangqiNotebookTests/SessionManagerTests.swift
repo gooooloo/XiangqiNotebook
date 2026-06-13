@@ -8,42 +8,15 @@ struct SessionManagerTests {
 
     /// 创建包含起始局面和一些着法的测试数据库
     private func createTestDatabase() -> Database {
-        let data = DatabaseData()
         let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
-
-        // fenId 1: 起始局面
-        let fen1 = FenObject(fen: startFen, fenId: 1)
-        fen1.inRedOpening = true
-        fen1.inBlackOpening = true
-        data.fenObjects2[1] = fen1
-        data.fenToId[startFen] = 1
-
-        // fenId 2: 红方开局后局面
-        let fen2 = FenObject(fen: "fen_after_red_move", fenId: 2)
-        fen2.inRedOpening = true
-        fen2.inBlackOpening = true
-        data.fenObjects2[2] = fen2
-        data.fenToId["fen_after_red_move"] = 2
-
-        // fenId 3: 黑方应对后局面
-        let fen3 = FenObject(fen: "fen_after_black_move", fenId: 3)
-        fen3.inRedOpening = true
-        fen3.inBlackOpening = true
-        data.fenObjects2[3] = fen3
-        data.fenToId["fen_after_black_move"] = 3
-
-        // 着法: 1 → 2, 2 → 3
-        let move1 = Move(sourceFenId: 1, targetFenId: 2)
-        data.moveObjects[1] = move1
-        data.moveToId[[1, 2]] = 1
-        fen1.moves.append(move1)
-
-        let move2 = Move(sourceFenId: 2, targetFenId: 3)
-        data.moveObjects[2] = move2
-        data.moveToId[[2, 3]] = 2
-        fen2.moves.append(move2)
-
-        return Database(testDatabaseData: data)
+        // fenId 1-3 全部红黑开局，着法 1→2→3
+        return TestDatabaseBuilder()
+            .addFen(1, fen: startFen, inRedOpening: true, inBlackOpening: true)
+            .addFen(2, fen: "fen_after_red_move", inRedOpening: true, inBlackOpening: true)
+            .addFen(3, fen: "fen_after_black_move", inRedOpening: true, inBlackOpening: true)
+            .addMove(from: 1, to: 2)
+            .addMove(from: 2, to: 3)
+            .build()
     }
 
     /// 创建 SessionManager 的便捷方法

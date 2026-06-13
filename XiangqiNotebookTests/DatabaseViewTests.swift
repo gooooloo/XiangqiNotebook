@@ -10,61 +10,21 @@ struct DatabaseViewTests {
 
     /// 创建测试用的数据库（使用独立实例，避免并发污染）
     private func createTestDatabase() -> Database {
-        // 创建一个空的测试数据库，避免与共享单例产生并发访问问题
-        let testDatabaseData = DatabaseData()
-        let database = Database(testDatabaseData: testDatabaseData)
-
-        // 创建测试局面：fenId 1-5
-        // fenId 1: 在红方开局库中
-        let fen1 = FenObject(fen: "fen1", fenId: 1)
-        fen1.setInRedOpening(true)
-        fen1.setInBlackOpening(false)
-        database.databaseData.fenObjects2[1] = fen1
-
-        // fenId 2: 在黑方开局库中
-        let fen2 = FenObject(fen: "fen2", fenId: 2)
-        fen2.setInRedOpening(false)
-        fen2.setInBlackOpening(true)
-        database.databaseData.fenObjects2[2] = fen2
-
-        // fenId 3: 在两个开局库中
-        let fen3 = FenObject(fen: "fen3", fenId: 3)
-        fen3.setInRedOpening(true)
-        fen3.setInBlackOpening(true)
-        database.databaseData.fenObjects2[3] = fen3
-
-        // fenId 4: 不在开局库中，但在红方实战中
-        let fen4 = FenObject(fen: "fen4", fenId: 4)
-        fen4.setInRedOpening(false)
-        fen4.setInBlackOpening(false)
-        database.databaseData.fenObjects2[4] = fen4
-        let stats4 = GameResultStatistics()
-        stats4.redWin = 1
-        database.databaseData.myRealRedGameStatisticsByFenId[4] = stats4
-
-        // fenId 5: 不在开局库中，但在黑方实战中
-        let fen5 = FenObject(fen: "fen5", fenId: 5)
-        fen5.setInRedOpening(false)
-        fen5.setInBlackOpening(false)
-        database.databaseData.fenObjects2[5] = fen5
-        let stats5 = GameResultStatistics()
-        stats5.blackWin = 1
-        database.databaseData.myRealBlackGameStatisticsByFenId[5] = stats5
-
-        // 添加一些 moves：1 -> 2, 1 -> 3, 2 -> 4, 3 -> 5
-        let move1to2 = Move(sourceFenId: 1, targetFenId: 2)
-        fen1.addMoveIfNeeded(move: move1to2)
-
-        let move1to3 = Move(sourceFenId: 1, targetFenId: 3)
-        fen1.addMoveIfNeeded(move: move1to3)
-
-        let move2to4 = Move(sourceFenId: 2, targetFenId: 4)
-        fen2.addMoveIfNeeded(move: move2to4)
-
-        let move3to5 = Move(sourceFenId: 3, targetFenId: 5)
-        fen3.addMoveIfNeeded(move: move3to5)
-
-        return database
+        // fenId 1-5 钻石结构 + 开局标志 + 实战统计：
+        // 1(红) 2(黑) 3(红黑) 4(红方实战) 5(黑方实战)；着法 1→2,1→3,2→4,3→5
+        TestDatabaseBuilder()
+            .addFen(1, fen: "fen1", inRedOpening: true, inBlackOpening: false)
+            .addFen(2, fen: "fen2", inRedOpening: false, inBlackOpening: true)
+            .addFen(3, fen: "fen3", inRedOpening: true, inBlackOpening: true)
+            .addFen(4, fen: "fen4", inRedOpening: false, inBlackOpening: false)
+            .addFen(5, fen: "fen5", inRedOpening: false, inBlackOpening: false)
+            .addRedRealGameStats(fenId: 4, redWin: 1)
+            .addBlackRealGameStats(fenId: 5, blackWin: 1)
+            .addMove(from: 1, to: 2)
+            .addMove(from: 1, to: 3)
+            .addMove(from: 2, to: 4)
+            .addMove(from: 3, to: 5)
+            .build()
     }
 
     // MARK: - Full View Tests

@@ -10,64 +10,19 @@ struct SessionTests {
 
     /// 创建测试用的 Database（共享数据）
     private func createTestDatabase() -> Database {
-        // 创建一个空的测试数据库，避免与共享单例产生并发访问问题
-        let testDatabaseData = DatabaseData()
-        let database = Database(testDatabaseData: testDatabaseData)
-
-        // 创建起始局面（在两个开局库中，因为起始局面两边都会使用）
+        // fenId 1-5 钻石结构：1(红黑)→2(红)→4(红)，1→3(黑)→5(无)
         let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
-        let fen1 = FenObject(fen: startFen, fenId: 1)
-        fen1.setInRedOpening(true)
-        fen1.setInBlackOpening(true)
-        database.databaseData.fenObjects2[1] = fen1
-        database.databaseData.fenToId[startFen] = 1
-
-        // 创建几个后续局面
-        // fenId 2: 在红方开局库中
-        let fen2 = FenObject(fen: "fen2 - - 1 1", fenId: 2)
-        fen2.setInRedOpening(true)
-        database.databaseData.fenObjects2[2] = fen2
-        database.databaseData.fenToId["fen2 - - 1 1"] = 2
-
-        // fenId 3: 在黑方开局库中
-        let fen3 = FenObject(fen: "fen3 - - 1 1", fenId: 3)
-        fen3.setInBlackOpening(true)
-        database.databaseData.fenObjects2[3] = fen3
-        database.databaseData.fenToId["fen3 - - 1 1"] = 3
-
-        // fenId 4: 在红方开局库中
-        let fen4 = FenObject(fen: "fen4 - - 1 1", fenId: 4)
-        fen4.setInRedOpening(true)
-        database.databaseData.fenObjects2[4] = fen4
-        database.databaseData.fenToId["fen4 - - 1 1"] = 4
-
-        // fenId 5: 不在任何开局库中
-        let fen5 = FenObject(fen: "fen5 - - 1 1", fenId: 5)
-        database.databaseData.fenObjects2[5] = fen5
-        database.databaseData.fenToId["fen5 - - 1 1"] = 5
-
-        // 添加 moves: 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 5
-        let move1to2 = Move(sourceFenId: 1, targetFenId: 2)
-        fen1.addMoveIfNeeded(move: move1to2)
-        database.databaseData.moveObjects[1] = move1to2
-        database.databaseData.moveToId[[1, 2]] = 1
-
-        let move1to3 = Move(sourceFenId: 1, targetFenId: 3)
-        fen1.addMoveIfNeeded(move: move1to3)
-        database.databaseData.moveObjects[2] = move1to3
-        database.databaseData.moveToId[[1, 3]] = 2
-
-        let move2to4 = Move(sourceFenId: 2, targetFenId: 4)
-        fen2.addMoveIfNeeded(move: move2to4)
-        database.databaseData.moveObjects[3] = move2to4
-        database.databaseData.moveToId[[2, 4]] = 3
-
-        let move3to5 = Move(sourceFenId: 3, targetFenId: 5)
-        fen3.addMoveIfNeeded(move: move3to5)
-        database.databaseData.moveObjects[4] = move3to5
-        database.databaseData.moveToId[[3, 5]] = 4
-
-        return database
+        return TestDatabaseBuilder()
+            .addFen(1, fen: startFen, inRedOpening: true, inBlackOpening: true)
+            .addFen(2, fen: "fen2 - - 1 1", inRedOpening: true)
+            .addFen(3, fen: "fen3 - - 1 1", inBlackOpening: true)
+            .addFen(4, fen: "fen4 - - 1 1", inRedOpening: true)
+            .addFen(5, fen: "fen5 - - 1 1")
+            .addMove(from: 1, to: 2)
+            .addMove(from: 1, to: 3)
+            .addMove(from: 2, to: 4)
+            .addMove(from: 3, to: 5)
+            .build()
     }
 
     /// 创建测试用的 Session（使用完整视图）
