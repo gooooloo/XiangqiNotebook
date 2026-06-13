@@ -50,6 +50,8 @@ class Session: ObservableObject {
     static let othersRealGameBookId = UUID(uuidString: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")!
     static let courseBookId = UUID(uuidString: "19331DC6-67E9-419B-AA51-546C43669913")!
     static let xiangqiyashiuBookId = UUID(uuidString: "E4A84131-DC52-437A-86BD-F318698F3439")!
+    static let juzhongmiBookId = UUID(uuidString: "0B5C7A1E-3D2F-4A6B-8C9D-1E2F3A4B5C6D")!
+    static let meihuapuBookId = UUID(uuidString: "1C6D8B2F-4E3A-5B7C-9D0E-2F3A4B5C6D7E")!
 
     @Published public var dataChanged: Bool = false
 
@@ -1789,6 +1791,69 @@ extension Session {
         }
 
         loadShiQingYaQuDataIfNeeded()
+        loadClassicManualsIfNeeded()
+    }
+
+    /// 内置古谱（橘中秘全局谱 + 梅花谱）导入（issue #173）。
+    /// 与《适情雅趣》同样受测试开关控制；每本书仅在为空时导入一次。
+    func loadClassicManualsIfNeeded(force: Bool = false) {
+        guard force || !Self.skipBuiltInPuzzleImport else { return }
+        importManual(bookId: Self.juzhongmiBookId, bookName: "《橘中秘》", games: ClassicManualData.juzhongmi)
+        importManual(bookId: Self.meihuapuBookId, bookName: "《梅花谱》", games: ClassicManualData.meihuapu)
+    }
+
+    /// 把一本古谱挂到「课程」下，并在书为空时导入其全部棋局（含变着树）
+    private func importManual(bookId: UUID, bookName: String, games: [ClassicManualData.Game]) {
+        if databaseView.getBookObjectUnfiltered(bookId) == nil {
+            databaseView.updateBookObject(bookId, bookObject: BookObject(id: bookId, name: bookName))
+        }
+        if let courseBook = databaseView.getBookObjectUnfiltered(Session.courseBookId),
+           !courseBook.subBookIds.contains(bookId) {
+            courseBook.subBookIds.append(bookId)
+            databaseView.updateBookObject(Session.courseBookId, bookObject: courseBook)
+        }
+
+        guard let book = databaseView.getBookObjectUnfiltered(bookId), book.gameIds.isEmpty else { return }
+
+        let startFen = normalizeFen(XiangqiBoardUtils.startFEN)
+        for game in games {
+            importManualGame(into: bookId, name: game.name, lines: game.lines, startFen: startFen)
+        }
+    }
+
+    /// 导入单局：逐条变着线 replay 建图（ensureFenId/ensureMove），
+    /// GameObject.moveIds 收录全部边（主线+变着，去重），使变着在 specificGame 视图中可分叉浏览
+    private func importManualGame(into bookId: UUID, name: String, lines: [String], startFen: String) {
+        let startFenId = databaseView.ensureFenId(for: startFen)
+        let gameId = databaseView.addGame(
+            to: bookId, name: name, redPlayerName: "", blackPlayerName: "",
+            gameDate: Date(), gameResult: .unknown, iAmRed: false, iAmBlack: false,
+            startingFenId: startFenId, isFullyRecorded: true
+        )
+        guard let game = databaseView.getGameObjectUnfiltered(gameId) else { return }
+
+        var addedMoveIds = Set<Int>()
+        for line in lines {
+            var currentFenId = startFenId
+            var pieces = XiangqiBoardUtils.fenToPiecesBySquare(startFen)
+            for token in line.split(separator: " ") {
+                let appMove = PGNParser.pgnCoordToAppCoord(String(token))
+                let from = String(appMove.prefix(2))
+                let to = String(appMove.suffix(2))
+                guard let newFen = XiangqiBoardUtils.getNewFenAfterMove(from: from, to: to, currentPieces: pieces) else {
+                    break  // 数据已离线全量校验，正常不会发生
+                }
+                let normFen = normalizeFen(newFen)
+                let nextFenId = databaseView.ensureFenId(for: normFen)
+                let (move, moveId, _) = databaseView.ensureMove(from: currentFenId, to: nextFenId)
+                if addedMoveIds.insert(moveId).inserted {
+                    game.appendMoveId(moveId, move: move)
+                }
+                currentFenId = nextFenId
+                pieces = XiangqiBoardUtils.fenToPiecesBySquare(normFen)
+            }
+        }
+        databaseView.updateGameObject(gameId, gameObject: game)
     }
 
     /// 测试开关：测试进程默认跳过《适情雅趣》550 局静默导入。
