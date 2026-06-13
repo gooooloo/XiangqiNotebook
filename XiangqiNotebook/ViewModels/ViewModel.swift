@@ -1676,8 +1676,9 @@ class ViewModel: ObservableObject {
         let game = session.sessionData.currentGame2
         var requests: [EvaluationRequest] = []
         for fenId in game {
-            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey) != nil ||
-               Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) != nil { continue }
+            // 只看快估分：与深评本局对称，各管各的 engineKey。
+            // 即使已有深评分，也仍补算快估分（按用户需求，不再因深评存在而跳过）
+            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey) != nil { continue }
             guard let fen = session.getFenForId(fenId) else { continue }
             requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: 3000))
         }
