@@ -389,4 +389,80 @@ struct SessionTests {
 
         #expect(result == nil)
     }
+
+    // MARK: - 锁机制 Tests（issue #167 回归钉子）
+
+    @Test func testToggleLock_SetsAndClearsLockedStep() {
+        let session = createTestSession()
+        session.sessionData.currentGame2 = [1, 2, 4]
+        session.sessionData.currentGameStep = 1
+
+        #expect(session.isAnyMoveLocked == false)
+        session.toggleLock()
+        #expect(session.isAnyMoveLocked == true)
+        #expect(session.sessionData.lockedStep == 1)
+        session.toggleLock()
+        #expect(session.isAnyMoveLocked == false)
+        #expect(session.sessionData.lockedStep == nil)
+    }
+
+    @Test func testToStepIndex_BlockedBeforeLock_WhenCannotNavigate() {
+        let session = createTestSession()
+        session.sessionData.currentGame2 = [1, 2, 4]
+        session.sessionData.currentGameStep = 2
+        session.toggleLock()  // lockedStep = 2
+
+        #expect(session.sessionData.canNavigateBeforeLockedStep == false)
+        session.toStepIndex(0)  // 0 < lockedStep 2 → 被拦，游标不动
+        #expect(session.sessionData.currentGameStep == 2)
+    }
+
+    @Test func testToStepIndex_AllowedBeforeLock_WhenCanNavigate() {
+        let session = createTestSession()
+        session.sessionData.currentGame2 = [1, 2, 4]
+        session.sessionData.currentGameStep = 2
+        session.toggleLock()
+        session.toggleCanNavigateBeforeLockedStep()  // canNav = true
+
+        session.toStepIndex(0)  // 允许回退到锁前
+        #expect(session.sessionData.currentGameStep == 0)
+    }
+
+    // MARK: - playNewBoardFen Tests（issue #167 回归钉子）
+
+    @Test func testPlayNewBoardFen_AdvancesOnValidFen() {
+        let session = createTestSession()
+        session.sessionData.currentGame2 = [1]
+        session.sessionData.currentGameStep = 0
+        session.sessionData.lockedStep = nil
+
+        let ok = session.playNewBoardFen("fen2 - - 1 1")  // 走 1→2
+        #expect(ok == true)
+        #expect(session.sessionData.currentGameStep == 1)
+        #expect(session.sessionData.currentGame2[safe: 1] == 2)
+    }
+
+    @Test func testPlayNewBoardFen_BlockedWhenBeforeLockedStep() {
+        let session = createTestSession()
+        session.sessionData.currentGame2 = [1, 2, 4]
+        session.sessionData.currentGameStep = 2
+        session.toggleLock()                          // lockedStep = 2
+        session.toggleCanNavigateBeforeLockedStep()   // 允许回退到锁前
+        session.toStepIndex(0)                         // 退到 step 0（< lockedStep）
+        #expect(session.sessionData.currentGameStep == 0)
+
+        // currentGameStep(0) < lockedStep(2) → 直接拒绝
+        let ok = session.playNewBoardFen("fen3 - - 1 1")
+        #expect(ok == false)
+    }
+
+    @Test func testPlayNewBoardFen_RejectsOutOfScopeInFilteredView() {
+        // 红开局视图：fen3（仅黑开局）不在范围内，且非 specificGame 模式 → 拒绝创建
+        let session = createTestSessionWithFilter(Session.filterRedOpeningOnly)
+        session.sessionData.currentGame2 = [1]
+        session.sessionData.currentGameStep = 0
+
+        let ok = session.playNewBoardFen("fen3 - - 1 1")
+        #expect(ok == false)
+    }
 }
