@@ -170,23 +170,28 @@ xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -dest
 
 DEBUG 构建下，app 启动后会自动在 `localhost:9214` 启动远程操控 HTTP 服务器（`RemoteControlServer`），提供截图、状态查询和操作执行接口。
 
+**鉴权（防 CSRF）**：每次启动生成随机 token，所有请求必须带 `X-RemoteControl-Token` 头。token 写在 `~/Library/Application Support/XiangqiNotebook/remote-control-token.txt`，本地工具读取它来构造请求头（本机浏览器里的恶意网页读不到本地文件，因此无法伪造请求）。
+
 ### API 接口
 
 ```bash
+# 先读取本次启动的 token
+TOKEN=$(cat ~/Library/Application\ Support/XiangqiNotebook/remote-control-token.txt)
+
 # 截图当前窗口（返回 PNG）
-curl http://localhost:9214/screenshot -o /tmp/screenshot.png
+curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/screenshot -o /tmp/screenshot.png
 
 # 获取当前应用状态（返回 JSON）
-curl http://localhost:9214/state
+curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/state
 
 # 执行操作（action 名称对应 ActionDefinitions.ActionKey）
-curl -X POST http://localhost:9214/action -d '{"action":"stepForward"}'
+curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/action -d '{"action":"stepForward"}'
 
 # Toggle 操作可指定目标值
-curl -X POST http://localhost:9214/action -d '{"action":"toggleShowPath","value":true}'
+curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/action -d '{"action":"toggleShowPath","value":true}'
 
 # 列出所有可用操作
-curl http://localhost:9214/actions
+curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/actions
 ```
 
 ### UI 变更验证流程
@@ -194,10 +199,11 @@ curl http://localhost:9214/actions
 修改 View 层或 ViewModel 层代码后，除了运行单元测试，还应通过远程操控接口进行视觉验证：
 
 1. 构建并运行 app（DEBUG 配置）
-2. 用 `curl http://localhost:9214/screenshot -o $TMPDIR/screenshot.png` 获取截图
-3. 读取截图文件进行视觉检查（Claude 支持多模态图片理解）
-4. 用 `curl http://localhost:9214/state` 验证状态数据是否符合预期
-5. 需要时用 `/action` 接口触发操作后再截图对比
+2. 读取 token：`TOKEN=$(cat ~/Library/Application\ Support/XiangqiNotebook/remote-control-token.txt)`
+3. 用 `curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/screenshot -o $TMPDIR/screenshot.png` 获取截图
+4. 读取截图文件进行视觉检查（Claude 支持多模态图片理解）
+5. 用 `curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/state` 验证状态数据是否符合预期
+6. 需要时用 `/action` 接口触发操作后再截图对比
 
 这是对单元测试的补充，不替代测试。
 

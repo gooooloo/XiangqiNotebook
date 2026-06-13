@@ -3,13 +3,71 @@
 import Foundation
 import Network
 import AppKit
+import Security
 
 class RemoteControlServer {
     private var listener: NWListener?
     private let port: UInt16 = 9214
     private let queue = DispatchQueue(label: "RemoteControlServer")
 
+    /// 每次启动生成的随机鉴权 token。
+    /// acceptLocalOnly 只挡局域网，挡不住本机浏览器里的恶意网页向 localhost 发请求；
+    /// 要求每个请求携带自定义头 X-RemoteControl-Token 才能防 CSRF：
+    /// 1) 网页跨域无法读到 token（写在本地文件/控制台）；
+    /// 2) 自定义头会触发 CORS 预检，本服务不返回 CORS 头，浏览器据此直接拦截请求。
+    let authToken: String = RemoteControlServer.generateToken()
+
+    /// HTTP 头名（小写比较）
+    static let tokenHeaderName = "x-remotecontrol-token"
+
     weak var viewModel: ViewModel?
+
+    private static func generateToken() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        if SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) != errSecSuccess {
+            // 退化兜底：拼接 UUID（DEBUG 工具，极端情况下可接受）
+            return (UUID().uuidString + UUID().uuidString).replacingOccurrences(of: "-", with: "").lowercased()
+        }
+        return bytes.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// token 文件路径：本地工具读它来构造请求头；远程网页读不到本地文件
+    static func tokenFileURL() -> URL? {
+        guard let dir = try? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+        ).appendingPathComponent("XiangqiNotebook") else { return nil }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("remote-control-token.txt")
+    }
+
+    private func writeTokenFile() {
+        guard let url = Self.tokenFileURL() else { return }
+        do {
+            try authToken.write(to: url, atomically: true, encoding: .utf8)
+            print("[RemoteControlServer] 鉴权 token 已写入 \(url.path)")
+        } catch {
+            print("[RemoteControlServer] token 文件写入失败：\(error)")
+        }
+    }
+
+    /// 从原始 HTTP 请求文本中提取 X-RemoteControl-Token 头的值（纯函数，便于单测）
+    static func extractToken(from requestString: String) -> String? {
+        // 只在头部（首个空行之前）查找，避免 body 里的同名串被误读
+        let head: Substring
+        if let headerEnd = requestString.range(of: "\r\n\r\n") {
+            head = requestString[requestString.startIndex..<headerEnd.lowerBound]
+        } else {
+            head = Substring(requestString)
+        }
+        for rawLine in head.split(separator: "\r\n", omittingEmptySubsequences: true) {
+            guard let colon = rawLine.firstIndex(of: ":") else { continue }
+            let name = rawLine[rawLine.startIndex..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+            if name == tokenHeaderName {
+                return rawLine[rawLine.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return nil
+    }
 
     func start() throws {
         let params = NWParameters.tcp
@@ -27,6 +85,7 @@ class RemoteControlServer {
             }
         }
 
+        writeTokenFile()
         listener?.start(queue: queue)
     }
 
@@ -97,6 +156,13 @@ class RemoteControlServer {
 
         let method = String(parts[0])
         let path = String(parts[1])
+
+        // 鉴权：所有端点都要求正确的 token，防本机浏览器 CSRF
+        guard Self.extractToken(from: str) == authToken else {
+            sendJSONResponse(connection: connection, status: "403 Forbidden",
+                             body: #"{"error":"Missing or invalid X-RemoteControl-Token header"}"#)
+            return
+        }
 
         var body = ""
         if let headerEnd = str.range(of: "\r\n\r\n") {
