@@ -784,8 +784,8 @@ struct GameListItemView: View {
                     .font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(getResultColor(game.gameResult).opacity(0.1))
-                    .foregroundColor(getResultColor(game.gameResult))
+                    .background(game.gameResult.displayColor.opacity(0.1))
+                    .foregroundColor(game.gameResult.displayColor)
                     .cornerRadius(6)
             }
         }
@@ -823,21 +823,6 @@ struct GameListItemView: View {
             }
         } message: {
             Text("确定要删除这局棋吗？此操作不可撤销。")
-        }
-    }
-    
-    private func getResultColor(_ result: GameResult) -> Color {
-        switch result {
-        case .redWin:
-            return .red
-        case .blackWin:
-            return .black
-        case .draw:
-            return .blue
-        case .notFinished:
-            return .orange
-        case .unknown:
-            return .secondary
         }
     }
 }
@@ -1027,26 +1012,11 @@ struct GameResultSection: View {
                     .font(.system(size: 16, weight: .semibold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(getResultColor(game.gameResult).opacity(0.1))
-                    .foregroundColor(getResultColor(game.gameResult))
+                    .background(game.gameResult.displayColor.opacity(0.1))
+                    .foregroundColor(game.gameResult.displayColor)
                     .cornerRadius(8)
                 Spacer()
             }
-        }
-    }
-    
-    private func getResultColor(_ result: GameResult) -> Color {
-        switch result {
-        case .redWin:
-            return .red
-        case .blackWin:
-            return .black
-        case .draw:
-            return .blue
-        case .notFinished:
-            return .orange
-        case .unknown:
-            return .secondary
         }
     }
 }

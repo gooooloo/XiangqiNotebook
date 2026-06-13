@@ -40,7 +40,7 @@ struct iPhoneRealGameListView: View {
                                             Spacer()
                                             Text(game.gameResult.rawValue)
                                                 .font(.caption)
-                                                .foregroundColor(resultColor(game.gameResult))
+                                                .foregroundColor(game.gameResult.displayColor)
                                         }
                                     }
                                     Spacer()
@@ -87,15 +87,6 @@ struct iPhoneRealGameListView: View {
     private func isCurrentlyLoaded(_ game: GameObject) -> Bool {
         viewModel.currentFilters.contains(Session.filterSpecificGame) &&
             viewModel.currentSpecificGameId == game.id
-    }
-
-    private func resultColor(_ result: GameResult) -> Color {
-        switch result {
-        case .redWin: return .red
-        case .blackWin: return .primary
-        case .draw: return .blue
-        case .notFinished, .unknown: return .secondary
-        }
     }
 }
 

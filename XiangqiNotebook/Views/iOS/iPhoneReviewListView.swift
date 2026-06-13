@@ -26,7 +26,7 @@ struct iPhoneReviewListView: View {
                                         Text(viewModel.reviewItemDescription(fenId: item.fenId))
                                             .lineLimit(1)
                                         HStack(spacing: 8) {
-                                            Text(dueStatusText(item.srsData))
+                                            Text(item.srsData.dueStatusText)
                                                 .font(.caption)
                                                 .foregroundColor(item.srsData.isDue ? .red : .secondary)
                                             Text("已复习 \(item.srsData.repetitions) 次")
@@ -115,21 +115,6 @@ struct iPhoneReviewListView: View {
         .onAppear { selectedFenId = viewModel.lockedFenId ?? viewModel.reviewItemList.first?.fenId }
         .onChange(of: viewModel.lockedFenId) { _, newValue in
             if let newValue { selectedFenId = newValue }
-        }
-    }
-
-    private func dueStatusText(_ srsData: SRSData) -> String {
-        if srsData.isDue {
-            return "已到期"
-        }
-        let now = Date()
-        let days = Calendar.current.dateComponents([.day], from: now, to: srsData.nextReviewDate).day ?? 0
-        if days == 0 {
-            return "今天到期"
-        } else if days == 1 {
-            return "明天到期"
-        } else {
-            return "\(days)天后"
         }
     }
 }

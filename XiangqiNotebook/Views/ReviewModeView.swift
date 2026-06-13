@@ -46,12 +46,7 @@ struct ReviewModeView: View {
                 .foregroundColor(.secondary)
 
             // 自评按钮
-            HStack(spacing: 6) {
-                reviewButton("忘了", quality: .again, color: .red)
-                reviewButton("困难", quality: .hard, color: .orange)
-                reviewButton("良好", quality: .good, color: .blue)
-                reviewButton("简单", quality: .easy, color: .green)
-            }
+            ReviewRatingButtons(viewModel: viewModel, spacing: 6)
 
             // 跳过按钮
             Button("跳过") {
@@ -96,15 +91,6 @@ struct ReviewModeView: View {
         }
     }
 
-    // MARK: - Helper
-
-    private func reviewButton(_ title: String, quality: ReviewQuality, color: Color) -> some View {
-        Button(title) {
-            viewModel.submitReviewRating(quality)
-        }
-        .foregroundColor(color)
-        .buttonStyle(.bordered)
-    }
 }
 
 #Preview {

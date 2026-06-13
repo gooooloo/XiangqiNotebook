@@ -57,6 +57,25 @@ class SRSData: Codable {
     }
 }
 
+extension SRSData {
+    /// 到期状态文案：已到期 / 今天到期 / 明天到期 / N 天后。
+    /// 复习库列表（Mac/iPad/iPhone）三处原本各有一份完全相同的实现，统一到此
+    var dueStatusText: String {
+        if isDue {
+            return "已到期"
+        }
+        let now = Date()
+        let days = Calendar.current.dateComponents([.day], from: now, to: nextReviewDate).day ?? 0
+        if days == 0 {
+            return "今天到期"
+        } else if days == 1 {
+            return "明天到期"
+        } else {
+            return "\(days)天后"
+        }
+    }
+}
+
 /// 复习自评等级
 enum ReviewQuality: Int, Codable {
     case again = 1
