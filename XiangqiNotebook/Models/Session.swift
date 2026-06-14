@@ -1848,13 +1848,16 @@ extension Session {
                 let nextFenId = databaseView.ensureFenId(for: normFen)
                 let (move, moveId, _) = databaseView.ensureMove(from: currentFenId, to: nextFenId)
                 // ensureMove 只写 moveObjects/moveToId，必须另把 move 加进源局面的 moves 数组，
-                // 否则本会话内 moves(from:) 读不到（rebuildIndexes 只在重新解码时才重建）
-                databaseView.getFenObject(currentFenId)?.addMoveIfNeeded(move: move)
+                // 否则本会话内 moves(from:) 读不到（rebuildIndexes 只在重新解码时才重建）。
+                // ⚠️ 必须用 Unfiltered：导入是数据写入，可能在带 filter 的 session 下运行
+                // （如启动时 session 恢复为 .specificGame），过滤版 getFenObject 会对新古谱局面
+                // 返回 nil → moves 漏填 → 招法列表全是 nil_bug（issue #173 回归）。
+                databaseView.getFenObjectUnfiltered(currentFenId)?.addMoveIfNeeded(move: move)
                 // 标记主线续走点（lastMoveFenId 已持久化）：line[0] 先经过 → 主线得标记。
                 // loadGame 现已改用 mainLinePath 重建主线，不依赖此字段；但 loadBook 等仍用纯
                 // autoExtend，保留标记可让它们倾向沿主线展开（跨局共享局面仍可能被覆盖，属已知局限）
                 if markedFens.insert(currentFenId).inserted {
-                    databaseView.getFenObject(currentFenId)?.markLastMove(fenId: nextFenId)
+                    databaseView.getFenObjectUnfiltered(currentFenId)?.markLastMove(fenId: nextFenId)
                 }
                 if addedMoveIds.insert(moveId).inserted {
                     game.appendMoveId(moveId, move: move)

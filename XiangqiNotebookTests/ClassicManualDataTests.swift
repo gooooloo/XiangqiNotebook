@@ -5,6 +5,55 @@ import Foundation
 /// 内置古谱（橘中秘 + 梅花谱）数据与导入器测试（issue #173）。
 struct ClassicManualDataTests {
 
+    /// 回归（issue #173 真凶，已用真实 app A/B 实测确认：旧代码 nil_bug=18 → 修复后 0）：
+    /// app 启动时 session 可能恢复为 .specificGame 过滤；Session.init 在该**过滤视图**下导入古谱。
+    /// 导入器若用过滤版 getFenObject 填 fenObject.moves，会对范围外的新古谱局面返回 nil → moves
+    /// 漏填 → 加载古谱时招法列表 nil_bug。导入是数据写入，须用 getFenObjectUnfiltered。
+    ///
+    /// 本测试**直接构造过滤视图的 Session** 并在其下导入（忠实复刻 Session.init 路径），
+    /// 再断言古谱每条边的源局面 moves 都已填入。旧代码下深层边的源局面 moves 为空 → 失败。
+    @Test func testImportUnderFilteredSessionFillsAllMoves() throws {
+        let database = Database(testDatabaseData: DatabaseData())
+
+        // 先在全库下建默认书 + 建一个占位棋局，供 .specificGame 过滤指向
+        let fullView = DatabaseView.full(database: database)
+        let bootSession = try Session(sessionData: SessionData(), databaseView: fullView)
+        bootSession.setupDefaultBooksIfNeeded()
+        let startFenId = fullView.ensureFenId(for: normalizeFen(XiangqiBoardUtils.startFEN))
+        let dummyGameId = fullView.addGame(
+            to: Session.myRealGameBookId, name: "占位", redPlayerName: "", blackPlayerName: "",
+            gameDate: Date(), gameResult: .unknown, iAmRed: false, iAmBlack: false,
+            startingFenId: startFenId, isFullyRecorded: false
+        )
+
+        // 构造**过滤视图**的 Session（复刻启动恢复 .specificGame 的状态），在其下导入古谱
+        let filteredView = DatabaseView.specificGame(database: database, gameId: dummyGameId)
+        var sd = SessionData()
+        sd.filters = [Session.filterSpecificGame]
+        sd.specificGameId = dummyGameId
+        let filteredSession = try Session(sessionData: sd, databaseView: filteredView)
+        filteredSession.loadClassicManualsIfNeeded(force: true)
+
+        // 断言：古谱每条边的源局面（unfiltered 直读）都包含该边，moves 未被漏填
+        let jzm = try #require(fullView.getBookObjectUnfiltered(Session.juzhongmiBookId))
+        #expect(jzm.gameIds.count == 20)
+        var missing = 0
+        var checked = 0
+        for gameId in jzm.gameIds {
+            guard let game = fullView.getGameObjectUnfiltered(gameId) else { continue }
+            for moveId in game.moveIds {
+                guard let move = database.databaseData.moveObjects[moveId],
+                      move.targetFenId != nil,
+                      let srcFen = database.databaseData.fenObjects2[move.sourceFenId] else { continue }
+                checked += 1
+                if srcFen.findMove(targetFenId: move.targetFenId!, fenIdFilter: { _ in true }) == nil {
+                    missing += 1
+                }
+            }
+        }
+        #expect(missing == 0, "过滤态导入后，\(checked) 条边中有 \(missing) 条未填入源局面 moves（→ 招法列表 nil_bug）")
+    }
+
     @Test func testCounts() {
         #expect(ClassicManualData.juzhongmi.count == 20)
         #expect(ClassicManualData.meihuapu.count == 31)
