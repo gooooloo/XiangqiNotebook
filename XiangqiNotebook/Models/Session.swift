@@ -1833,6 +1833,7 @@ extension Session {
         guard let game = databaseView.getGameObjectUnfiltered(gameId) else { return }
 
         var addedMoveIds = Set<Int>()
+        var markedFens = Set<Int>()   // 已设过 lastMoveFenId 的局面（首条线经过者胜出 → line[0]=主线）
         for line in lines {
             var currentFenId = startFenId
             var pieces = XiangqiBoardUtils.fenToPiecesBySquare(startFen)
@@ -1846,6 +1847,15 @@ extension Session {
                 let normFen = normalizeFen(newFen)
                 let nextFenId = databaseView.ensureFenId(for: normFen)
                 let (move, moveId, _) = databaseView.ensureMove(from: currentFenId, to: nextFenId)
+                // ensureMove 只写 moveObjects/moveToId，必须另把 move 加进源局面的 moves 数组，
+                // 否则本会话内 moves(from:) 读不到（rebuildIndexes 只在重新解码时才重建）
+                databaseView.getFenObject(currentFenId)?.addMoveIfNeeded(move: move)
+                // 标记主线续走点（lastMoveFenId 已持久化）：line[0] 先经过 → 主线得标记。
+                // loadGame 现已改用 mainLinePath 重建主线，不依赖此字段；但 loadBook 等仍用纯
+                // autoExtend，保留标记可让它们倾向沿主线展开（跨局共享局面仍可能被覆盖，属已知局限）
+                if markedFens.insert(currentFenId).inserted {
+                    databaseView.getFenObject(currentFenId)?.markLastMove(fenId: nextFenId)
+                }
                 if addedMoveIds.insert(moveId).inserted {
                     game.appendMoveId(moveId, move: move)
                 }
@@ -2162,12 +2172,14 @@ extension Session {
         rebuildDatabaseView()
         clearAllGamePaths()
 
-        // 设置起始局面
+        // 用棋局自身记录的 moveIds 重建主线（不依赖会被跨局加载/导入污染的 lastMoveFenId）。
+        // 对带变着树的棋局（如导入的古谱）这是正确展开主线的关键；线性棋局结果与旧逻辑一致。
+        let mainLine = GameOperations.mainLinePath(of: game, databaseView: databaseView)
         let startingFenId = game.startingFenId ?? 1
-        sessionData.currentGame2 = [startingFenId]
+        sessionData.currentGame2 = mainLine.isEmpty ? [startingFenId] : mainLine
         sessionData.currentGameStep = 0
 
-        // 利用 DatabaseView 的 .specificGame() 过滤，auto-extension 会沿着唯一路径扩展
+        // 主线终点之后若还有可唯一延伸的着法，继续沿 .specificGame() 过滤扩展
         autoExtendCurrentGame()
 
         // 移动到游戏末尾
