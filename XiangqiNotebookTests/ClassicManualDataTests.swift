@@ -121,4 +121,65 @@ struct ClassicManualDataTests {
             "loadGame 后 currentGame2 应有 \(expectedMoves + 1) 个局面，实际 \(loaded.count)"
         )
     }
+
+    /// 回归：加载后招法列表不应出现 "nil_bug"（路径中相邻局面间必须有可见 move）。
+    /// 对应用户截图：梅花谱某局主线后半段全是 nil_bug，因 fenObject.moves 未填充，
+    /// move(from:to:) 取不到边。
+    @Test func testLoadedGameMoveListHasNoNilBug() throws {
+        let database = Database(testDatabaseData: DatabaseData())
+        let sessionManager = SessionManager.create(from: SessionData(), database: database)
+        sessionManager.mainSession.setupDefaultBooksIfNeeded()
+        sessionManager.mainSession.loadClassicManualsIfNeeded(force: true)
+
+        let view = DatabaseView.full(database: database)
+        let mhp = try #require(view.getBookObjectUnfiltered(Session.meihuapuBookId))
+
+        for gameId in mhp.gameIds {
+            sessionManager.loadGame(gameId)
+            let path = sessionManager.mainSession.sessionData.currentGame2
+            let items = GameOperations.formatMoveList(
+                currentGame: path,
+                databaseView: sessionManager.mainSession.databaseView,
+                isHorizontalFlipped: false
+            )
+            let nilBugCount = items.filter { $0.notation == "nil_bug" }.count
+            let name = view.getGameObjectUnfiltered(gameId)?.name ?? "?"
+            #expect(nilBugCount == 0, "\(name) 招法列表出现 \(nilBugCount) 个 nil_bug（路径长 \(path.count)）")
+        }
+    }
+
+    /// 模拟用户场景：古谱由「旧导入器」导入（未填 fenObject.moves），存盘后重启 app
+    /// 重新解码 → rebuildIndexes 应重建 fenObject.moves，使加载后招法列表无 nil_bug。
+    /// 即：存量被旧代码导入的数据，重启一次即自愈，无需删库重导。
+    @Test func testStaleDataSelfHealsAfterDecode() throws {
+        // 1. 正常导入（含本次新增的 addMoveIfNeeded）
+        let database = Database(testDatabaseData: DatabaseData())
+        let importer = SessionManager.create(from: SessionData(), database: database)
+        importer.mainSession.setupDefaultBooksIfNeeded()
+        importer.mainSession.loadClassicManualsIfNeeded(force: true)
+
+        // 2. 模拟「旧导入器」遗留状态：清空所有 fenObject.moves（旧代码不填该数组）
+        let snapshot = database.databaseData
+        for (_, fen) in snapshot.fenObjects2 { fen.moves = [] }
+
+        // 3. 存盘往返：编码 → 解码（解码 init 内会调用 rebuildIndexes 重建 moves）
+        let data = try JSONEncoder().encode(snapshot)
+        let restored = try JSONDecoder().decode(DatabaseData.self, from: data)
+        let restoredDB = Database(testDatabaseData: restored)
+        let sessionManager = SessionManager.create(from: SessionData(), database: restoredDB)
+
+        // 4. 重启后加载，招法列表不应有 nil_bug
+        let view = DatabaseView.full(database: restoredDB)
+        let mhp = try #require(view.getBookObjectUnfiltered(Session.meihuapuBookId))
+        let gameId = try #require(mhp.gameIds.first)
+        sessionManager.loadGame(gameId)
+        let path = sessionManager.mainSession.sessionData.currentGame2
+        let items = GameOperations.formatMoveList(
+            currentGame: path,
+            databaseView: sessionManager.mainSession.databaseView,
+            isHorizontalFlipped: false
+        )
+        let nilBugCount = items.filter { $0.notation == "nil_bug" }.count
+        #expect(nilBugCount == 0, "重启解码后仍有 \(nilBugCount) 个 nil_bug（路径长 \(path.count)）")
+    }
 }
