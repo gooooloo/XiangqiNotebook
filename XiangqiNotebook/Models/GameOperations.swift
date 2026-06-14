@@ -71,7 +71,48 @@ class GameOperations {
 
         return extendedGame
     }
-    
+
+    /// 沿棋局自身记录的 moveIds 重建主线路径（从起始局面到主线终点的 fenId 序列）。
+    ///
+    /// 为什么不直接用 `autoExtendGame`：autoExtend 靠 `FenObject.lastMoveFenId` 与
+    /// `moves(from:)[0]` 选续走点，二者都是「按局面」的全局状态，会被其它棋局的加载/导入
+    /// 改写（同一局面在多局间共享同一 FenObject）。当多局共享开局/中局局面（如各路顺炮），
+    /// 加载某局时 autoExtend 可能沿被污染的 lastMoveFenId 串到另一局的线上，导致展开过长或过短。
+    ///
+    /// 本方法只依赖棋局**自身且不可变**的 `moveIds`：导入/录入时主线的边最先 append，
+    /// 因此每个局面取「在本局 moveIds 中顺序最靠前的出边」即为该局主线续走，跨局不受污染。
+    /// 对无变着的线性棋局，每个局面只有唯一出边，结果与旧 autoExtend 完全一致。
+    static func mainLinePath(of game: GameObject, databaseView: DatabaseView) -> [Int] {
+        guard let start = game.startingFenId else { return [] }
+
+        // moveId → 在本局 moveIds 中的顺序索引（越小越接近主线）
+        var order: [Int: Int] = [:]
+        for (i, moveId) in game.moveIds.enumerated() where order[moveId] == nil {
+            order[moveId] = i
+        }
+        // 预聚合：sourceFenId → 该局面的出边（move + 顺序），避免每步全表扫描
+        var outEdges: [Int: [(order: Int, target: Int)]] = [:]
+        for moveId in game.moveIds {
+            guard let move = databaseView.move(id: moveId),
+                  let target = move.targetFenId,
+                  let ord = order[moveId] else { continue }
+            outEdges[move.sourceFenId, default: []].append((ord, target))
+        }
+
+        var path = [start]
+        var visited: Set<Int> = [start]
+        var current = start
+        while let edges = outEdges[current], !edges.isEmpty {
+            // 顺序最靠前的出边 = 主线续走
+            let next = edges.min(by: { $0.order < $1.order })!.target
+            if visited.contains(next) { break }   // 防环（含转位）
+            path.append(next)
+            visited.insert(next)
+            current = next
+        }
+        return path
+    }
+
     static func cutGameUntilStep(_ stepIndex: Int, currentGame: [Int]) -> ([Int], Int) {
         guard stepIndex >= 0,
               stepIndex <= currentGame.count - 1 else {
