@@ -4,94 +4,116 @@ import SwiftUI
 struct CommentView: View {
     @ObservedObject var viewModel: ViewModel
 
-    var body: some View {
-        HStack() {
-            // 第一列：局面评论区
-            VStack() {
-                Text("局面评论区")
-                if viewModel.isCommentEditing {
-                    TextEditor(text: .init(
-                        get: { viewModel.currentFenComment ?? "" },
-                        set: { newValue in
-                            viewModel.updateCurrentFenComment(newValue)
-                        }
-                    ))
-                    .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
-                } else {
-                    Text(viewModel.currentFenComment ?? "")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .background(Color.gray.opacity(0.1))
-                        .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
-                }
+    /// 评论文本块：编辑态用 TextEditor，浏览态用只读文本；统一浅底内嵌框。
+    @ViewBuilder
+    private func commentBox(text: String, isEditing: Bool, disabled: Bool = false, onChange: @escaping (String) -> Void) -> some View {
+        Group {
+            if isEditing {
+                TextEditor(text: .init(get: { text }, set: onChange))
+                    .font(.system(size: Theme.fs(12.5)))
+                    .scrollContentBackground(.hidden)
+                    .disabled(disabled)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+            } else {
+                Text(text)
+                    .font(.system(size: Theme.fs(12.5)))
+                    .foregroundColor(Theme.monoText)
+                    .lineSpacing(2)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .insetBox()
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // 第一列：局面评论区
+            VStack(alignment: .leading, spacing: 5) {
+                GroupHeader("局面评论区")
+                commentBox(
+                    text: viewModel.currentFenComment ?? "",
+                    isEditing: viewModel.isCommentEditing,
+                    onChange: { viewModel.updateCurrentFenComment($0) }
+                )
+            }
+            .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
 
             // 第二列：招法评论区
-            VStack() {
-                Text("招法评论区")
-                if viewModel.isCommentEditing {
-                    TextEditor(text: .init(
-                        get: { viewModel.currentMoveComment ?? "" },
-                        set: { newValue in
-                            viewModel.updateCurrentMoveComment(newValue)
-                        }
-                    ))
-                    .disabled(!viewModel.hasCurrentMove)
-                    .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
-                } else {
-                    Text(viewModel.currentMoveComment ?? "")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .background(Color.gray.opacity(0.1))
-                        .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
-                }
+            VStack(alignment: .leading, spacing: 5) {
+                GroupHeader("招法评论区")
+                commentBox(
+                    text: viewModel.currentMoveComment ?? "",
+                    isEditing: viewModel.isCommentEditing,
+                    disabled: !viewModel.hasCurrentMove,
+                    onChange: { viewModel.updateCurrentMoveComment($0) }
+                )
             }
+            .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
 
             // 第三列：相关课程 + 不好的原因
-            VStack(spacing: 0) {
+            VStack(spacing: 7) {
                 // 上半部分：相关课程
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("相关课程")
+                VStack(alignment: .leading, spacing: 5) {
+                    GroupHeader("相关课程")
                     ScrollView {
                         FlowLayout(items: viewModel.relatedCoursesForCurrentFen) { game in
                             Text(game.name ?? "未命名游戏")
+                                .font(.system(size: Theme.fs(11)))
+                                .foregroundColor(Theme.variant)
                                 .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.gray.opacity(0.1))
-                                .cornerRadius(4)
+                                .padding(.vertical, 3)
+                                .background(Color(hex: 0xE7EEFC))
+                                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.row))
                                 #if os(macOS)
                                 .contextMenu {
                                     CourseVideoContextMenu(viewModel: viewModel, gameId: game.id, currentFenId: viewModel.currentFenId)
                                 }
                                 #endif
                         }
-                        .padding(.top, 8)
+                        .padding(8)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .insetBox()
                 }
                 .frame(maxHeight: .infinity)
                 .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
 
-                // 下半部分：不好的原因
+                // 下半部分：不好的原因（劣手时显示，红色框）
                 if viewModel.currentAppMode != .practice && viewModel.isCurrentMoveBad {
-                    VStack() {
-                        Text("不好的原因")
-                        if viewModel.isCommentEditing {
-                            TextEditor(text: .init(
-                                get: { viewModel.currentMoveBadReason ?? "" },
-                                set: { newValue in
-                                    viewModel.updateCurrentMoveBadReason(newValue)
-                                }
-                            ))
-                        } else {
-                            Text(viewModel.currentMoveBadReason ?? "")
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                .background(Color.gray.opacity(0.1))
+                    VStack(alignment: .leading, spacing: 5) {
+                        GroupHeader("不好的原因", color: Theme.bad)
+                        Group {
+                            if viewModel.isCommentEditing {
+                                TextEditor(text: .init(
+                                    get: { viewModel.currentMoveBadReason ?? "" },
+                                    set: { viewModel.updateCurrentMoveBadReason($0) }
+                                ))
+                                .font(.system(size: Theme.fs(12.5)))
+                                .scrollContentBackground(.hidden)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                            } else {
+                                Text(viewModel.currentMoveBadReason ?? "")
+                                    .font(.system(size: Theme.fs(12.5)))
+                                    .foregroundColor(Theme.monoText)
+                                    .lineSpacing(2)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                            }
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .insetBox(background: Theme.reasonBackground, border: Theme.reasonBorder)
                     }
                     .frame(maxHeight: .infinity)
                 }
             }
         }
-        .padding()
-        .border(Color.gray)
+        .padding(12)
     }
 }
 

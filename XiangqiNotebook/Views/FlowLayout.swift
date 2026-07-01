@@ -8,8 +8,17 @@ private struct FlowLayoutEngine: Layout {
     var verticalSpacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let containerWidth = proposal.width ?? .infinity
-        let rows = computeRows(subviews: subviews, containerWidth: containerWidth)
+        // 关键：当父布局以未指定/无穷大宽度来测量理想尺寸时，绝不能返回无穷大宽度，
+        // 否则该无穷大会沿父链向上传播，挤占同级列（着法列、右栏）的宽度，
+        // 使其文字被压成 0 宽而“消失”。此时以最宽子项作为理想宽度，逐项竖排。
+        let resolvedWidth: CGFloat
+        if let width = proposal.width, width.isFinite {
+            resolvedWidth = width
+        } else {
+            resolvedWidth = subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+        }
+
+        let rows = computeRows(subviews: subviews, containerWidth: resolvedWidth)
         var totalHeight: CGFloat = 0
         for (index, row) in rows.enumerated() {
             let rowHeight = row.map { $0.size.height }.max() ?? 0
@@ -18,7 +27,7 @@ private struct FlowLayoutEngine: Layout {
                 totalHeight += verticalSpacing
             }
         }
-        return CGSize(width: containerWidth, height: totalHeight)
+        return CGSize(width: resolvedWidth, height: totalHeight)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

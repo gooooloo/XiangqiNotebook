@@ -2,7 +2,11 @@
 import SwiftUI
 import AppKit
 
-/// 按钮区域组件
+/// 底部按钮区组件
+///
+/// 视觉改版：两行等宽对齐网格（行 1 不足处留空位补齐）；每个按钮单行「文字 + 键帽」，
+/// 高约 30；所有按钮统一为普通样式（不做单独高亮，避免被误读成激活态）。
+/// 整条工具栏用渐变底 + 顶部细分隔线。
 struct MacActionButtonsView: View {
     @ObservedObject var viewModel: ViewModel
 
@@ -59,7 +63,7 @@ struct MacActionButtonsView: View {
         }
     }
 
-    /// 最大可见按钮数量
+    /// 最大可见按钮数量（决定网格列数，保证两行对齐）
     private var maxVisibleCount: Int {
         buttonRows.map { visibleKeys(for: $0).count }.max() ?? 0
     }
@@ -70,22 +74,23 @@ struct MacActionButtonsView: View {
         let visible = visibleKeys(for: keys)
         let padding = maxVisibleCount - visible.count
 
-        HStack {
+        HStack(spacing: 5) {
             // 只渲染可见的按钮
             ForEach(Array(visible.enumerated()), id: \.offset) { _, key in
-                LargeButton(viewModel: viewModel, actionKey: key)
+                MacToolbarButton(viewModel: viewModel, actionKey: key)
                     .frame(maxWidth: .infinity)
             }
             // 补齐空占位符
             ForEach(0..<padding, id: \.self) { _ in
-                LargeButton(viewModel: viewModel, actionKey: nil)
+                Color.clear
                     .frame(maxWidth: .infinity)
+                    .frame(height: 30)
             }
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 5) {
             ForEach(Array(buttonRows.enumerated()), id: \.offset) { _, rowKeys in
                 let visible = visibleKeys(for: rowKeys)
                 if !visible.isEmpty {
@@ -93,8 +98,70 @@ struct MacActionButtonsView: View {
                 }
             }
         }
-        .padding(8)
-        .border(Color.gray)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(
+            LinearGradient(
+                colors: [Color(hex: 0xF8F8FA), Color(hex: 0xEEEEF1)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.black.opacity(0.12))
+                .frame(height: 0.5)
+        }
+    }
+}
+
+/// 底部工具栏的单个按钮：文字 + 键帽，单行。
+private struct MacToolbarButton: View {
+    @ObservedObject var viewModel: ViewModel
+    let actionKey: ActionDefinitions.ActionKey
+
+    var body: some View {
+        let info: ActionDefinitions.ActionInfo? = viewModel.isActionVisible(actionKey)
+            ? viewModel.actionDefinitions.getActionInfo(actionKey)
+            : nil
+
+        Button(action: {
+            ShortcutUsageStats.shared.recordFromButton(actionKey)
+            info?.action()
+        }) {
+            HStack(spacing: 5) {
+                Text(info?.text ?? "")
+                    .font(.system(size: Theme.fs(12.5), weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if let shortcut = info?.shortcutsDisplayText {
+                    Keycap(text: shortcut)
+                }
+            }
+            .foregroundColor(Theme.textPrimary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 30)
+            .padding(.horizontal, 6)
+        }
+        .buttonStyle(MacToolbarButtonStyle())
+        .disabled(info == nil)
+    }
+}
+
+/// 工具栏按钮样式：圆角浅底细边 + 轻投影，所有按钮统一。
+private struct MacToolbarButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Radius.row)
+                    .fill(configuration.isPressed ? Color.black.opacity(0.06) : Theme.cardBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.row)
+                    .stroke(Color.black.opacity(0.14), lineWidth: 0.5)
+            )
+            .shadow(color: Color.black.opacity(0.07), radius: 0.75, y: 1)
     }
 }
 
@@ -102,6 +169,6 @@ struct MacActionButtonsView: View {
     MacActionButtonsView(viewModel: ViewModel(
         platformService: MacOSPlatformService()
     ))
-} 
+}
 
 #endif

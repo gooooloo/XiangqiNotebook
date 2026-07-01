@@ -1160,12 +1160,25 @@ struct GameBrowserSidebarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("棋局浏览器")
-                    .font(.headline)
-                    .padding(.horizontal)
-                    .padding(.top)
+                GroupHeader("棋局浏览器")
                 Spacer()
+                // 收起侧栏（对应动作 toggleGameBrowserSidebar / ,gb）
+                Button(action: {
+                    if let info = viewModel.actionDefinitions.getToggleActionInfo(.toggleGameBrowserSidebar) {
+                        ShortcutUsageStats.shared.recordFromButton(.toggleGameBrowserSidebar)
+                        info.action(false)
+                    }
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: Theme.fs(11), weight: .semibold))
+                        .foregroundColor(Theme.textSecondary)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
@@ -1195,10 +1208,10 @@ struct GameBrowserSidebarView: View {
                         }
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, 8)
             }
         }
-        .background(Color.adaptiveBackground)
+        .background(Theme.sidebarBackground)
         .onAppear {
             expandedBookIds = viewModel.gameBrowserExpandedBookIds
         }
@@ -1231,7 +1244,7 @@ private struct SidebarBookRowView: View {
                 }
             }) {
                 Image(systemName: !hasChildren ? "circle" : (isExpanded ? "chevron.down" : "chevron.right"))
-                    .font(.system(size: 10))
+                    .font(.system(size: Theme.fs(10)))
                     .foregroundColor(.secondary)
                     .frame(width: 16, height: 16)
                     .contentShape(Rectangle())
@@ -1240,17 +1253,18 @@ private struct SidebarBookRowView: View {
             .disabled(!hasChildren)
 
             Image(systemName: "folder.fill")
-                .foregroundColor(.blue)
-                .font(.system(size: 12))
+                .foregroundColor(Theme.accent)
+                .font(.system(size: Theme.fs(12)))
 
             Text(book.name)
-                .font(.system(size: 12))
+                .font(.system(size: Theme.fs(12.5), weight: .medium))
+                .foregroundColor(Theme.textPrimary)
                 .lineLimit(1)
 
             Spacer()
         }
-        .padding(.vertical, 3)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -1285,16 +1299,20 @@ private struct SidebarGameRowView: View {
 
                 HStack(spacing: 6) {
                     Image(systemName: "doc.text")
-                        .foregroundColor(.orange)
-                        .font(.system(size: 11))
+                        .foregroundColor(isCurrentGame ? .white : Color(hex: 0xE0A93B))
+                        .font(.system(size: Theme.fs(11)))
                     Text(game.displayTitle)
-                        .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                        .font(.system(size: Theme.fs(12.5), weight: isSelected ? .medium : .regular))
+                        .foregroundColor(isCurrentGame ? .white : Theme.textPrimary)
                         .lineLimit(1)
-                    Spacer()
+                    Spacer(minLength: 4)
+                    if let outcome = game.userOutcome {
+                        OutcomeChip(outcome: outcome)
+                    }
                 }
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 3)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
 
             if isSelected {
                 HStack(spacing: 0) {
@@ -1311,27 +1329,27 @@ private struct SidebarGameRowView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         if !game.redPlayerName.isEmpty || !game.blackPlayerName.isEmpty {
                             Text("\(game.redPlayerName.isEmpty ? "?" : game.redPlayerName) vs \(game.blackPlayerName.isEmpty ? "?" : game.blackPlayerName)")
-                                .font(.system(size: 11))
+                                .font(.system(size: Theme.fs(11)))
                                 .foregroundColor(.secondary)
                         }
 
                         HStack(spacing: 6) {
                             if let date = game.gameDate {
                                 Text(date, style: .date)
-                                    .font(.system(size: 11))
+                                    .font(.system(size: Theme.fs(11)))
                                     .foregroundColor(.secondary)
                             }
 
                             if game.gameResult != .unknown {
                                 Text(game.gameResult.rawValue)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.system(size: Theme.fs(10), weight: .medium))
                                     .foregroundColor(.secondary)
                             }
                         }
 
                         Button(action: onLoad) {
                             Text("加载棋局")
-                                .font(.system(size: 11))
+                                .font(.system(size: Theme.fs(11)))
                         }
                         .buttonStyle(.plain)
                         .foregroundColor(.accentColor)
@@ -1345,8 +1363,8 @@ private struct SidebarGameRowView: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(isCurrentGame ? Color.accentColor.opacity(0.2) : (isSelected ? Color.secondary.opacity(0.1) : Color.clear))
+            RoundedRectangle(cornerRadius: Theme.Radius.row)
+                .fill(isCurrentGame ? Theme.accent : (isSelected ? Color.black.opacity(0.05) : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture {
