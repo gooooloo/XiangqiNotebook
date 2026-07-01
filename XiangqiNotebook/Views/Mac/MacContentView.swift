@@ -23,47 +23,71 @@ struct MacContentView: View {
         isViewFocused = true
     }
     
+    /// 弹性列宽：clamp(min, 比例, max)
+    private func clampWidth(_ total: CGFloat, ratio: CGFloat, min minW: CGFloat, max maxW: CGFloat) -> CGFloat {
+        Swift.min(maxW, Swift.max(minW, total * ratio))
+    }
+
     var body: some View {
         GeometryReader { geometry in
+            // 侧栏 / 着法列 / 右栏：确定宽度且更高布局优先级，HStack 先把它们排满，
+            // 棋盘栏拿剩余空间（最低优先级），因此列宽只随窗口宽度变化，既不会被
+            // 评论区内容反向挤压而随局面漂移，也不会在窄窗口下被压成空白。
+            // 各列 min/max 随字号缩放，避免放大字体后窄列装不下内容。
+            let totalWidth = geometry.size.width
+            let sidebarShown = viewModel.showGameBrowserSidebar
+            let sidebarWidth = sidebarShown ? clampWidth(totalWidth, ratio: 0.15, min: Theme.fs(178), max: Theme.fs(238)) : 0
+            let middleWidth = clampWidth(totalWidth, ratio: 0.17, min: Theme.fs(208), max: Theme.fs(272))
+            let rightWidth = clampWidth(totalWidth, ratio: 0.18, min: Theme.fs(220), max: Theme.fs(288))
+
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    // 棋局浏览器侧栏
-                    if viewModel.showGameBrowserSidebar {
+                    // 棋局浏览器侧栏（弹性宽度 clamp(178, 15%, 238)，可折叠）
+                    if sidebarShown {
                         GameBrowserSidebarView(viewModel: viewModel)
-                            .frame(width: 250)
+                            .frame(width: sidebarWidth)
+                            .layoutPriority(1)
                         Divider()
                     }
 
                     // 左侧区域：棋盘
                     VStack(spacing: 0) {
-                        // 棋盘 - 设置为屏幕高度的一半
+                        // 棋盘 - 按可用空间等比缩放并居中（内部 aspectRatio .fit），
+                        // 多余的纵向空间留给它，而不是堆给评论区
                         XiangqiBoard(viewModel: $viewModel.boardViewModel, onMove: { newFen in
                             viewModel.handleBoardMove(newFen)
                         })
-                        .frame(height: geometry.size.height * 0.5)  // 设置为屏幕高度的50%
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                         // 状态栏 - 保持固定高度
                         StatusBarView(viewModel: viewModel)
 
-                        // 评论区 - 分配剩余空间
+                        // 评论区 - 限高，避免空评论框过高
                         CommentView(viewModel: viewModel)
-                            .frame(maxHeight: .infinity)
+                            .frame(maxHeight: geometry.size.height * 0.30)
                     }
                     .frame(maxWidth: .infinity)
+                    .clipped()
+                    .background(Theme.centerBackground)
 
-                    // 中间区域：开局库和书签
+                    Divider()
+
+                    // 中间区域：着法列 + 变招（弹性宽度 clamp(208, 17%, 272)）
+                    // 着法列表 / 本步变招 / 下步变招 三段上下竖排，各占满整列宽度，
+                    // 这样变招行能拿到完整列宽，分数不会因列太窄被截断或换行。
                     VStack(spacing: 0) {
                         MoveListView(viewModel: viewModel)
-                            .frame(width: geometry.size.width * 0.2)
-
-                        // 变着列表 + 下一步招法列表（左右并排）
-                        HStack(spacing: 0) {
-                            VariantListView(viewModel: viewModel)
-                            NextMovesListView(viewModel: viewModel)
-                        }
-                        .frame(height: geometry.size.height * 0.25)
+                            .frame(maxHeight: .infinity)
+                        VariantListView(viewModel: viewModel)
+                            .frame(height: geometry.size.height * 0.18)
+                        NextMovesListView(viewModel: viewModel)
+                            .frame(height: geometry.size.height * 0.18)
                     }
-                    .frame(width: geometry.size.width * 0.2)
+                    .frame(width: middleWidth)
+                    .layoutPriority(1)
+                    .background(Theme.sidebarBackground)
+
+                    Divider()
 
                     // 右侧区域
                     if viewModel.isInVerificationMode {
@@ -78,7 +102,9 @@ struct MacContentView: View {
                             .frame(maxHeight: .infinity)
                             BoardOperationTogglesView(viewModel: viewModel)
                         }
-                        .frame(width: geometry.size.width * 0.2)
+                        .frame(width: rightWidth)
+                    .layoutPriority(1)
+                    .background(Theme.sidebarBackground)
                     } else if viewModel.isInReviewMode {
                         // 复习模式：复习面板 + 复习库列表（填满） + 棋盘操作（底部）
                         VStack(spacing: 0) {
@@ -91,7 +117,9 @@ struct MacContentView: View {
                             .frame(maxHeight: .infinity)
                             BoardOperationTogglesView(viewModel: viewModel)
                         }
-                        .frame(width: geometry.size.width * 0.2)
+                        .frame(width: rightWidth)
+                    .layoutPriority(1)
+                    .background(Theme.sidebarBackground)
                     } else {
                         // 常规/练习模式：ScrollView 包裹
                         ScrollView {
@@ -104,7 +132,9 @@ struct MacContentView: View {
                                 }
                             }
                         }
-                        .frame(width: geometry.size.width * 0.2)
+                        .frame(width: rightWidth)
+                    .layoutPriority(1)
+                    .background(Theme.sidebarBackground)
                     }
                 }
 

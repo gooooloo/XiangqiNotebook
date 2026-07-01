@@ -5,13 +5,10 @@ struct VariantListView: View {
     @ObservedObject var viewModel: ViewModel
     
     var body: some View {
-        VStack(alignment: .leading) {
-            HStack() {
-                Text("本步变招")
-                Spacer()
-            }
-            if viewModel.currentGameVariantListDisplay.count > 1 {
-                ScrollView(showsIndicators: true) {
+        VStack(alignment: .leading, spacing: 5) {
+            GroupHeader("本步变招")
+            ScrollView(showsIndicators: true) {
+                if viewModel.currentGameVariantListDisplay.count > 1 {
                     VStack(alignment: .leading, spacing: 0) {
                         // 用 enumerated 的 offset 作为身份，与下方 scrollPosition
                         // 的 Int 索引保持同一身份类型，否则定位无法匹配
@@ -27,21 +24,23 @@ struct VariantListView: View {
                                     viewModel.playVariantMove(item.move)
                                 }
                             )
-                            Divider()
+                            Divider().overlay(Theme.hairline)
                         }
                     }
                     // scrollPosition(id:) 必须配套 scrollTargetLayout 才能定位条目
                     .scrollTargetLayout()
                 }
-                .scrollPosition(id: .constant(viewModel.currentGameVariantListDisplay.firstIndex(where: {
-                    $0.move.targetFenId == viewModel.currentFenId
-                })))
-                .opacity(viewModel.currentAppMode == .practice || (viewModel.currentAppMode == .review && !viewModel.showAllNextMoves) ? 0 : 1)
             }
-            Spacer()
+            .scrollPosition(id: .constant(viewModel.currentGameVariantListDisplay.firstIndex(where: {
+                $0.move.targetFenId == viewModel.currentFenId
+            })))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .insetBox()
+            .opacity(viewModel.currentAppMode == .practice || (viewModel.currentAppMode == .review && !viewModel.showAllNextMoves) ? 0 : 1)
         }
-        .padding()
-        .border(Color.gray)
+        // 两列（本步/下步变招）永远等宽等高，空的一侧也保留同样大小的框
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(6)
     }
 }
 
@@ -50,13 +49,10 @@ struct NextMovesListView: View {
     @ObservedObject var viewModel: ViewModel
 
     var body: some View {
-        VStack(alignment: .leading) {
-            HStack() {
-                Text("下步变招")
-                Spacer()
-            }
-            if viewModel.currentNextMovesListDisplay.count > 1 {
-                ScrollView(showsIndicators: true) {
+        VStack(alignment: .leading, spacing: 5) {
+            GroupHeader("下步变招")
+            ScrollView(showsIndicators: true) {
+                if viewModel.currentNextMovesListDisplay.count > 1 {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(viewModel.currentNextMovesListDisplay, id: \.move) { item in
                             MoveItemView(
@@ -70,16 +66,17 @@ struct NextMovesListView: View {
                                     viewModel.playNextMove(item.move)
                                 }
                             )
-                            Divider()
+                            Divider().overlay(Theme.hairline)
                         }
                     }
                 }
-                .opacity(viewModel.currentAppMode == .practice || (viewModel.currentAppMode == .review && !viewModel.showAllNextMoves) ? 0 : 1)
             }
-            Spacer()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .insetBox()
+            .opacity(viewModel.currentAppMode == .practice || (viewModel.currentAppMode == .review && !viewModel.showAllNextMoves) ? 0 : 1)
         }
-        .padding()
-        .border(Color.gray)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(6)
     }
 }
 
@@ -94,42 +91,55 @@ struct MoveItemView: View {
     let onTap: () -> Void
     
     var body: some View {
-        HStack {
-            Text(displayText)
-                .padding(.vertical, 2)
-                .padding(.horizontal, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    Group {
-                        if isSelected {
-                            Color.blue.opacity(0.2)
-                        } else if isLocked {
-                            Color.gray.opacity(0.2)
-                        } else {
-                            Color.clear
-                        }
-                    }
-                )
+        HStack(spacing: 4) {
+            // 招法（变招列较窄，用半角数字更紧凑，优先保证招法完整不被截断）
+            Text(text)
+                .lineLimit(1)
+                .layoutPriority(1)
                 .foregroundColor(foregroundColor)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onTap)
+            Spacer(minLength: 4)
+            // 分数右对齐，按好坏着色
+            if !score.isEmpty {
+                Text(score)
+                    .monospacedDigit()
+                    .foregroundColor(scoreColor)
+            }
         }
+        .font(.system(size: Theme.fs(12.5)))
+        .padding(.vertical, 3)
+        .padding(.horizontal, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Group {
+                if isSelected {
+                    Theme.accent.opacity(0.12)
+                } else if isLocked {
+                    Color.black.opacity(0.05)
+                } else {
+                    Color.clear
+                }
+            }
+        )
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
     }
-    
-    private var displayText: String {
-        if !score.isEmpty {
-            return "\(text)（\(score)）"
-        }
-        return text
-    }
-    
+
     private var foregroundColor: Color {
         if isBadMove {
-            return .red
+            return Theme.bad
         } else if isRecommendedMove {
-            return .green
+            return Theme.good
         }
-        return .primary
+        return Theme.textPrimary
+    }
+
+    private var scoreColor: Color {
+        if isBadMove {
+            return Theme.bad
+        } else if isRecommendedMove {
+            return Theme.good
+        }
+        return Theme.textSecondary
     }
 }
 
