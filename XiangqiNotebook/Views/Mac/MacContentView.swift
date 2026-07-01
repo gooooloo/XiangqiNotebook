@@ -40,6 +40,12 @@ struct MacContentView: View {
             let middleWidth = clampWidth(totalWidth, ratio: 0.17, min: Theme.fs(208), max: Theme.fs(272))
             let rightWidth = clampWidth(totalWidth, ratio: 0.18, min: Theme.fs(220), max: Theme.fs(288))
 
+            // 本步 / 下步变招固定为约 4 行 item 的高度（多余交给滚动条），不再随窗口
+            // 高度线性增长挤占上方招法列表。各项随字号缩放，放大字体时同步变高。
+            //   行高 ≈ fs(20)（文字 fs 12.5 + 上下 padding 3 + 分隔线）
+            //   再加 标题 fs(12) + VStack spacing 5 + 外层上下 padding(6) 共 12
+            let variantListHeight = Theme.fs(20) * 4 + Theme.fs(12) + 5 + 12
+
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     // 棋局浏览器侧栏（弹性宽度 clamp(178, 15%, 238)，可折叠）
@@ -79,9 +85,9 @@ struct MacContentView: View {
                         MoveListView(viewModel: viewModel)
                             .frame(maxHeight: .infinity)
                         VariantListView(viewModel: viewModel)
-                            .frame(height: geometry.size.height * 0.18)
+                            .frame(height: variantListHeight)
                         NextMovesListView(viewModel: viewModel)
-                            .frame(height: geometry.size.height * 0.18)
+                            .frame(height: variantListHeight)
                     }
                     .frame(width: middleWidth)
                     .layoutPriority(1)
