@@ -1888,11 +1888,15 @@ class ViewModel: ObservableObject {
     var currentFenComment: String? { session.currentFenComment }
     var currentMoveComment: String? { session.currentMoveComment }
     var hasCurrentMove: Bool { session.currentMove != nil }
+    /// 当前手的着法记谱文本（评论面板标题用）
+    var currentMoveNotation: String? { session.currentMove.map { session.getMoveString(move: $0) } }
     var currentMoveBadReason: String? { session.currentMoveBadReason }
     var currentCombinedComment: String? { session.currentCombinedComment }
     var bookmarkList: [(game: [Int], name: String)] { session.bookmarkList }
     var isCurrentFenInReview: Bool { session.isCurrentFenInReview }
     var reviewItemList: [(fenId: Int, srsData: SRSData)] { session.reviewItemList }
+    /// 当前到期待复习的局面数（今日首页 Hero 卡用）
+    var dueReviewItemsCount: Int { session.dueReviewItems.count }
     func removeReviewItem(fenId: Int) { session.removeReviewItem(fenId: fenId) }
     func renameReviewItem(fenId: Int, name: String) { session.renameReviewItem(fenId: fenId, name: name) }
     func reviewAgain(fenId: Int) {
@@ -2139,6 +2143,13 @@ class ViewModel: ObservableObject {
     func isRecommendedMove(_ move: Move) -> Bool { session.isRecommendedMove(move) }
     func isMoveLocked(_ stepIndex: Int) -> Bool { session.isMoveLocked(stepIndex) }
 
+    /// 练习模式选择题：记录用户点选的错误候选着法（走该手后的局面 FEN 作为错误记录）
+    func recordPracticeMistake(wrongMove: Move) {
+        guard let targetFenId = wrongMove.targetFenId,
+              let fenObj = session.databaseView.getFenObjectUnfiltered(targetFenId) else { return }
+        session.recordPracticeMistakeAtCurrentFen(wrongBoardFen: fenObj.fen)
+    }
+
     var currentAppMode: AppMode { session.currentAppMode }
     var showPath: Bool { session.showPath }
     var showAllNextMoves: Bool { session.showAllNextMoves }
@@ -2199,6 +2210,11 @@ class ViewModel: ObservableObject {
 
     func getGamesInBook(_ bookId: UUID) -> [GameObject] {
         session.getGamesInBook(bookId)
+    }
+
+    /// 递归取某个棋书（含所有子棋书）下的全部棋局，用于「棋谱」标签的树形浏览
+    func getGamesInBookRecursively(_ bookId: UUID) -> [GameObject] {
+        session.databaseView.getGamesInBookRecursivelyUnfiltered(bookId: bookId)
     }
 
     func getSubBooksInBook(_ book: BookObject) -> [BookObject] {
@@ -2386,6 +2402,10 @@ class ViewModel: ObservableObject {
         session.toggleShowRealGameList()
     }
 
+    /// 「记录变招」：是否允许在棋盘上走出新着法时把它写入棋谱
+    var allowAddingNewMoves: Bool { session.allowAddingNewMoves }
+    func toggleAllowAddingNewMoves() { session.toggleAllowAddingNewMoves() }
+
     func toggleShowGameBrowserSidebar() {
         session.toggleShowGameBrowserSidebar()
     }
@@ -2430,6 +2450,9 @@ class ViewModel: ObservableObject {
 
         playRandomIfYourTurn(delay: 1.0)
     }
+
+    /// 是否存在正在进行的专项练习（今日/练习首页「继续练习」卡用）
+    var isInFocusedPractice: Bool { sessionManager.isInFocusedPractice }
 
     func startFocusedPractice() {
         // 使用 SessionManager 的方法进入 focusedPractice（v3.0 架构）
