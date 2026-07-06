@@ -2,7 +2,8 @@
 import SwiftUI
 
 /// 「棋盘」标签：沉浸式分析页（detail 页）。进入时隐藏底部标签栏；
-/// 固定头（返回/走子方/⋯）+ 固定棋盘（近满宽，靠冷灰底与暖木色棋盘的图底对比跳出，不用阴影）+ 可滚动分析区 + 固定底部走子条。
+/// 固定头（返回/走子方/⋯）+ 固定棋盘（近满宽，四周靠发丝线卡片界定边界，不靠底色对比、不加阴影/描边）
+/// + 可滚动分析区 + 固定底部走子条。页面底色与其余标签页统一为暖米 `XiangqiTheme.bg`。
 /// 卡片文字一律常规字重，靠深墨/浅灰颜色分主次；全屏唯一强调色是「更多」蓝按钮。
 struct iPhoneBoardView: View {
     @ObservedObject var viewModel: ViewModel
@@ -30,7 +31,7 @@ struct iPhoneBoardView: View {
             }
             navBar
         }
-        .background(XiangqiTheme.boardPageBg.ignoresSafeArea())
+        .background(XiangqiTheme.bg.ignoresSafeArea())
         .onAppear {
             // 分析页默认关闭路径/下一步/来源招法箭头叠加：棋子多的局面全是箭头太乱，
             // 保留在「更多」里可手动开；只在本页首次出现时纠正一次，不会覆盖用户之后的手动选择。
@@ -80,11 +81,11 @@ struct iPhoneBoardView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(XiangqiTheme.boardPageBg)
+        .background(XiangqiTheme.bg)
         .overlay(Divider().overlay(XiangqiTheme.hair), alignment: .bottom)
     }
 
-    // MARK: - 固定棋盘（不滚动，靠冷底/暖木色的图底对比跳出，不靠阴影）
+    // MARK: - 固定棋盘（不滚动，满宽，靠下方卡片的发丝线边界，不加阴影/描边）
 
     private var boardBlock: some View {
         // 边长≈屏宽：不用固定尺寸（不同设备宽度不同，固定值无法保证"全屏最宽元素"），
@@ -174,20 +175,9 @@ struct iPhoneBoardView: View {
 
     private var metaCard: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                recordSide(label: "执红",
-                           total: viewModel.currentFenInRealRedGameTotalCount,
-                           win: viewModel.currentFenInRealRedGameWinCount,
-                           draw: viewModel.currentFenInRealRedGameDrawCount,
-                           loss: viewModel.currentFenInRealRedGameLossCount)
-                recordSide(label: "执黑",
-                           total: viewModel.currentFenInRealBlackGameTotalCount,
-                           win: viewModel.currentFenInRealBlackGameWinCount,
-                           draw: viewModel.currentFenInRealBlackGameDrawCount,
-                           loss: viewModel.currentFenInRealBlackGameLossCount)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            recordSection
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
 
             Divider().overlay(XiangqiTheme.hair)
 
@@ -208,15 +198,59 @@ struct iPhoneBoardView: View {
         .padding(.horizontal, 14)
     }
 
-    private func recordSide(label: String, total: Int, win: Int, draw: Int, loss: Int) -> some View {
+    /// 自适应密度：双方胜/和/负都 ＜100 时一行两栏并排；只要任一 ≥100（真机常态）
+    /// 就拆成执红/执黑各一行——三位数战绩挤在一行会挤压/换行错位，拆行后每行仍是
+    /// 完整「标签+局数+胜/和/负」，一律左对齐（不用 flex 推到最右，避免中间留大片空白）。
+    private var recordUsesTwoRows: Bool {
+        [viewModel.currentFenInRealRedGameWinCount, viewModel.currentFenInRealRedGameDrawCount, viewModel.currentFenInRealRedGameLossCount,
+         viewModel.currentFenInRealBlackGameWinCount, viewModel.currentFenInRealBlackGameDrawCount, viewModel.currentFenInRealBlackGameLossCount]
+            .contains { $0 >= 100 }
+    }
+
+    @ViewBuilder
+    private var recordSection: some View {
+        Group {
+            if recordUsesTwoRows {
+                VStack(alignment: .leading, spacing: 6) {
+                    redRecordLine
+                    blackRecordLine
+                }
+            } else {
+                HStack(spacing: 20) {
+                    redRecordLine
+                    blackRecordLine
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var redRecordLine: some View {
+        recordLine(label: "执红",
+                   total: viewModel.currentFenInRealRedGameTotalCount,
+                   win: viewModel.currentFenInRealRedGameWinCount,
+                   draw: viewModel.currentFenInRealRedGameDrawCount,
+                   loss: viewModel.currentFenInRealRedGameLossCount)
+    }
+
+    private var blackRecordLine: some View {
+        recordLine(label: "执黑",
+                   total: viewModel.currentFenInRealBlackGameTotalCount,
+                   win: viewModel.currentFenInRealBlackGameWinCount,
+                   draw: viewModel.currentFenInRealBlackGameDrawCount,
+                   loss: viewModel.currentFenInRealBlackGameLossCount)
+    }
+
+    private func recordLine(label: String, total: Int, win: Int, draw: Int, loss: Int) -> some View {
         HStack(spacing: 6) {
-            Text(label).font(.system(size: 12)).foregroundColor(XiangqiTheme.ink)
+            Text(label).font(.system(size: 12, weight: .semibold)).foregroundColor(XiangqiTheme.ink)
             recordUnit(total, "局")
             recordUnit(win, "胜")
             recordUnit(draw, "和")
             recordUnit(loss, "负")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize()
+        .lineLimit(1)
     }
 
     private func recordUnit(_ value: Int, _ unit: String) -> some View {
@@ -258,7 +292,7 @@ struct iPhoneBoardView: View {
                 .font(.system(size: 13.5, weight: .medium))
                 .foregroundColor(accent ? .white : XiangqiTheme.ink)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
+                .padding(.vertical, 16)
                 .background(accent ? XiangqiTheme.blue : XiangqiTheme.card)
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(accent ? Color.clear : XiangqiTheme.line, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -294,7 +328,7 @@ struct iPhoneBoardView: View {
                 .font(.system(size: 14.5, weight: .medium))
                 .foregroundColor(disabled ? XiangqiTheme.faint : XiangqiTheme.ink)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, 16)
                 .background(disabled ? Color.clear : (primary ? XiangqiTheme.card : XiangqiTheme.inset))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)

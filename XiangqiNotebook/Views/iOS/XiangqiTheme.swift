@@ -13,11 +13,8 @@ enum XiangqiTheme {
     static let card = Color(hex: 0xFBF6E9)
     static let inset = Color(hex: 0xF1E8D2)
 
-    /// 棋盘分析页专用冷中性灰底：暖木色棋盘需要冷底衬托才能"跳出来"，
-    /// 其余标签页仍用暖米 `bg`（分析页是隐藏标签栏的沉浸详情页，允许有自己的底色）。
-    static let boardPageBg = Color(hex: 0xEBEBED)
-    /// 分析页固定底部走子条的磨砂色（冷色调，与 boardPageBg 配套）
-    static let boardNavBarMaterial = Color(hex: 0xFAFAFC, alpha: 0.94)
+    /// 分析页固定底部走子条的磨砂色，与全局暖米底色同色系
+    static let boardNavBarMaterial = Color(hex: 0xF6EFDC, alpha: 0.94)
 
     // MARK: - 文字
     static let ink = Color(hex: 0x282219)
