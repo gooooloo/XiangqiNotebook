@@ -127,7 +127,7 @@
 				179BE3EF2D46691E000FA5AC /* Sources */,
 				179BE3F02D46691E000FA5AC /* Frameworks */,
 				179BE3F12D46691E000FA5AC /* Resources */,
-				17SCRIPT0000000000000002 /* Codesign Pikafish */,
+				17SCRIPT0000000000000002 /* Prepare Pikafish Resource */,
 				17SCRIPT0000000000000001 /* Set Build Number from Git */,
 			);
 			buildRules = (
@@ -281,7 +281,7 @@
 			shellPath = /bin/sh;
 			shellScript = "BUILD_NUMBER=$(git -C \"${PROJECT_DIR}\" rev-list --count HEAD)\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion ${BUILD_NUMBER}\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n";
 		};
-		17SCRIPT0000000000000002 /* Codesign Pikafish */ = {
+		17SCRIPT0000000000000002 /* Prepare Pikafish Resource */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
