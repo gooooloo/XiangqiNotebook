@@ -193,7 +193,7 @@ internal class Database: ObservableObject {
     func buildRealGamesIndex() {
         let myRealGameBookId = Session.myRealGameBookId
 
-        guard let book = databaseData.bookObjects[myRealGameBookId] else {
+        guard databaseData.bookObjects[myRealGameBookId] != nil else {
             realGamesByFenId = [:]
             isRealGamesIndexReady = true
             return

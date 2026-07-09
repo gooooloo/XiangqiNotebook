@@ -253,8 +253,10 @@ class ViewModel: ObservableObject {
             object: nil, queue: .main
         ) { [weak self] _ in
             DatabaseStorage.clearRecoverySnapshot()
-            self?.evaluationQueue?.cancelAll()
-            self?.pikafishService?.stop()
+            Task { @MainActor [weak self] in
+                self?.evaluationQueue?.cancelAll()
+                self?.pikafishService?.stop()
+            }
         }
         #endif
 
@@ -265,7 +267,9 @@ class ViewModel: ObservableObject {
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            self?.writeRecoverySnapshotIfDirty(force: true)
+            Task { @MainActor [weak self] in
+                self?.writeRecoverySnapshotIfDirty(force: true)
+            }
         }
         #endif
 
@@ -287,7 +291,9 @@ class ViewModel: ObservableObject {
     /// 启动崩溃恢复定时器：每 30 秒检查一次，脏且有新改动时写入恢复快照
     private func startRecoveryTimer() {
         recoveryTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            self?.writeRecoverySnapshotIfDirty()
+            Task { @MainActor [weak self] in
+                self?.writeRecoverySnapshotIfDirty()
+            }
         }
     }
 

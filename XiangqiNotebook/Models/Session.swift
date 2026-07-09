@@ -1852,7 +1852,7 @@ extension Session {
                 // ⚠️ 必须用 Unfiltered：导入是数据写入，可能在带 filter 的 session 下运行
                 // （如启动时 session 恢复为 .specificGame），过滤版 getFenObject 会对新古谱局面
                 // 返回 nil → moves 漏填 → 招法列表全是 nil_bug（issue #173 回归）。
-                databaseView.getFenObjectUnfiltered(currentFenId)?.addMoveIfNeeded(move: move)
+                _ = databaseView.getFenObjectUnfiltered(currentFenId)?.addMoveIfNeeded(move: move)
                 // 标记主线续走点（lastMoveFenId 已持久化）：line[0] 先经过 → 主线得标记。
                 // loadGame 现已改用 mainLinePath 重建主线，不依赖此字段；但 loadBook 等仍用纯
                 // autoExtend，保留标记可让它们倾向沿主线展开（跨局共享局面仍可能被覆盖，属已知局限）
