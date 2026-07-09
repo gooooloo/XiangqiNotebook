@@ -67,6 +67,9 @@ struct PGNImportView: View {
         }
         .padding()
         .frame(width: 420, height: 350)
+        .onAppear {
+            startHTTPServer()
+        }
         .onDisappear {
             stopHTTPServer()
         }
