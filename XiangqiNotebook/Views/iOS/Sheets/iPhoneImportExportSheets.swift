@@ -86,7 +86,10 @@ struct iPhoneExportSheet: View {
                         UIPasteboard.general.string = viewModel.exportPGNCurrentGameContent()
                         toast = "已复制 PGN"
                     }
-                    button("分享棋盘图片", filled: false, color: XiangqiTheme.accent2) { }
+                    button("分享棋盘图片", filled: false, color: XiangqiTheme.accent2) {
+                        viewModel.actionDefinitions.getActionInfo(.copyBoardImage)?.action()
+                        toast = "已复制棋盘图片"
+                    }
                     button("生成复习卡片", filled: false, color: XiangqiTheme.sub) {
                         viewModel.actionDefinitions.getActionInfo(.addToReview)?.action()
                         toast = "已加入复习库"

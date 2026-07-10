@@ -17,12 +17,20 @@ struct XiangqiBoard: View {
     var onMove: ((String) -> Void)?  // 添加回调属性
     @State private var selectedGroupIndex: Int? = nil
     @State private var selectedPathIndex: Int? = nil
-    @State private var lastMoveOpacity: Double = 0
-    
+    @State private var lastMoveOpacity: Double
+    let staticSnapshot: Bool
+
     // MARK: - 初始化
-    init(viewModel: Binding<BoardViewModel> = .constant(.default), onMove: ((String) -> Void)? = nil) {
+    /// - Parameter staticSnapshot: 一次性静态展示模式（用于 ImageRenderer 离屏导出图片）：
+    ///   跳过来源招法高亮的淡入动画（直接以完全不透明显示），并去掉点击事件捕获层。
+    ///   去掉事件捕获层是关键：它是一个 NSViewRepresentable/UIViewRepresentable，一旦出现在视图树中，
+    ///   ImageRenderer 在新版 macOS 上会转为走系统级窗口合成截屏路径，若没有屏幕录制权限，
+    ///   会被替换成系统的隐私保护占位图（红色禁止图标），而不是棋盘本身。
+    init(viewModel: Binding<BoardViewModel> = .constant(.default), onMove: ((String) -> Void)? = nil, staticSnapshot: Bool = false) {
         _viewModel = viewModel
         self.onMove = onMove
+        self.staticSnapshot = staticSnapshot
+        _lastMoveOpacity = State(initialValue: staticSnapshot ? 1 : 0)
     }
     
     // MARK: - 辅助函数
@@ -200,37 +208,41 @@ struct XiangqiBoard: View {
                     .allowsHitTesting(false)
                 }
             }
-            .overlay(
-                BoardEventCatcherView(
-                    onTap: { point in
-                        // 坐标系统转换：macOS 和 iOS 的坐标原点不同
-                        //
-                        // macOS (NSView): 原点在左下角，y 轴向上增长（数学坐标系）
-                        //   示例：点击顶部时 y ≈ boardSize，点击底部时 y ≈ 0
-                        //   需要转换：boardSize - y
-                        //
-                        // iOS (UIView): 原点在左上角，y 轴向下增长（屏幕坐标系）
-                        //   示例：点击顶部时 y ≈ 0，点击底部时 y ≈ boardSize
-                        //   不需要转换
-                        //
-                        // handleBoardTap 期望的是 SwiftUI 标准坐标（左上角为原点）
-                    #if os(macOS)
-                        let p = CGPoint(x: point.x, y: boardSize - point.y)
-                    #else
-                        let p = point
-                    #endif
-                        self.handleBoardTap(
-                            p,
-                            squareSize: squareSize,
-                            squareSizeWidth: squareSizeWidth,
-                            squareSizeHeight: squareSizeHeight,
-                            pieceDiffX: pieceDiffX,
-                            pieceDiffY: pieceDiffY
-                        )
-                    }
-                )
-                .frame(width: boardSize, height: boardSize)
-            )
+            .overlay {
+                // staticSnapshot 模式下跳过事件捕获层：见 init 中 staticSnapshot 的说明，
+                // 该 NSViewRepresentable/UIViewRepresentable 会导致离屏导出图片被系统隐私占位图替换。
+                if !staticSnapshot {
+                    BoardEventCatcherView(
+                        onTap: { point in
+                            // 坐标系统转换：macOS 和 iOS 的坐标原点不同
+                            //
+                            // macOS (NSView): 原点在左下角，y 轴向上增长（数学坐标系）
+                            //   示例：点击顶部时 y ≈ boardSize，点击底部时 y ≈ 0
+                            //   需要转换：boardSize - y
+                            //
+                            // iOS (UIView): 原点在左上角，y 轴向下增长（屏幕坐标系）
+                            //   示例：点击顶部时 y ≈ 0，点击底部时 y ≈ boardSize
+                            //   不需要转换
+                            //
+                            // handleBoardTap 期望的是 SwiftUI 标准坐标（左上角为原点）
+                        #if os(macOS)
+                            let p = CGPoint(x: point.x, y: boardSize - point.y)
+                        #else
+                            let p = point
+                        #endif
+                            self.handleBoardTap(
+                                p,
+                                squareSize: squareSize,
+                                squareSizeWidth: squareSizeWidth,
+                                squareSizeHeight: squareSizeHeight,
+                                pieceDiffX: pieceDiffX,
+                                pieceDiffY: pieceDiffY
+                            )
+                        }
+                    )
+                    .frame(width: boardSize, height: boardSize)
+                }
+            }
             .frame(width: boardSize, height: boardSize)
         }
         .aspectRatio(1, contentMode: .fit)

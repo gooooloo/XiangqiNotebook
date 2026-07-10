@@ -334,6 +334,7 @@ struct MacMenuCommands: Commands {
             Divider()
             menuButton(.copyFEN)
             menuButton(.copyBoardText)
+            menuButton(.copyBoardImage)
         }
 
         // 显示 menu

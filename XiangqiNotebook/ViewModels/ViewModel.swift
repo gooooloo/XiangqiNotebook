@@ -512,6 +512,7 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
         actionDefinitions.registerAction(.copyBoardText, text: "生成详细局面文本", shortcuts: [.sequence(",c")]) { self.showingBoardTextView = true }
+        actionDefinitions.registerAction(.copyBoardImage, text: "拷贝棋盘图片", shortcuts: [.sequence(",ci")]) { self.copyBoardImageToClipboard() }
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { self.session.recalculateGameStatistics() }
         actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", shortcuts: [.sequence(",O")], supportedModes: [.normal]) { self.performAutoAddToOpening() }
         actionDefinitions.registerAction(.jumpToNextOpeningGap, text: "跳转开局缺口", shortcuts: [.sequence(",o")], supportedModes: [.normal]) { self.jumpToNextOpeningGap() }
@@ -1763,6 +1764,42 @@ class ViewModel: ObservableObject {
         NSPasteboard.general.setString(text, forType: .string)
         #else
         UIPasteboard.general.string = text
+        #endif
+    }
+
+    /// 构建一个与当前棋盘展示状态一致、脱离实时绑定的静态快照，供离屏渲染导出图片使用。
+    /// 不能直接复用 `boardViewModel`：它是 class，会被 `updateBoardView()` 持续原地修改，
+    /// 离屏渲染期间若发生变化会导致图片内容与截图瞬间不一致。
+    func makeBoardSnapshotForImageExport() -> BoardViewModel {
+        BoardViewModel(
+            fen: boardViewModel.getFen(),
+            orientation: boardViewModel.getOrientation(),
+            isHorizontalFlipped: boardViewModel.getIsHorizontalFlipped(),
+            showPath: boardViewModel.getShowPath(),
+            showAllNextMoves: boardViewModel.getShowAllNextMoves(),
+            shouldAnimate: false,
+            currentFenPathGroups: boardViewModel.getCurrentFenPathGroups(),
+            nextMovesPathGroups: boardViewModel.getNextMovesPathGroups(),
+            lastMoveSquares: boardViewModel.getLastMoveSquares()
+        )
+    }
+
+    func copyBoardImageToClipboard() {
+        let snapshot = makeBoardSnapshotForImageExport()
+        let boardSize: CGFloat = 640
+        let boardView = XiangqiBoard(viewModel: .constant(snapshot), staticSnapshot: true)
+            .frame(width: boardSize, height: boardSize)
+
+        let renderer = ImageRenderer(content: boardView)
+        renderer.scale = 3
+
+        #if os(macOS)
+        guard let image = renderer.nsImage else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+        #else
+        guard let image = renderer.uiImage else { return }
+        UIPasteboard.general.image = image
         #endif
     }
 
