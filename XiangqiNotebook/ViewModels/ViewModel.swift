@@ -183,6 +183,8 @@ class ViewModel: ObservableObject {
     #if os(iOS)
     private var pikafishServiceIOS: PikafishServiceIOS?
     @Published private(set) var isEvaluatingIOS = false
+    /// 用户在思考期间点了取消：结果到达后整个丢弃，不存分也不落子
+    private var aiRespondCancelled = false
     #endif
 
     // 静默云库查分：在飞去重与退避状态（仅主线程访问）
@@ -1753,10 +1755,15 @@ class ViewModel: ObservableObject {
         guard let fen = session.getFenForId(fenId) else { return }
 
         isEvaluatingIOS = true
+        aiRespondCancelled = false
         defer { isEvaluatingIOS = false }
 
         let service = ensurePikafishServiceIOS()
         guard let result = await service.evaluatePosition(fen: fen) else { return }
+
+        // 用户思考期间点了取消：结果整个丢弃，不存分也不落子，就当没点过
+        guard !aiRespondCancelled else { return }
+
         session.updateEngineScore(fenId, score: result.score, engineKey: PikafishServiceIOS.engineKey)
 
         // 评估这 3 秒期间用户可能已经切到别的局面：分数按 fenId 存，切到哪都不受影响，
@@ -1769,6 +1776,14 @@ class ViewModel: ObservableObject {
             _ = session.playNewBoardFen(newFen)
             session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishServiceIOS.engineKey)
         }
+    }
+
+    /// 取消正在进行的 AI 应招：通知引擎提前结束搜索，结果到达后会被丢弃
+    @MainActor
+    func cancelAIRespondIOS() {
+        guard isEvaluatingIOS else { return }
+        aiRespondCancelled = true
+        pikafishServiceIOS?.stopCurrentSearch()
     }
     #endif
 

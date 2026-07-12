@@ -34,13 +34,17 @@ struct iPhoneEngineSheet: View {
                     .padding(.vertical, 12)
                     Divider().overlay(XiangqiTheme.hair)
                     Button(action: {
-                        Task { await viewModel.aiRespondIOS() }
+                        if viewModel.isEvaluatingIOS {
+                            viewModel.cancelAIRespondIOS()
+                        } else {
+                            Task { await viewModel.aiRespondIOS() }
+                        }
                     }) {
                         HStack {
                             if viewModel.isEvaluatingIOS {
                                 ProgressView()
                                     .controlSize(.small)
-                                Text("AI应招中…")
+                                Text("取消应招")
                             } else {
                                 Text("AI应招")
                             }
@@ -50,7 +54,6 @@ struct iPhoneEngineSheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                     }
-                    .disabled(viewModel.isEvaluatingIOS)
                     Divider().overlay(XiangqiTheme.hair)
                     HStack {
                         Text("云库评估")

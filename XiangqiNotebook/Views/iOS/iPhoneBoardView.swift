@@ -272,8 +272,15 @@ struct iPhoneBoardView: View {
     private var actionGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
             actionButton("翻转棋盘") { viewModel.flipOrientation() }
-            actionButton(viewModel.isEvaluatingIOS ? "AI应招中…" : "AI应招", disabled: viewModel.isEvaluatingIOS) {
-                Task { await viewModel.aiRespondIOS() }
+            actionButton(
+                viewModel.isEvaluatingIOS ? "取消应招" : "AI应招",
+                isLoading: viewModel.isEvaluatingIOS
+            ) {
+                if viewModel.isEvaluatingIOS {
+                    viewModel.cancelAIRespondIOS()
+                } else {
+                    Task { await viewModel.aiRespondIOS() }
+                }
             }
             actionButton("打开云库") { viewModel.actionDefinitions.getActionInfo(.openYunku)?.action() }
             actionButton("加入复习") { viewModel.actionDefinitions.getActionInfo(.addToReview)?.action() }
@@ -288,14 +295,20 @@ struct iPhoneBoardView: View {
         .padding(.bottom, 6)
     }
 
-    private func actionButton(_ label: String, accent: Bool = false, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+    private func actionButton(_ label: String, accent: Bool = false, isLoading: Bool = false, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label)
-                .font(.system(size: 13.5, weight: .medium))
-                .foregroundColor(accent ? .white : XiangqiTheme.ink)
+            HStack(spacing: 5) {
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+                Text(label)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundColor(accent ? .white : XiangqiTheme.ink)
+            }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(accent ? XiangqiTheme.blue : XiangqiTheme.card)
+                .background(isLoading ? XiangqiTheme.inset : (accent ? XiangqiTheme.blue : XiangqiTheme.card))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(accent ? Color.clear : XiangqiTheme.line, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
