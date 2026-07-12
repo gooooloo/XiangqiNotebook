@@ -512,7 +512,7 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.copyFEN, text: "拷贝FEN", shortcuts: [.sequence(",f")]) { self.copyFenToClipboard() }
         actionDefinitions.registerAction(.copyBoardText, text: "生成详细局面文本", shortcuts: [.sequence(",c")]) { self.showingBoardTextView = true }
-        actionDefinitions.registerAction(.copyBoardImage, text: "拷贝棋盘图片", shortcuts: [.sequence(",ci")]) { self.copyBoardImageToClipboard() }
+        actionDefinitions.registerAction(.copyBoardImage, text: "拷贝棋盘", shortcuts: [.sequence(",ci")]) { self.copyBoardImageToClipboard() }
         actionDefinitions.registerAction(.fix, text: "修复", shortcuts: [.sequence(",fix")], supportedModes: [.normal]) { self.session.recalculateGameStatistics() }
         actionDefinitions.registerAction(.autoAddToOpening, text: "自动完善开局库", shortcuts: [.sequence(",O")], supportedModes: [.normal]) { self.performAutoAddToOpening() }
         actionDefinitions.registerAction(.jumpToNextOpeningGap, text: "跳转开局缺口", shortcuts: [.sequence(",o")], supportedModes: [.normal]) { self.jumpToNextOpeningGap() }

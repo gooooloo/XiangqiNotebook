@@ -21,7 +21,7 @@ struct MacActionButtonsView: View {
                     .nextVariant, .playRandomNextMove, .random,
                     .practiceNewGame, .reviewThisGame, .focusedPractice,
                     .practiceRedOpening, .practiceBlackOpening,
-                    .addToReview,
+                    .addToReview, .copyBoardImage,
                 ],
                 [
                     .queryScore, .openYunku, .pikafishQuickMove, .quickEngineScore, .queryEngineScore, .quickAllEngineScores, .queryAllEngineScores,
