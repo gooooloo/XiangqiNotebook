@@ -108,7 +108,7 @@ struct iPhoneBoardView: View {
             HStack(spacing: 0) {
                 scoreCell(label: "云库", value: viewModel.displayScore)
                 scoreCell(label: "快估", value: viewModel.displayQuickEngineScore)
-                scoreCell(label: "深评", value: viewModel.displayDeepEngineScore)
+                scoreCell(label: "轻评", value: viewModel.isEvaluatingIOS ? "评估中…" : viewModel.displayDeepEngineScore)
             }
             .padding(.vertical, 9)
 
@@ -272,8 +272,10 @@ struct iPhoneBoardView: View {
     private var actionGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
             actionButton("翻转棋盘") { viewModel.flipOrientation() }
-            actionButton("记录变招") { viewModel.toggleAllowAddingNewMoves() }
-            actionButton("云库查分") { Task { await viewModel.queryFenScore() } }
+            actionButton(viewModel.isEvaluatingIOS ? "AI应招中…" : "AI应招", disabled: viewModel.isEvaluatingIOS) {
+                Task { await viewModel.aiRespondIOS() }
+            }
+            actionButton("打开云库") { viewModel.actionDefinitions.getActionInfo(.openYunku)?.action() }
             actionButton("加入复习") { viewModel.actionDefinitions.getActionInfo(.addToReview)?.action() }
             actionButton("书签") {
                 if viewModel.isBookmarked { _ = viewModel.removeBookmark() } else { viewModel.showingBookmarkAlert = true }
@@ -286,7 +288,7 @@ struct iPhoneBoardView: View {
         .padding(.bottom, 6)
     }
 
-    private func actionButton(_ label: String, accent: Bool = false, action: @escaping () -> Void) -> some View {
+    private func actionButton(_ label: String, accent: Bool = false, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: 13.5, weight: .medium))
@@ -297,6 +299,7 @@ struct iPhoneBoardView: View {
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(accent ? Color.clear : XiangqiTheme.line, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         }
+        .disabled(disabled)
     }
 
     // MARK: - 固定底部走子条

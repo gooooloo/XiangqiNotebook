@@ -179,6 +179,12 @@ class ViewModel: ObservableObject {
     private(set) var evaluationQueue: EvaluationQueue?
     #endif
 
+    // 引擎评估（仅 iOS/iPadOS，内嵌版 Pikafish）
+    #if os(iOS)
+    private var pikafishServiceIOS: PikafishServiceIOS?
+    @Published private(set) var isEvaluatingIOS = false
+    #endif
+
     // 静默云库查分：在飞去重与退避状态（仅主线程访问）
     private var silentQueryTask: Task<Void, Never>?
     private var silentQueryFenId: Int?
@@ -261,14 +267,19 @@ class ViewModel: ObservableObject {
         #endif
 
         #if os(iOS)
+        // 9b. iOS 内嵌引擎评分单独存一个 engineKey，不与 Mac 的 "_d34" 共享
+        Database.shared.activeEngineKey = PikafishServiceIOS.engineKey
+
         // 10. 进后台时强制写一次崩溃恢复快照（防系统在挂起期间杀掉进程）。
-        //     iOS 无可靠的"干净退出"信号，恢复留待下次冷启动判断
+        //     iOS 无可靠的"干净退出"信号，恢复留待下次冷启动判断。
+        //     同时释放内嵌引擎的置换表/线程池，避免后台常驻占用内存与耗电
         NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.writeRecoverySnapshotIfDirty(force: true)
+                self?.pikafishServiceIOS?.releaseResources()
             }
         }
         #endif
@@ -1652,7 +1663,12 @@ class ViewModel: ObservableObject {
             if let result = try await service.evaluatePosition(fen: fen, movetime: 3000) {
                 // 函数为 @MainActor，await 恢复后数据修改自动回到主线程
                 session.updateEngineScore(fenId, score: result.score, engineKey: PikafishService.quickEngineKey)
-                if let uciMove = result.bestMove,
+
+                // 评估这 3 秒期间用户可能已经切到别的局面：分数按 fenId 存，切到哪都不受影响，
+                // 但应招落子必须只在用户仍停留在被评估的这个局面时才执行，
+                // 否则会把用户从当前正在看的局面强行拽走到一个跟当前上下文无关的新局面
+                if session.currentFenId == fenId,
+                   let uciMove = result.bestMove,
                    let newFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) {
                     _ = session.playNewBoardFen(newFen)
                     session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishService.quickEngineKey)
@@ -1696,6 +1712,64 @@ class ViewModel: ObservableObject {
         evaluationQueue?.cancelAll()
     }
 
+    #endif
+
+    #if os(iOS)
+    private func ensurePikafishServiceIOS() -> PikafishServiceIOS {
+        if let service = pikafishServiceIOS { return service }
+        let service = PikafishServiceIOS()
+        pikafishServiceIOS = service
+        return service
+    }
+
+    /// AI 应招（iOS 专属，内嵌引擎，固定 3 秒限时的「轻评」参数）：
+    /// 评估当前局面并落子最佳应招，原局面和应招后局面的分数都存到 PikafishServiceIOS.engineKey（轻评分数）下
+    @MainActor
+    func aiRespondIOS() async {
+        guard !isEvaluatingIOS else { return }
+        guard session.allowAddingNewMoves else {
+            platformService.showWarningAlert(
+                title: "不允许增加新走法",
+                message: "请先打开【允许增加新走法】选项。"
+            )
+            return
+        }
+        if ProcessInfo.processInfo.isLowPowerModeEnabled {
+            platformService.showWarningAlert(
+                title: "低电量模式",
+                message: "当前设备处于低电量模式，暂不进行引擎评估。"
+            )
+            return
+        }
+        if ProcessInfo.processInfo.thermalState == .serious || ProcessInfo.processInfo.thermalState == .critical {
+            platformService.showWarningAlert(
+                title: "设备过热",
+                message: "设备当前温度较高，暂不进行引擎评估，请稍后再试。"
+            )
+            return
+        }
+
+        let fenId = session.currentFenId
+        guard let fen = session.getFenForId(fenId) else { return }
+
+        isEvaluatingIOS = true
+        defer { isEvaluatingIOS = false }
+
+        let service = ensurePikafishServiceIOS()
+        guard let result = await service.evaluatePosition(fen: fen) else { return }
+        session.updateEngineScore(fenId, score: result.score, engineKey: PikafishServiceIOS.engineKey)
+
+        // 评估这 3 秒期间用户可能已经切到别的局面：分数按 fenId 存，切到哪都不受影响，
+        // 但应招落子必须只在用户仍停留在被评估的这个局面时才执行，
+        // 否则会把用户从当前正在看的局面强行拽走到一个跟当前上下文无关的新局面
+        guard session.currentFenId == fenId else { return }
+
+        if let uciMove = result.bestMove,
+           let newFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) {
+            _ = session.playNewBoardFen(newFen)
+            session.updateEngineScore(session.currentFenId, score: -result.score, engineKey: PikafishServiceIOS.engineKey)
+        }
+    }
     #endif
 
     var currentFenQuickEvalStatus: FenEvalStatus {

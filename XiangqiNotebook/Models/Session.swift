@@ -573,13 +573,16 @@ class Session: ObservableObject {
     }
 
     /// 深度评分显示文本，空字符串表示无深度评分
+    /// iOS/iPadOS 上固定显示内嵌引擎（PikafishServiceIOS）的评分，不与 Mac 深评混用、不做优先级判断
     var displayDeepEngineScore: String {
         #if os(macOS)
         guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.engineKey) else { return "" }
         let nextIsRed = Session.fenNextIsRed(currentFen)
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
         #else
-        return ""
+        guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishServiceIOS.engineKey) else { return "" }
+        let nextIsRed = Session.fenNextIsRed(currentFen)
+        return "\(adjustScore(score, nextIsRed: nextIsRed))"
         #endif
     }
 

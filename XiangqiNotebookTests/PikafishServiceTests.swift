@@ -2,6 +2,7 @@ import Testing
 import Foundation
 @testable import XiangqiNotebook
 
+#if os(macOS)
 struct PikafishServiceTests {
 
     // MARK: - FEN Conversion Tests
@@ -127,6 +128,7 @@ struct PikafishServiceTests {
         #expect(result == nil)
     }
 }
+#endif
 
 // MARK: - UCI Move to FEN Tests
 

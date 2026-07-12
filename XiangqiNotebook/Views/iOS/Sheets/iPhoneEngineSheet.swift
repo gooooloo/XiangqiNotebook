@@ -1,11 +1,17 @@
 #if os(iOS)
 import SwiftUI
 
-/// 「引擎与云库」Sheet。iPhone 端无本地皮卡鱼引擎（`PikafishService` 仅 macOS 实现），
-/// 只接云库（ChessDB）评估；皮卡鱼开关展示但禁用，注明仅 Mac 支持。
+/// 「引擎与云库」Sheet。iPhone/iPad 端皮卡鱼引擎内嵌运行（进程内调用，非 Mac 版子进程方案），
+/// 出于耗电考虑固定 3 秒限时评估、仅手动触发，不做批量/自动评估；分数单独存一个 engineKey，
+/// 与 Mac 深评互不干扰。另外仍保留云库（ChessDB）评估。
 struct iPhoneEngineSheet: View {
     @ObservedObject var viewModel: ViewModel
     @Environment(\.dismiss) private var dismiss
+
+    private var lightScoreText: String {
+        let text = viewModel.displayDeepEngineScore
+        return text.isEmpty ? "暂无评分" : text
+    }
 
     var body: some View {
         iPhoneSheetShell(title: "引擎与云库") {
@@ -13,19 +19,38 @@ struct iPhoneEngineSheet: View {
                 VStack(spacing: 0) {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("皮卡鱼引擎")
+                            Text("皮卡鱼引擎（轻评）")
                                 .font(XiangqiTheme.XFont.sans(15, weight: .semibold))
                                 .foregroundColor(XiangqiTheme.ink)
-                            Text("仅 Mac 支持")
+                            Text("手动触发 · 固定 3 秒限时")
                                 .font(.system(size: 11.5))
                                 .foregroundColor(XiangqiTheme.faint)
                         }
                         Spacer()
-                        Toggle("", isOn: .constant(false))
-                            .labelsHidden()
-                            .disabled(true)
+                        Text(lightScoreText)
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundColor(XiangqiTheme.ink)
                     }
                     .padding(.vertical, 12)
+                    Divider().overlay(XiangqiTheme.hair)
+                    Button(action: {
+                        Task { await viewModel.aiRespondIOS() }
+                    }) {
+                        HStack {
+                            if viewModel.isEvaluatingIOS {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("AI应招中…")
+                            } else {
+                                Text("AI应招")
+                            }
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(XiangqiTheme.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                    }
+                    .disabled(viewModel.isEvaluatingIOS)
                     Divider().overlay(XiangqiTheme.hair)
                     HStack {
                         Text("云库评估")
