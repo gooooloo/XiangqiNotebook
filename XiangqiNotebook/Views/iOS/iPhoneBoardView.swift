@@ -182,7 +182,11 @@ struct iPhoneBoardView: View {
             Divider().overlay(XiangqiTheme.hair)
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), spacing: 8) {
-                metaKV("数据", "\(viewModel.currentDataVersion)")
+                metaKV(
+                    "数据",
+                    viewModel.currentDatabaseDirty ? "\(viewModel.currentDataVersion) · 未保存" : "\(viewModel.currentDataVersion)",
+                    valueColor: viewModel.currentDatabaseDirty ? XiangqiTheme.bad : XiangqiTheme.ink
+                )
                 metaKV("练习", "\(viewModel.currentFenPracticeCount) 次")
                 metaKV("本变", "\(viewModel.currentVariationIndex + 1)/\(viewModel.totalVariationsCount)")
                 metaKV("红库", viewModel.currentFenIsInRedOpening ? "是" : "否")
@@ -260,10 +264,10 @@ struct iPhoneBoardView: View {
         }
     }
 
-    private func metaKV(_ label: String, _ value: String) -> some View {
+    private func metaKV(_ label: String, _ value: String, valueColor: Color = XiangqiTheme.ink) -> some View {
         HStack(spacing: 3) {
             Text(label).font(.system(size: 12)).foregroundColor(XiangqiTheme.sub)
-            Text(value).font(.system(size: 12)).foregroundColor(XiangqiTheme.ink)
+            Text(value).font(.system(size: 12)).foregroundColor(valueColor)
         }
     }
 
