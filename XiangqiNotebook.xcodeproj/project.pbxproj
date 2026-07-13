@@ -798,6 +798,7 @@
 					"Pikafish/external/decompress/*.S",
 					Services/PikafishEngineBridge.mm,
 				);
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				"GCC_ENABLE_CPP_EXCEPTIONS[sdk=iphoneos*]" = NO;
 				"GCC_ENABLE_CPP_EXCEPTIONS[sdk=iphonesimulator*]" = NO;
 				"GCC_PREPROCESSOR_DEFINITIONS[sdk=iphoneos*]" = (
@@ -883,6 +884,7 @@
 					"Pikafish/external/decompress/*.S",
 					Services/PikafishEngineBridge.mm,
 				);
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				"GCC_ENABLE_CPP_EXCEPTIONS[sdk=iphoneos*]" = NO;
 				"GCC_ENABLE_CPP_EXCEPTIONS[sdk=iphonesimulator*]" = NO;
 				"GCC_PREPROCESSOR_DEFINITIONS[sdk=iphoneos*]" = (
