@@ -990,6 +990,16 @@ extension Session {
         engineScoreDirty = false
         notifyDataChanged(markDatabaseDirty: false, markSessionDirty: false)
     }
+
+    /// 清除会话与引擎分数的脏标记，不触碰数据库脏标记。
+    /// 供异步保存流程使用：数据库脏标记由 Database.saveAsync 单独管理
+    /// （保存期间有新修改时保持脏并进入新版本），这里不能一并清掉
+    func setSessionAndEngineScoreClean() {
+        databaseView.markEngineScoreClean()
+        sessionDataDirty = false
+        engineScoreDirty = false
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: false)
+    }
 }
 
 // MARK: - Session Operations (会话相关操作) 
@@ -1268,8 +1278,9 @@ extension Session {
   }
 
   func playRandomNextMove(delay: Double = 0) {
-    updateAllGamePaths()
-
+    // 不在此调用 updateAllGamePaths()：练习模式每次应招都会走到这里，
+    // 路径缓存被清后（新局面/加载棋局等）重建要对全库做 DFS，大库在主线程是秒级卡顿。
+    // getRandomNextMove 在 fenIdToGamePathCount 缺失时按均匀权重随机，可接受
     guard let move = getRandomNextMove() else { return }
     
     let targetFenId = move.targetFenId

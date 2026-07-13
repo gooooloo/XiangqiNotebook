@@ -8,11 +8,16 @@ struct iPhoneHomeView: View {
     @Binding var practiceRoute: PracticeRoute
     @Binding var showMore: Bool
 
-    private var greetingDate: String {
+    /// DateFormatter 创建成本高（要加载 locale），静态复用；本视图每次数据变化都会重算 body
+    private static let greetingDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_Hans_CN")
         formatter.dateFormat = "M月d日 · EEEE"
-        return formatter.string(from: Date())
+        return formatter
+    }()
+
+    private var greetingDate: String {
+        Self.greetingDateFormatter.string(from: Date())
     }
 
     private var greetingTitle: String {

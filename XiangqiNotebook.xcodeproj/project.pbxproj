@@ -70,7 +70,7 @@
 		09132704558749C956E72B3D /* network.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = network.h; sourceTree = "<group>"; };
 		0E2D07476742B44F35CC2051 /* nnue_architecture.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = nnue_architecture.h; sourceTree = "<group>"; };
 		125B3D091E32EDE4F1CDC578 /* thread.cpp */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.cpp; path = thread.cpp; sourceTree = "<group>"; };
-		146C9314B30C1F43FCDE56CB /* Makefile */ = {isa = PBXFileReference; includeInIndex = 1; path = Makefile; sourceTree = "<group>"; };
+		146C9314B30C1F43FCDE56CB /* Makefile */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		1782DD49C8934BC32E1C7113 /* magics.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = magics.h; sourceTree = "<group>"; };
 		179BE3F32D46691E000FA5AC /* XiangqiNotebook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = XiangqiNotebook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		179BE4042D46691F000FA5AC /* XiangqiNotebookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = XiangqiNotebookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -97,7 +97,7 @@
 		4F83CA2998CD288C040DFB33 /* simd.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = simd.h; sourceTree = "<group>"; };
 		53EA63624FD84A6A6ED59896 /* movepick.cpp */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.cpp; path = movepick.cpp; sourceTree = "<group>"; };
 		583F72299CD3168A5E3DD554 /* zstd_trace.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = zstd_trace.h; sourceTree = "<group>"; };
-		5C16FF0F8CF452F0CDDD7DAE /* huf_decompress_amd64.S */ = {isa = PBXFileReference; includeInIndex = 1; path = huf_decompress_amd64.S; sourceTree = "<group>"; };
+		5C16FF0F8CF452F0CDDD7DAE /* huf_decompress_amd64.S */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.asm; path = huf_decompress_amd64.S; sourceTree = "<group>"; };
 		5DBC51225BD28FEA49A75D00 /* bitboard.cpp */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.cpp; path = bitboard.cpp; sourceTree = "<group>"; };
 		6020BD92E1E13A31704481E8 /* shm.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = shm.h; sourceTree = "<group>"; };
 		60B71861DD5380F66154A58D /* ucioption.cpp */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.cpp.cpp; path = ucioption.cpp; sourceTree = "<group>"; };
@@ -186,15 +186,11 @@
 		};
 		179BE4072D46691F000FA5AC /* XiangqiNotebookTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = XiangqiNotebookTests;
 			sourceTree = "<group>";
 		};
 		179BE4112D46691F000FA5AC /* XiangqiNotebookUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-			);
 			path = XiangqiNotebookUITests;
 			sourceTree = "<group>";
 		};
@@ -321,7 +317,6 @@
 				98C266BB320AFB24EEE29C62 /* zstd_decompress_block.h */,
 				7E773C0CA9AC9ECEF1F92F7B /* zstd_decompress_internal.h */,
 			);
-			name = decompress;
 			path = decompress;
 			sourceTree = "<group>";
 		};
@@ -341,7 +336,6 @@
 				96DFF4A1E8A3A0C2FAD5839D /* nnue_misc.h */,
 				4F83CA2998CD288C040DFB33 /* simd.h */,
 			);
-			name = nnue;
 			path = nnue;
 			sourceTree = "<group>";
 		};
@@ -353,7 +347,6 @@
 				3D973C182F52629A3B18F4C9 /* half_ka_v2_hm.cpp */,
 				335D7DEFAAFEFCFF03F73CA7 /* half_ka_v2_hm.h */,
 			);
-			name = features;
 			path = features;
 			sourceTree = "<group>";
 		};
@@ -386,7 +379,6 @@
 				FAFCA591BDACAB69A5775CD3 /* zstd_internal.h */,
 				583F72299CD3168A5E3DD554 /* zstd_trace.h */,
 			);
-			name = common;
 			path = common;
 			sourceTree = "<group>";
 		};
@@ -398,7 +390,6 @@
 				94345C60C7D4A58A46D8CF5C /* zstd.h */,
 				CB58DE1387EC6775B15207B5 /* zstd_errors.h */,
 			);
-			name = external;
 			path = external;
 			sourceTree = "<group>";
 		};
@@ -410,7 +401,6 @@
 				D26927E3828F0FDF84A6A677 /* clipped_relu.h */,
 				ACAD86EE9F98E421AB36DEEC /* sqr_clipped_relu.h */,
 			);
-			name = layers;
 			path = layers;
 			sourceTree = "<group>";
 		};

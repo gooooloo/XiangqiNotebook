@@ -46,7 +46,14 @@ struct iPhoneLibraryView: View {
         return result
     }
 
-    private var treeRows: [Row] { rows(nodes: viewModel.allTopLevelBookObjects, level: 0) }
+    /// 树形行列表缓存。不能用计算属性：本视图观察整个 ViewModel，每次走子都会重算 body，
+    /// 而构建行列表要递归收集全部棋局（数千局）并统计战绩——在棋盘页走子时这是纯浪费。
+    /// 只在本 tab 可见时响应数据变化重建；切回本 tab 时由 onAppear 补一次
+    @State private var treeRows: [Row] = []
+
+    private func rebuildTreeRows() {
+        treeRows = rows(nodes: viewModel.allTopLevelBookObjects, level: 0)
+    }
 
     private var searchResults: [GameObject] {
         viewModel.allTopLevelBookObjects
@@ -74,6 +81,13 @@ struct iPhoneLibraryView: View {
         .background(XiangqiTheme.bg.ignoresSafeArea())
         .sheet(isPresented: $showFilterSheet) {
             iPhoneFilterSheet(viewModel: viewModel)
+        }
+        .onAppear { rebuildTreeRows() }
+        .onChange(of: openBookIds) { rebuildTreeRows() }
+        .onReceive(viewModel.objectWillChange.receive(on: DispatchQueue.main)) { _ in
+            // receive(on:) 让重建发生在数据变更落地之后（objectWillChange 是变更前信号）
+            guard selectedTab == .library else { return }
+            rebuildTreeRows()
         }
     }
 
@@ -208,11 +222,16 @@ struct iPhoneLibraryView: View {
         }
     }
 
-    private func dateString(_ date: Date) -> String {
+    /// DateFormatter 创建成本高（要加载 locale），静态复用；每个可见棋局行每次渲染都要用
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_Hans_CN")
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private func dateString(_ date: Date) -> String {
+        Self.dateFormatter.string(from: date)
     }
 
     @ViewBuilder

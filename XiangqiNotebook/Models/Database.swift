@@ -64,6 +64,11 @@ internal class Database: ObservableObject {
 
     // MARK: - Data Mutation
 
+    /// 自数据库加载以来的修改次数（仅内存，不持久化）。
+    /// dataVersion 每个脏周期只递增一次（供存档冲突仲裁），无法区分周期内的多次修改；
+    /// 恢复快照与异步保存需要感知「是否有新修改」，用这个计数判断
+    private(set) var mutationCount: Int = 0
+
     /// 标记数据已修改
     /// guard 与赋值必须在同一个主线程临界区内执行：
     /// 若 guard 在调用方线程检查而赋值异步执行，同一 runloop 内的多次调用
@@ -71,6 +76,8 @@ internal class Database: ObservableObject {
     /// 且 mutation 后立即 save() 会因 isDirty 尚未置位而被跳过
     func markDirty() {
         runOnMain {
+            self.mutationCount += 1
+
             guard !self.isDirty else { return }
 
             self.invalidateRealGamesIndex()
@@ -113,6 +120,55 @@ internal class Database: ObservableObject {
         try DatabaseStorage.saveDatabaseToURL(databaseData, url: dbURL)
         markClean()
         print("✅ Database: 数据已保存到 \(dbURL)")
+    }
+
+    /// 异步保存专用串行队列（大库 JSON 编码耗时秒级，不能占用主线程）
+    private let saveQueue = DispatchQueue(label: "com.gooooloo.XiangqiNotebook.database-save", qos: .userInitiated)
+    /// 是否有一次异步保存正在进行（仅主线程读写）
+    private(set) var isSaving = false
+
+    /// 异步保存数据库：主线程做值快照（数十毫秒），后台编码写盘（秒级），完成后回主线程。
+    /// 脏标记处理：保存期间无新修改则转干净；有新修改则保持脏并递增 dataVersion，
+    /// 开启以刚写盘版本为基线的新脏周期（否则 checkpoint 版本会与磁盘不一致，触发冲突误报）。
+    /// - Parameter completion: 主线程回调；重入（上一次保存未完成）时立即回调 .failure(.saveInProgress)
+    func saveAsync(completion: @escaping (Result<Void, Error>) -> Void) {
+        assert(Thread.isMainThread)
+
+        guard isDirty else {
+            print("ℹ️ Database: 数据无变化，跳过保存")
+            completion(.success(()))
+            return
+        }
+        guard !isSaving else {
+            completion(.failure(DatabaseError.saveInProgress))
+            return
+        }
+        guard let dbURL = DatabaseStorage.getDatabaseURL() else {
+            completion(.failure(DatabaseError.urlUnavailable))
+            return
+        }
+
+        isSaving = true
+        let snapshot = databaseData.snapshotCopy()
+        let savedMutationCount = mutationCount
+
+        saveQueue.async { [weak self] in
+            let result = Result { try DatabaseStorage.saveDatabaseToURL(snapshot, url: dbURL) }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isSaving = false
+                if case .success = result {
+                    if self.mutationCount == savedMutationCount {
+                        self.markClean()
+                    } else {
+                        self.databaseData.dataVersion += 1
+                        print("🔄 Database: 保存期间有新修改，保持脏状态并进入新版本 \(self.databaseData.dataVersion)")
+                    }
+                    print("✅ Database: 数据已保存到 \(dbURL)")
+                }
+                completion(result.map { _ in () })
+            }
+        }
     }
 
     /// 从默认位置重新加载数据库
@@ -273,8 +329,18 @@ internal class Database: ObservableObject {
 }
 
 // MARK: - Errors
-enum DatabaseError: Error {
+enum DatabaseError: Error, LocalizedError {
     case urlUnavailable
     case fileOperationFailed
     case loadFailed
+    case saveInProgress
+
+    var errorDescription: String? {
+        switch self {
+        case .urlUnavailable: return "无法获取存档文件位置"
+        case .fileOperationFailed: return "文件操作失败"
+        case .loadFailed: return "存档加载失败"
+        case .saveInProgress: return "上一次保存尚未完成，请稍候再试"
+        }
+    }
 }

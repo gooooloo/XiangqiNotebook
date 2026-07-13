@@ -272,6 +272,11 @@ final class DatabaseView {
         database.markClean()
     }
 
+    /// 自数据库加载以来的修改次数（仅内存），供恢复快照/异步保存判断是否有新修改
+    var mutationCount: Int {
+        database.mutationCount
+    }
+
     func markEngineScoreClean() {
         database.markEngineScoreClean()
     }
@@ -282,6 +287,12 @@ final class DatabaseView {
     /// - Note: 这是对底层 Database 的委托调用，不受 scope 过滤影响
     func save() throws {
         try database.save()
+    }
+
+    /// 异步保存数据库（主线程值快照 + 后台编码写盘），完成后主线程回调
+    /// - Note: 这是对底层 Database 的委托调用，不受 scope 过滤影响
+    func saveAsync(completion: @escaping (Result<Void, Error>) -> Void) {
+        database.saveAsync(completion: completion)
     }
 
     /// 保存所有脏的引擎分数文件

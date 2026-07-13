@@ -274,20 +274,34 @@ class ViewModel: ObservableObject {
 
         // 10. 进后台时强制写一次崩溃恢复快照（防系统在挂起期间杀掉进程）。
         //     iOS 无可靠的"干净退出"信号，恢复留待下次冷启动判断。
-        //     同时释放内嵌引擎的置换表/线程池，避免后台常驻占用内存与耗电
+        //     同时释放内嵌引擎的置换表/线程池，避免后台常驻占用内存与耗电。
+        //     大库的快照编码可能超过进后台的默认宽限期，用 background task 申请额外时间
         NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
+            let taskId = UIApplication.shared.beginBackgroundTask()
+            let endTask = {
+                if taskId != .invalid {
+                    UIApplication.shared.endBackgroundTask(taskId)
+                }
+            }
             Task { @MainActor [weak self] in
-                self?.writeRecoverySnapshotIfDirty(force: true)
-                self?.pikafishServiceIOS?.releaseResources()
+                guard let self else { endTask(); return }
+                self.pikafishServiceIOS?.releaseResources()
+                // 快照写盘在后台队列完成后才结束 background task，防止编码中途被挂起
+                self.writeRecoverySnapshotIfDirty(force: true, completion: endTask)
             }
         }
         #endif
 
-        // 11. 崩溃恢复定时器：周期性把脏数据写入本地恢复快照（与正式存档分开）
+        // 11. 崩溃恢复定时器（仅 macOS）：周期性把脏数据写入本地恢复快照（与正式存档分开）。
+        //     编码写盘已在后台队列，但主线程仍要付一次值快照（深拷贝）的成本；
+        //     iOS 不开定时器：iPhone 上深拷贝大库仍可能有可感知卡顿，
+        //     且进后台的强制快照已覆盖挂起期间被杀这一主要风险场景
+        #if os(macOS)
         startRecoveryTimer()
+        #endif
 
         // 12. 启动后检查是否有上次未保存的恢复快照（崩溃/被杀残留）
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
@@ -298,8 +312,14 @@ class ViewModel: ObservableObject {
     // MARK: - 崩溃恢复
 
     private var recoveryTimer: Timer?
-    /// 上次写入恢复快照时的数据版本，避免重复写同一版本
-    private var lastSnapshotVersion: Int = -1
+    /// 上次写入恢复快照时的修改计数，避免无新改动时重复写。
+    /// 用 mutationCount 而非 dataVersion：dataVersion 每个脏周期只递增一次，
+    /// 用它去重会让周期内的后续修改永远不再写入快照（快照只保护首次修改）
+    private var lastSnapshotMutationCount: Int = -1
+    /// 恢复快照后台写入是否在途（仅主线程读写）；在途时跳过本轮，下个周期再写
+    private var recoverySnapshotInFlight = false
+    /// 恢复快照后台写盘专用串行队列
+    private let recoverySnapshotQueue = DispatchQueue(label: "com.gooooloo.XiangqiNotebook.recovery-snapshot", qos: .utility)
 
     /// 启动崩溃恢复定时器：每 30 秒检查一次，脏且有新改动时写入恢复快照
     private func startRecoveryTimer() {
@@ -310,21 +330,35 @@ class ViewModel: ObservableObject {
         }
     }
 
-    /// 数据库脏且版本较上次快照有变化时，写入本地崩溃恢复快照。
+    /// 数据库脏且较上次快照有新改动时，写入本地崩溃恢复快照。
+    /// 主线程只做值快照（拷贝，数十毫秒量级），JSON 编码与写盘在后台队列进行——
+    /// 大库全量编码是秒级操作，放主线程会整体冻结界面。
     /// 这是与正式存档分开的"草稿"，不触碰 database.json，也不走 iCloud。
-    /// - Parameter force: 进后台等场景强制写一次（忽略版本去重）
-    private func writeRecoverySnapshotIfDirty(force: Bool = false) {
-        guard session.databaseDirty else { return }
-        let version = session.databaseView.dataVersion
-        guard force || version != lastSnapshotVersion else { return }
-        DatabaseStorage.writeRecoverySnapshot(session.databaseView.databaseDataForBackup)
-        lastSnapshotVersion = version
+    /// - Parameters:
+    ///   - force: 进后台等场景强制写一次（忽略修改计数去重）
+    ///   - completion: 写盘完成（或本轮跳过）后的主线程回调，供进后台时结束 background task
+    private func writeRecoverySnapshotIfDirty(force: Bool = false, completion: (() -> Void)? = nil) {
+        guard session.databaseDirty else { completion?(); return }
+        let count = session.databaseView.mutationCount
+        guard force || count != lastSnapshotMutationCount else { completion?(); return }
+        guard !recoverySnapshotInFlight else { completion?(); return }
+
+        recoverySnapshotInFlight = true
+        lastSnapshotMutationCount = count
+        let snapshot = session.databaseView.databaseDataForBackup.snapshotCopy()
+        recoverySnapshotQueue.async { [weak self] in
+            DatabaseStorage.writeRecoverySnapshot(snapshot)
+            DispatchQueue.main.async {
+                self?.recoverySnapshotInFlight = false
+                completion?()
+            }
+        }
     }
 
     /// 清除崩溃恢复快照（手动保存成功 或 干净退出 后调用）
     private func clearRecoverySnapshot() {
         DatabaseStorage.clearRecoverySnapshot()
-        lastSnapshotVersion = -1
+        lastSnapshotMutationCount = -1
     }
 
     /// 启动时检查崩溃恢复快照：若上次会话因崩溃/被杀留下了未保存的更新，提示恢复
@@ -419,9 +453,10 @@ class ViewModel: ObservableObject {
         // 取消旧的订阅
         currentSessionSubscription?.cancel()
 
-        // 订阅当前活跃的 Session
+        // 订阅当前活跃的 Session。
+        // 不加 receive(on: main)：Session 的 dataChanged 只在主线程翻转，且翻转前数据变更已全部落地；
+        // 多一次 main 队列跳变只会让每次操作的界面响应晚一帧
         currentSessionSubscription = session.objectWillChange
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self = self else { return }
                 // 防御性检查：
@@ -451,7 +486,8 @@ class ViewModel: ObservableObject {
         boardViewModel.updateOrientation(orientation: session.isCurrentBlackOrientation ? "black" : "red")
         boardViewModel.updateHorizontalFlipped(flipped: session.isCurrentHorizontalFlipped)
         boardViewModel.updateCurrentFenPathGroups(currentFenPathGroups: currentFenPathGroups)
-        boardViewModel.updateNextMovesPathGroups(nextMovesPathGroups: session.getNextMovesPathGroups())
+        // 关闭「显示所有下一步」时不必计算路径组（棋盘也不会渲染它），每步走子都省一遍遍历
+        boardViewModel.updateNextMovesPathGroups(nextMovesPathGroups: showAllNextMoves ? session.getNextMovesPathGroups() : [])
         boardViewModel.updateShowPath(showPath: showPath)
         boardViewModel.updateShowAllNextMoves(showAllNextMoves: showAllNextMoves)
 
@@ -1262,27 +1298,44 @@ class ViewModel: ObservableObject {
 
     func saveToDefaultWithResultNotification(session: Session) {
         do {
-            // 1. 保存 database（通过 DatabaseView）
-            try session.databaseView.save()
-
-            // 2. 保存引擎分数文件
+            // 1. 引擎分数与 mainSession 文件很小，主线程同步保存
+            //   （只保存 mainSession，practiceSession 是临时的）
             try session.databaseView.saveEngineScores()
-
-            // 3. 保存 mainSession（通过 SessionStorage）
-            // 注意：只保存 mainSession，practiceSession 是临时的
             try SessionStorage.saveSessionToDefault(session: sessionManager.mainSessionData)
-
-            self.setDataClean()
-            self.clearRecoverySnapshot()  // 已安全写入存档，恢复快照不再需要
-            self.showAlert(
-                message: "保存成功",
-                info: "数据已成功保存"
-            )
         } catch {
             self.showWarningAlert(
                 message: "保存失败",
                 info: "无法保存数据：\(error.localizedDescription)"
             )
+            return
+        }
+
+        // 2. database 是大文件：主线程值快照后异步编码写盘
+        //   （主线程全量编码大库要秒级，会整体冻结界面）
+        session.databaseView.saveAsync { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                // 数据库脏标记已由 saveAsync 处理（保存期间无新修改才转干净）
+                self.session.setSessionAndEngineScoreClean()
+                self.clearRecoverySnapshot()  // 快照内容已进正式存档，不再需要
+                if self.session.databaseDirty {
+                    self.showAlert(
+                        message: "保存成功",
+                        info: "数据已成功保存（保存期间又有新改动，可稍后再次保存）"
+                    )
+                } else {
+                    self.showAlert(
+                        message: "保存成功",
+                        info: "数据已成功保存"
+                    )
+                }
+            case .failure(let error):
+                self.showWarningAlert(
+                    message: "保存失败",
+                    info: "无法保存数据：\(error.localizedDescription)"
+                )
+            }
         }
     }
 
@@ -1372,22 +1425,35 @@ class ViewModel: ObservableObject {
                     print("[ViewModel] 用户选择保留本地修改，将覆盖远程数据")
 
                     do {
-                        // 强制保存本地数据到 iCloud（覆盖远程，通过 DatabaseView）
-                        try self.session.databaseView.save()
                         // 注意：只保存 mainSession，practiceSession 是临时的
                         try SessionStorage.saveSessionToDefault(session: self.sessionManager.mainSessionData)
-                        self.setDataClean()
-                        self.clearRecoverySnapshot()  // 已写入存档，恢复快照不再需要
-
-                        self.platformService.showAlert(
-                            title: "已保存",
-                            message: "本地修改已保存并同步到 iCloud"
-                        )
                     } catch {
                         self.platformService.showWarningAlert(
                             title: "保存失败",
                             message: "无法保存本地修改：\(error.localizedDescription)"
                         )
+                        return
+                    }
+
+                    // 强制保存本地数据到 iCloud（覆盖远程）：值快照后异步编码写盘
+                    self.session.databaseView.saveAsync { [weak self] result in
+                        guard let self else { return }
+                        switch result {
+                        case .success:
+                            // 数据库脏标记已由 saveAsync 处理（保存期间无新修改才转干净）
+                            self.session.setSessionAndEngineScoreClean()
+                            self.clearRecoverySnapshot()  // 已写入存档，恢复快照不再需要
+
+                            self.platformService.showAlert(
+                                title: "已保存",
+                                message: "本地修改已保存并同步到 iCloud"
+                            )
+                        case .failure(let error):
+                            self.platformService.showWarningAlert(
+                                title: "保存失败",
+                                message: "无法保存本地修改：\(error.localizedDescription)"
+                            )
+                        }
                     }
                 } else {
                     // 用户选择使用远程数据
