@@ -1750,6 +1750,36 @@ class ViewModel: ObservableObject {
         }
     }
 
+    /// 远程分析进行中标志：防止并发 /eval 请求同时驱动同一个引擎进程。
+    /// 供 RemoteControlServer 的只读 /eval 接口使用（Release 也启用），故不限 DEBUG
+    private var isRemoteAnalyzing = false
+
+    enum RemoteAnalyzeError: Error, LocalizedError {
+        case engineBusy
+        case engineUnavailable
+
+        var errorDescription: String? {
+            switch self {
+            case .engineBusy: return "引擎忙碌中（有评估任务在进行）"
+            case .engineUnavailable: return "引擎不可用（仅支持 Apple Silicon Mac）"
+            }
+        }
+    }
+
+    /// 远程操控（/eval）专用：对指定局面做 MultiPV 引擎分析。
+    /// 只读分析，不写入数据库；与 app 内评估共用引擎进程，忙碌时直接拒绝。
+    /// @MainActor：忙碌标志与惰性创建的 service ivar 都是主线程状态；
+    /// 引擎评估的 await 挂起期间不占用主线程
+    @MainActor
+    func remoteEngineAnalyze(fen: String, multiPV: Int, movetime: Int) async throws -> [PikafishService.PVLine] {
+        if isRemoteAnalyzing { throw RemoteAnalyzeError.engineBusy }
+        if let queue = evaluationQueue, !queue.isIdle { throw RemoteAnalyzeError.engineBusy }
+        guard let service = ensurePikafishService() else { throw RemoteAnalyzeError.engineUnavailable }
+        isRemoteAnalyzing = true
+        defer { isRemoteAnalyzing = false }
+        return try await service.analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
+    }
+
     func queryAllEngineScores() {
         guard let queue = ensureEvaluationQueue() else { return }
         let game = session.sessionData.currentGame2

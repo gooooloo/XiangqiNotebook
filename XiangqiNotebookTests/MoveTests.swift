@@ -129,14 +129,50 @@ struct MoveTests {
         let move1 = Move(sourceFenId: 1, targetFenId: 2)
         let move2 = Move(sourceFenId: 1, targetFenId: 2)
         let move3 = Move(sourceFenId: 1, targetFenId: 3)
-        
+
         // 测试相等性
         #expect(move1 == move2)
         #expect(move1 != move3)
-        
+
         // 测试哈希
         let set: Set<Move> = [move1, move2, move3]
         #expect(set.count == 2) // move1和move2应该被认为是同一个
     }
-    
+
+    // MARK: - 基于 FEN 的着法描述
+
+    private static let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r"
+
+    @Test func testStringifyMoveByFen_redCannonHorizontal() {
+        // 炮二平五（h2e2）
+        let fen2 = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR b"
+        let result = Move.stringifyMove(fen1: Self.startFen, fen2: fen2, backup: "?", isHorizontalFlipped: false)
+        #expect(result == "炮二平五")
+    }
+
+    @Test func testStringifyMoveByFen_blackHorseForward() {
+        // 黑马 h9 进 g7（马８进７）
+        let fen1 = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR b"
+        let fen2 = "rnbakab1r/9/1c4nc1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR r"
+        let result = Move.stringifyMove(fen1: fen1, fen2: fen2, backup: "?", isHorizontalFlipped: false)
+        #expect(result == "马８进７")
+    }
+
+    @Test func testStringifyMoveByFen_malformedFenReturnsBackup() {
+        let result = Move.stringifyMove(fen1: "bad fen", fen2: "also bad", backup: "h2e2", isHorizontalFlipped: false)
+        #expect(result == "h2e2")
+    }
+
+    @Test func testStringifyMoveByFen_matchesFenObjectsVariant() {
+        // 两个入口的输出必须一致（fenId 版内部委托给 FEN 版）
+        let fen2 = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR b"
+        let fenObjects2: [Int: FenObject] = [
+            1: FenObject(fen: Self.startFen, fenId: 1),
+            2: FenObject(fen: fen2, fenId: 2),
+        ]
+        let byId = Move.stringifyMove(fenObjects2: fenObjects2, from: 1, to: 2, backup: "?", isHorizontalFlipped: false)
+        let byFen = Move.stringifyMove(fen1: Self.startFen, fen2: fen2, backup: "?", isHorizontalFlipped: false)
+        #expect(byId == byFen)
+        #expect(byId == "炮二平五")
+    }
 } 

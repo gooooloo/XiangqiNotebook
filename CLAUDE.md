@@ -166,9 +166,18 @@ xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -dest
 xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -destination 'platform=macOS' -only-testing:XiangqiNotebookTests/TestClassName/testMethodName 2>&1 | grep -E "TEST (SUCCEEDED|FAILED)|error:|fatal:"
 ```
 
-## 远程操控与 UI 验证（仅 DEBUG 构建）
+## 远程操控与本地分析服务（macOS）
 
-DEBUG 构建下，app 启动后会自动在 `localhost:9214` 启动远程操控 HTTP 服务器（`RemoteControlServer`），提供截图、状态查询和操作执行接口。
+app 启动后会自动在 `localhost:9214` 启动 HTTP 服务器（`RemoteControlServer`，macOS 专属）。
+接口按能力分两层，编译门禁不同：
+
+- **只读分析接口（Release 也启用）**：`/state`、`/eval`、`/apply`、`/screenshot`——
+  查局面、皮卡鱼引擎分析、走子计算、截图，均只读，不改数据；供 MCP server 桥接给 Claude。
+- **驱动接口（仅 DEBUG）**：`/action`、`/actions`——能触发 app 内任意操作，属开发/自动化测试
+  专用，不随正式版发行，以缩小攻击面。
+
+切分逻辑在 `RemoteControlServer` 内部用 `#if DEBUG` 按接口包裹；服务本身与只读接口在
+Release 也编译。历史上（1.0.8 及之前）整个服务仅 DEBUG。
 
 **鉴权（防 CSRF）**：每次启动生成随机 token，所有请求必须带 `X-RemoteControl-Token` 头。token 写在 `~/Library/Application Support/XiangqiNotebook/remote-control-token.txt`，本地工具读取它来构造请求头（本机浏览器里的恶意网页读不到本地文件，因此无法伪造请求）。
 
@@ -196,7 +205,39 @@ curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/action -d 
 
 # 列出所有可用操作
 curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/actions
+
+# 皮卡鱼 MultiPV 分析（仅 macOS + Apple Silicon；耗时约 movetime 毫秒，默认 5 秒）
+# 省略 fen 则分析 app 当前局面；multipv 默认 3（1-10），movetime 默认 5000ms（500-60000）
+curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval -d '{"multipv":3,"movetime":5000}'
+curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval -d '{"fen":"rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r","multipv":5}'
+# 返回：每条候选线路的 rank、scoreCp（走子方视角厘兵值，杀棋折算 ±30000 附近）、depth、
+# pvUci（UCI 着法序列）、pvChinese（中文着法序列）。引擎忙碌时返回 409
+
+# 把 UCI 着法序列应用到局面上（机械移动，不校验规则），返回每步中文着法名与新 fen
+curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/apply -d '{"fen":"rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r","moves":["h2e2","h9g7"]}'
 ```
+
+**注意（shell 代理）**：本机 shell 环境可能设有 `HTTP_PROXY`/`HTTPS_PROXY`（v2ray）,会劫持发往
+localhost 的 curl 请求导致挂起。命令行调用远程操控接口时务必加 `--noproxy '*'`。
+
+**注意（测试与运行中的 app）**：`xcodebuild test` 全量运行会包含 UI 测试（XiangqiNotebookUITests）,
+它会尝试终止并重启 app——若用户正开着 app（尤其在 Xcode 调试器下,SIGTERM 会被 lldb 拦截导致
+app 挂起在暂停态）,必须只跑单元测试：`-only-testing:XiangqiNotebookTests`。
+另外单元测试的宿主 app 实例启动时会短暂占用/覆写远程操控 token 文件（已修复为仅在端口绑定成功后写入）。
+
+### MCP Server（连接 Claude 与本 App）
+
+`mcp/xiangqi-notebook-mcp.mjs` 是零依赖 Node（≥18）stdio MCP server,把 MCP 工具调用桥接到上述
+远程操控 HTTP 接口。提供工具：`get_position`（当前局面与笔记）、`evaluate`（皮卡鱼 MultiPV 分析）、
+`apply_moves`（沿变着走子）、`screenshot`（窗口截图）。
+
+```bash
+# 注册到 Claude Code
+claude mcp add xiangqi-notebook -- node /Users/qidu/dev/XiangqiNotebook/mcp/xiangqi-notebook-mcp.mjs
+```
+
+Claude Desktop 则在 `~/Library/Application Support/Claude/claude_desktop_config.json` 的
+`mcpServers` 中加入 `{"command": "node", "args": ["<仓库路径>/mcp/xiangqi-notebook-mcp.mjs"]}`。
 
 ### UI 变更验证流程
 

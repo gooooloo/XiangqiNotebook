@@ -1,10 +1,18 @@
-#if DEBUG
 #if os(macOS)
 import Foundation
 import Network
 import AppKit
 import Security
 
+/// 本地操控 / 分析 HTTP 服务（localhost:9214）。
+///
+/// 接口按能力分两类，编译门禁不同：
+/// - **只读分析接口**（Release 也启用）：/state、/eval、/apply、/screenshot——
+///   供 MCP server 桥接给 Claude，只读局面/引擎分析/走子计算/截图，不改数据。
+/// - **驱动接口**（仅 DEBUG）：/action、/actions——能触发 app 内任意操作，
+///   属开发/自动化测试专用，不随正式版发行，以缩小攻击面。
+///
+/// 两类都要求 X-RemoteControl-Token 头鉴权（防本机浏览器 CSRF）。
 class RemoteControlServer {
     private var listener: NWListener?
     private let port: UInt16 = 9214
@@ -79,13 +87,20 @@ class RemoteControlServer {
             self?.handleConnection(connection)
         }
 
-        listener?.stateUpdateHandler = { state in
-            if case .failed(let error) = state {
+        listener?.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .ready:
+                // 端口绑定成功后才写 token 文件。
+                // 若在 start() 里无条件写：单元测试的宿主 app 实例（端口被占、绑定失败）
+                // 也会覆写 token，导致正在运行实例的 token 与磁盘文件不一致，外部工具全部 403
+                self?.writeTokenFile()
+            case .failed(let error):
                 print("RemoteControlServer listener failed: \(error)")
+            default:
+                break
             }
         }
 
-        writeTokenFile()
         listener?.start(queue: queue)
     }
 
@@ -170,14 +185,22 @@ class RemoteControlServer {
         }
 
         switch (method, path) {
+        // 只读分析接口（Release 也启用）
         case ("GET", "/screenshot"):
             handleScreenshot(connection: connection)
-        case ("POST", "/action"):
-            handleAction(body: body, connection: connection)
         case ("GET", "/state"):
             handleState(connection: connection)
+        case ("POST", "/eval"):
+            handleEval(body: body, connection: connection)
+        case ("POST", "/apply"):
+            handleApply(body: body, connection: connection)
+        // 驱动接口（仅 DEBUG）：能触发 app 内任意操作，不随正式版发行
+        #if DEBUG
+        case ("POST", "/action"):
+            handleAction(body: body, connection: connection)
         case ("GET", "/actions"):
             handleListActions(connection: connection)
+        #endif
         default:
             sendJSONResponse(connection: connection, status: "404 Not Found",
                              body: #"{"error":"Unknown endpoint"}"#)
@@ -215,8 +238,9 @@ class RemoteControlServer {
         }
     }
 
-    // MARK: - Action
+    // MARK: - Action（仅 DEBUG：能驱动 app 内任意操作）
 
+    #if DEBUG
     private func handleAction(body: String, connection: NWConnection) {
         guard let jsonData = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
@@ -262,6 +286,7 @@ class RemoteControlServer {
             }
         }
     }
+    #endif
 
     // MARK: - State
 
@@ -313,8 +338,150 @@ class RemoteControlServer {
             + "\"variants\":[\(variants)],\"windowTitle\":\"\(windowTitle)\"}"
     }
 
-    // MARK: - List Actions
+    // MARK: - Eval (Pikafish MultiPV)
 
+    /// /eval 请求参数（纯函数解析 + 范围钳制，便于单测）
+    struct EvalParams: Equatable {
+        var fen: String?
+        var multiPV: Int
+        var movetime: Int
+    }
+
+    static func parseEvalParams(json: [String: Any]?) -> EvalParams {
+        let fen = json?["fen"] as? String
+        let multiPV = min(10, max(1, json?["multipv"] as? Int ?? 3))
+        let movetime = min(60000, max(500, json?["movetime"] as? Int ?? 5000))
+        return EvalParams(fen: fen, multiPV: multiPV, movetime: movetime)
+    }
+
+    /// 把 UCI 主变序列转成中文着法序列（逐步应用到局面上；遇到非法着法截断）
+    static func chinesePV(fen: String, uciMoves: [String]) -> [String] {
+        var currentFen = fen
+        var result: [String] = []
+        for uci in uciMoves {
+            guard let nextFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uci, fen: currentFen) else { break }
+            result.append(Move.stringifyMove(fen1: currentFen, fen2: nextFen, backup: uci, isHorizontalFlipped: false))
+            currentFen = nextFen
+        }
+        return result
+    }
+
+    // MARK: - Apply Moves
+
+    struct AppliedMove: Equatable {
+        let uci: String
+        let chinese: String
+        let fen: String
+    }
+
+    /// 把一串 UCI 着法依次应用到局面上（纯函数，便于单测）。
+    /// 只做机械移动（起点须有子），不校验象棋规则合法性。
+    /// 返回成功应用的着法列表；failedIndex 指向首个无法应用的着法（全部成功则为 nil）
+    static func applyUCIMoves(fen: String, uciMoves: [String]) -> (applied: [AppliedMove], failedIndex: Int?) {
+        var currentFen = fen
+        var applied: [AppliedMove] = []
+        for (index, uci) in uciMoves.enumerated() {
+            guard let nextFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uci, fen: currentFen) else {
+                return (applied, index)
+            }
+            let chinese = Move.stringifyMove(fen1: currentFen, fen2: nextFen, backup: uci, isHorizontalFlipped: false)
+            applied.append(AppliedMove(uci: uci, chinese: chinese, fen: nextFen))
+            currentFen = nextFen
+        }
+        return (applied, nil)
+    }
+
+    private func handleApply(body: String, connection: NWConnection) {
+        guard let jsonData = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let fen = json["fen"] as? String,
+              let moves = json["moves"] as? [String] else {
+            sendJSONResponse(connection: connection, status: "400 Bad Request",
+                             body: #"{"error":"Expect JSON body {\"fen\":\"...\",\"moves\":[\"h2e2\",...]}"}"#)
+            return
+        }
+
+        let fenParts = fen.split(separator: " ")
+        guard XiangqiBoardUtils.isValidBoardFen(fen),
+              fenParts.count >= 2, ["r", "b", "w"].contains(String(fenParts[1])) else {
+            sendJSONResponse(connection: connection, status: "400 Bad Request",
+                             body: #"{"error":"Invalid fen (expect board + side, e.g. '.../RNBAKABNR r')"}"#)
+            return
+        }
+
+        let result = Self.applyUCIMoves(fen: fen, uciMoves: moves)
+        if let failedIndex = result.failedIndex {
+            sendJSONResponse(connection: connection, status: "400 Bad Request",
+                             body: "{\"error\":\"Cannot apply move at index \(failedIndex): "
+                                + "\(escapeJSON(moves[failedIndex])) (malformed or no piece at source)\"}")
+            return
+        }
+
+        let steps = result.applied.map { step in
+            "{\"uci\":\"\(escapeJSON(step.uci))\",\"chinese\":\"\(escapeJSON(step.chinese))\",\"fen\":\"\(escapeJSON(step.fen))\"}"
+        }.joined(separator: ",")
+        let finalFen = result.applied.last?.fen ?? fen
+        sendJSONResponse(connection: connection, status: "200 OK",
+                         body: "{\"startFen\":\"\(escapeJSON(fen))\",\"steps\":[\(steps)],"
+                            + "\"finalFen\":\"\(escapeJSON(finalFen))\"}")
+    }
+
+    private func handleEval(body: String, connection: NWConnection) {
+        let json = body.data(using: .utf8).flatMap {
+            try? JSONSerialization.jsonObject(with: $0) as? [String: Any]
+        }
+        let params = Self.parseEvalParams(json: json)
+
+        guard let vm = viewModel else {
+            sendJSONResponse(connection: connection, status: "503 Service Unavailable",
+                             body: #"{"error":"ViewModel not available"}"#)
+            return
+        }
+
+        // 引擎分析耗时数秒，不能像其他端点一样在 server 队列上 main.sync 等待；
+        // 丢进 MainActor Task，评估的 await 挂起期间不阻塞主线程，完成后再发响应
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            let fen = params.fen ?? vm.currentFen
+            let fenParts = fen.split(separator: " ")
+            guard XiangqiBoardUtils.isValidBoardFen(fen),
+                  fenParts.count >= 2, ["r", "b", "w"].contains(String(fenParts[1])) else {
+                self.sendJSONResponse(connection: connection, status: "400 Bad Request",
+                                      body: #"{"error":"Invalid fen (expect board + side, e.g. '.../RNBAKABNR r')"}"#)
+                return
+            }
+
+            do {
+                let lines = try await vm.remoteEngineAnalyze(
+                    fen: fen, multiPV: params.multiPV, movetime: params.movetime)
+                let sideToMove = String(fenParts[1]) == "b" ? "black" : "red"
+                let lineJSONs = lines.map { line -> String in
+                    let uci = line.moves.map { "\"\(self.escapeJSON($0))\"" }.joined(separator: ",")
+                    let chinese = Self.chinesePV(fen: fen, uciMoves: line.moves)
+                        .map { "\"\(self.escapeJSON($0))\"" }.joined(separator: ",")
+                    let depth = line.depth.map(String.init) ?? "null"
+                    return "{\"rank\":\(line.multipv),\"scoreCp\":\(line.scoreCp),\"depth\":\(depth),"
+                        + "\"pvUci\":[\(uci)],\"pvChinese\":[\(chinese)]}"
+                }.joined(separator: ",")
+                let responseBody = "{\"fen\":\"\(self.escapeJSON(fen))\",\"sideToMove\":\"\(sideToMove)\","
+                    + "\"scorePerspective\":\"sideToMove\","
+                    + "\"engine\":\"\(self.escapeJSON(PikafishService.engineVersion))\","
+                    + "\"movetimeMs\":\(params.movetime),\"lines\":[\(lineJSONs)]}"
+                self.sendJSONResponse(connection: connection, status: "200 OK", body: responseBody)
+            } catch let error as ViewModel.RemoteAnalyzeError {
+                self.sendJSONResponse(connection: connection, status: "409 Conflict",
+                                      body: "{\"error\":\"\(self.escapeJSON(error.localizedDescription))\"}")
+            } catch {
+                self.sendJSONResponse(connection: connection, status: "500 Internal Server Error",
+                                      body: "{\"error\":\"\(self.escapeJSON(error.localizedDescription))\"}")
+            }
+        }
+    }
+
+    // MARK: - List Actions（仅 DEBUG：配合 /action）
+
+    #if DEBUG
     private func handleListActions(connection: NWConnection) {
         let actions = ActionDefinitions.ActionKey.allCases.map { key in
             "\"\(key.rawValue)\""
@@ -322,6 +489,7 @@ class RemoteControlServer {
         sendJSONResponse(connection: connection, status: "200 OK",
                          body: "{\"actions\":[\(actions)]}")
     }
+    #endif
 
     // MARK: - Response Helpers
 
@@ -351,5 +519,4 @@ class RemoteControlServer {
             .replacingOccurrences(of: "\t", with: "\\t")
     }
 }
-#endif
 #endif

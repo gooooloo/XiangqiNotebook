@@ -179,6 +179,78 @@ class PikafishService: @unchecked Sendable {
         return nil
     }
 
+    // MARK: - MultiPV Analysis
+
+    /// 单条主变（MultiPV 分析结果中的一条候选线路）
+    struct PVLine {
+        let multipv: Int      // 1-based 排名
+        let scoreCp: Int      // 分数（走子方视角，厘兵值；杀棋折算为 ±30000 附近）
+        let depth: Int?
+        let moves: [String]   // UCI 着法序列
+    }
+
+    /// 从引擎响应中解析 MultiPV 各线路。
+    /// 同一 multipv 序号取最后一次出现（搜索更深的结果覆盖浅的）；
+    /// 无 multipv 字段的 info 行按序号 1 处理
+    static func parsePVLines(from response: String) -> [PVLine] {
+        var linesByIndex: [Int: PVLine] = [:]
+        for rawLine in response.split(separator: "\n") {
+            let line = String(rawLine)
+            guard line.hasPrefix("info"), line.contains(" score "), line.contains(" pv ") else { continue }
+            let parts = line.split(separator: " ").map(String.init)
+            guard let pvIdx = parts.firstIndex(of: "pv"), pvIdx + 1 < parts.count,
+                  let score = parseScore(from: line) else { continue }
+            var multipv = 1
+            if let mpvIdx = parts.firstIndex(of: "multipv"), mpvIdx + 1 < parts.count,
+               let v = Int(parts[mpvIdx + 1]) {
+                multipv = v
+            }
+            var depth: Int?
+            if let dIdx = parts.firstIndex(of: "depth"), dIdx + 1 < parts.count {
+                depth = Int(parts[dIdx + 1])
+            }
+            let moves = Array(parts[(pvIdx + 1)...])
+            linesByIndex[multipv] = PVLine(multipv: multipv, scoreCp: score, depth: depth, moves: moves)
+        }
+        return linesByIndex.keys.sorted().compactMap { linesByIndex[$0] }
+    }
+
+    /// MultiPV 多变着分析：返回前 N 条候选线路及各自分数与主变。
+    /// 只读分析，不涉及数据库；供远程操控 /eval 端点使用
+    func analyzePosition(fen: String, multiPV: Int, movetime: Int) async throws -> [PVLine] {
+        if process == nil || !(process?.isRunning ?? false) {
+            try await start()
+        }
+
+        let uciFen = Self.convertFenToUCI(fen)
+
+        // 与 evaluatePosition 相同的同步序：停掉残留搜索，isready 对齐
+        sendCommand("stop")
+        outputBuffer = ""
+        sendCommand("isready")
+        _ = try await waitForResponse(containing: "readyok", timeout: 10.0)
+
+        outputBuffer = ""
+        sendCommand("setoption name MultiPV value \(multiPV)")
+        // 结束后必须恢复单线路：evaluatePosition 的分数解析取"最后一条 info 行"，
+        // MultiPV 残留会让它解析到排名靠后的差着分数
+        defer { sendCommand("setoption name MultiPV value 1") }
+
+        sendCommand("position fen \(uciFen)")
+        sendCommand("go movetime \(movetime)")
+
+        var response: String
+        do {
+            response = try await waitForResponse(containing: "bestmove", timeout: Double(movetime) / 1000.0 + 30.0)
+        } catch PikafishError.timeout {
+            // 超时：发 stop 让引擎立即返回，解析已有结果
+            sendCommand("stop")
+            response = try await waitForResponse(containing: "bestmove", timeout: 10.0)
+        }
+
+        return Self.parsePVLines(from: response)
+    }
+
     // MARK: - Evaluation
 
     /// 中断当前搜索（用于取消评估）

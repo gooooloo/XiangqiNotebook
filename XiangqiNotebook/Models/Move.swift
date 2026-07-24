@@ -267,6 +267,13 @@ class Move: Codable, Hashable {
         return backup
       }
 
+      return stringifyMove(fen1: fen1, fen2: fen2, backup: backup, isHorizontalFlipped: isHorizontalFlipped)
+    }
+
+    /// 基于移动前后两个 FEN 直接生成中文着法描述。
+    /// 供引擎 PV 等未入库的着法使用（入库着法走上面按 fenId 查找的版本）
+    static func stringifyMove(fen1: String, fen2: String, backup: String, isHorizontalFlipped: Bool) -> String {
+
         func expandRow(_ row: String) -> String {
             var newRow = ""
             for char in row {

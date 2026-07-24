@@ -159,4 +159,57 @@ struct UCIMoveToFenTests {
         let result = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: "e5e4", fen: fen)
         #expect(result == nil)
     }
+
+    // MARK: - MultiPV Parsing Tests
+
+    @Test func testParsePVLines_keepsDeepestPerIndex() {
+        let response = """
+        info depth 10 seldepth 12 multipv 1 score cp 20 nodes 1000 time 50 pv h2e2 h9g7
+        info depth 10 seldepth 12 multipv 2 score cp -5 nodes 1000 time 50 pv b2e2 b9c7
+        info depth 12 seldepth 15 multipv 1 score cp 35 nodes 5000 time 120 pv h2e2 h9g7 b2c2
+        info depth 12 seldepth 15 multipv 2 score cp -10 nodes 5000 time 120 pv b2e2 h9g7
+        bestmove h2e2 ponder h9g7
+        """
+        let lines = PikafishService.parsePVLines(from: response)
+        #expect(lines.count == 2)
+        #expect(lines[0].multipv == 1)
+        #expect(lines[0].scoreCp == 35)
+        #expect(lines[0].depth == 12)
+        #expect(lines[0].moves == ["h2e2", "h9g7", "b2c2"])
+        #expect(lines[1].multipv == 2)
+        #expect(lines[1].scoreCp == -10)
+        #expect(lines[1].moves == ["b2e2", "h9g7"])
+    }
+
+    @Test func testParsePVLines_noMultipvToken_defaultsToIndex1() {
+        let response = """
+        info depth 8 seldepth 10 score cp 42 nodes 800 time 30 pv h2e2
+        bestmove h2e2
+        """
+        let lines = PikafishService.parsePVLines(from: response)
+        #expect(lines.count == 1)
+        #expect(lines[0].multipv == 1)
+        #expect(lines[0].scoreCp == 42)
+        #expect(lines[0].moves == ["h2e2"])
+    }
+
+    @Test func testParsePVLines_mateScore() {
+        let response = """
+        info depth 15 seldepth 5 multipv 1 score mate 3 nodes 5000 time 10 pv h2e2 e9d9 e2d2
+        bestmove h2e2
+        """
+        let lines = PikafishService.parsePVLines(from: response)
+        #expect(lines.count == 1)
+        #expect(lines[0].scoreCp == 30000 - 3)
+    }
+
+    @Test func testParsePVLines_ignoresLinesWithoutPV() {
+        let response = """
+        info depth 5 score cp 10 nodes 100 time 5
+        info string NNUE evaluation enabled
+        bestmove h2e2
+        """
+        let lines = PikafishService.parsePVLines(from: response)
+        #expect(lines.isEmpty)
+    }
 }
