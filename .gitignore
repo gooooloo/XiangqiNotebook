@@ -114,6 +114,7 @@ UserInterfaceState.xcuserstate
 # Claude local settings and personal development tools
 .claude/settings.local.json
 .claude/agents/
+.playwright-mcp/
 
 # Local signing configuration (not committed)
 Config/Signing.local.xcconfig
