@@ -7,9 +7,9 @@ struct MacContentView: View {
     @StateObject private var viewModel: ViewModel
     @FocusState private var isViewFocused: Bool
     @State private var keyMonitor: Any?
-    #if DEBUG
+    // 本地分析服务在 Release 也启用（只读接口供 MCP 使用；驱动 app 的
+    // /action、/actions 仍限 DEBUG，切分在 RemoteControlServer 内部）
     @State private var remoteControlServer: RemoteControlServer?
-    #endif
     
     init() {
         _viewModel = StateObject(wrappedValue: ViewModel(
@@ -203,16 +203,12 @@ struct MacContentView: View {
         .onAppear {
             updateWindowTitle()
             installKeyMonitor()
-            #if DEBUG
             startRemoteControlServer()
-            #endif
         }
         .onDisappear {
             removeKeyMonitor()
-            #if DEBUG
             remoteControlServer?.stop()
             remoteControlServer = nil
-            #endif
         }
         .onReceive(viewModel.objectWillChange) { _ in
             // 监听 ViewModel 的任何变化，及时更新窗口标题
@@ -279,7 +275,6 @@ struct MacContentView: View {
         }
     }
 
-    #if DEBUG
     private func startRemoteControlServer() {
         let server = RemoteControlServer()
         server.viewModel = viewModel
@@ -291,7 +286,6 @@ struct MacContentView: View {
             print("RemoteControlServer failed to start: \(error)")
         }
     }
-    #endif
 
     /// 更新窗口标题
     private func updateWindowTitle() {
