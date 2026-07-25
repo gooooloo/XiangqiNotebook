@@ -1,0 +1,19 @@
+# Codex 专属元数据。此文件仅 Codex CLI 读取；Claude Code 会忽略它。
+# 位置约定：<skill>/agents/openai.yaml（经 .agents/skills/analyze-move symlink 暴露给 Codex）
+
+interface:
+  display_name: "象棋着法分析"
+  short_description: "用皮卡鱼引擎分析当前象棋局面或指定着法，并用地道中文术语讲解好坏"
+
+policy:
+  # 允许按 description 隐式自动触发，与 Claude Code 侧行为保持一致
+  allow_implicit_invocation: true
+
+dependencies:
+  tools:
+    # xiangqi-notebook 是本地 stdio MCP server（node 脚本），需另行在 Codex 注册
+    # （codex mcp add，或 ~/.codex/config.toml 的 [mcp_servers]）。
+    # 本地 stdio server 无 url/transport，故此处只按名称声明依赖。
+    - type: "mcp"
+      value: "xiangqi-notebook"
+      description: "XiangqiNotebook 本地远程操控 MCP：get_position / evaluate / apply_moves"
