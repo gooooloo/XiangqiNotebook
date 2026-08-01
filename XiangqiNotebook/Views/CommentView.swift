@@ -4,13 +4,40 @@ import SwiftUI
 struct CommentView: View {
     @ObservedObject var viewModel: ViewModel
 
+    private var isPractice: Bool { viewModel.currentAppMode == .practice }
+
+    /// 是否显示「不好的原因」：劣手时才有，练习模式下不剧透。
+    private var showsBadReason: Bool {
+        !isPractice && viewModel.isCurrentMoveBad
+    }
+
+    /// 第二列是否显示招法评论区。
+    ///
+    /// 有内容就永远显示（内容不能被藏起来），与「不好的原因」上下分栏；
+    /// 只有在它为空、且有「不好的原因」要显示时才隐藏，把整列让给原因——原因往往很长，需要整列才看得全。
+    /// 编辑态例外：始终显示，否则空的招法评论无从填写。
+    private var showsMoveComment: Bool {
+        guard showsBadReason, !viewModel.isCommentEditing else { return true }
+        return !(viewModel.currentMoveComment ?? "").isEmpty
+    }
+
     /// 评论文本块：编辑态用 TextEditor，浏览态用只读文本；统一浅底内嵌框。
     @ViewBuilder
-    private func commentBox(text: String, isEditing: Bool, disabled: Bool = false, onChange: @escaping (String) -> Void) -> some View {
+    private func commentBox(
+        text: String,
+        isEditing: Bool,
+        disabled: Bool = false,
+        background: Color = Theme.insetBackground,
+        border: Color = Theme.cardBorder,
+        onChange: @escaping (String) -> Void
+    ) -> some View {
         Group {
             if isEditing {
                 TextEditor(text: .init(get: { text }, set: onChange))
                     .font(.system(size: Theme.fs(12.5)))
+                    // 框底色是固定的浅色，文字色必须一并固定：否则深色外观下会取到白色，
+                    // 落在浅灰／粉红底上看不清
+                    .foregroundColor(Theme.monoText)
                     .scrollContentBackground(.hidden)
                     .disabled(disabled)
                     .padding(.horizontal, 6)
@@ -26,7 +53,7 @@ struct CommentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .insetBox()
+        .insetBox(background: background, border: border)
     }
 
     var body: some View {
@@ -40,78 +67,63 @@ struct CommentView: View {
                     onChange: { viewModel.updateCurrentFenComment($0) }
                 )
             }
-            .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
+            .opacity(isPractice ? 0 : 1)
 
-            // 第二列：招法评论区
-            VStack(alignment: .leading, spacing: 5) {
-                GroupHeader("招法评论区")
-                commentBox(
-                    text: viewModel.currentMoveComment ?? "",
-                    isEditing: viewModel.isCommentEditing,
-                    disabled: !viewModel.hasCurrentMove,
-                    onChange: { viewModel.updateCurrentMoveComment($0) }
-                )
-            }
-            .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
-
-            // 第三列：相关课程 + 不好的原因
+            // 第二列：招法评论区 + 不好的原因（红色框；招法评论为空时原因独占整列）
             VStack(spacing: 7) {
-                // 上半部分：相关课程
-                VStack(alignment: .leading, spacing: 5) {
-                    GroupHeader("相关课程")
-                    ScrollView {
-                        FlowLayout(items: viewModel.relatedCoursesForCurrentFen) { game in
-                            Text(game.name ?? "未命名游戏")
-                                .font(.system(size: Theme.fs(11)))
-                                .foregroundColor(Theme.variant)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Color(hex: 0xE7EEFC))
-                                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.row))
-                                #if os(macOS)
-                                .contextMenu {
-                                    CourseVideoContextMenu(viewModel: viewModel, gameId: game.id, currentFenId: viewModel.currentFenId)
-                                }
-                                #endif
-                        }
-                        .padding(8)
+                if showsMoveComment {
+                    VStack(alignment: .leading, spacing: 5) {
+                        GroupHeader("招法评论区")
+                        commentBox(
+                            text: viewModel.currentMoveComment ?? "",
+                            isEditing: viewModel.isCommentEditing,
+                            disabled: !viewModel.hasCurrentMove,
+                            onChange: { viewModel.updateCurrentMoveComment($0) }
+                        )
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .insetBox()
+                    .frame(maxHeight: .infinity)
                 }
-                .frame(maxHeight: .infinity)
-                .opacity(viewModel.currentAppMode == .practice ? 0 : 1)
 
-                // 下半部分：不好的原因（劣手时显示，红色框）
-                if viewModel.currentAppMode != .practice && viewModel.isCurrentMoveBad {
+                if showsBadReason {
                     VStack(alignment: .leading, spacing: 5) {
                         GroupHeader("不好的原因", color: Theme.bad)
-                        Group {
-                            if viewModel.isCommentEditing {
-                                TextEditor(text: .init(
-                                    get: { viewModel.currentMoveBadReason ?? "" },
-                                    set: { viewModel.updateCurrentMoveBadReason($0) }
-                                ))
-                                .font(.system(size: Theme.fs(12.5)))
-                                .scrollContentBackground(.hidden)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
-                            } else {
-                                Text(viewModel.currentMoveBadReason ?? "")
-                                    .font(.system(size: Theme.fs(12.5)))
-                                    .foregroundColor(Theme.monoText)
-                                    .lineSpacing(2)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 8)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .insetBox(background: Theme.reasonBackground, border: Theme.reasonBorder)
+                        commentBox(
+                            text: viewModel.currentMoveBadReason ?? "",
+                            isEditing: viewModel.isCommentEditing,
+                            background: Theme.reasonBackground,
+                            border: Theme.reasonBorder,
+                            onChange: { viewModel.updateCurrentMoveBadReason($0) }
+                        )
                     }
                     .frame(maxHeight: .infinity)
                 }
             }
+            .opacity(isPractice ? 0 : 1)
+
+            // 第三列：相关课程
+            VStack(alignment: .leading, spacing: 5) {
+                GroupHeader("相关课程")
+                ScrollView {
+                    FlowLayout(items: viewModel.relatedCoursesForCurrentFen) { game in
+                        Text(game.name ?? "未命名游戏")
+                            .font(.system(size: Theme.fs(11)))
+                            .foregroundColor(Theme.variant)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color(hex: 0xE7EEFC))
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.row))
+                            #if os(macOS)
+                            .contextMenu {
+                                CourseVideoContextMenu(viewModel: viewModel, gameId: game.id, currentFenId: viewModel.currentFenId)
+                            }
+                            #endif
+                    }
+                    .padding(8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .insetBox()
+            }
+            .opacity(isPractice ? 0 : 1)
         }
         .padding(12)
     }
