@@ -132,6 +132,10 @@ class ViewModel: ObservableObject {
     @Published var showingBoardTextView = false
     @Published var showingShortcutUsageStatsView = false
     @Published var showingPracticeMistakeStatsView = false
+    /// AI 问棋（iOS/iPad 走 sheet；macOS 用独立窗口，不看这个标志）
+    @Published var showingAIChat = false
+    /// iOS 专用：等 sheet 起来之后自动发出的问题。取走即清空
+    var pendingAIQuestion: String?
 
     // 复习模式状态
     @Published private(set) var reviewQueue: [(fenId: Int, srsData: SRSData)] = []
@@ -152,7 +156,8 @@ class ViewModel: ObservableObject {
                showingReviewListView ||
                showingBoardTextView ||
                showingShortcutUsageStatsView ||
-               showingPracticeMistakeStatsView
+               showingPracticeMistakeStatsView ||
+               showingAIChat
     }
 
     // Global alert state
@@ -162,6 +167,9 @@ class ViewModel: ObservableObject {
 
     #if os(macOS)
     private var referenceBoardWindowController: ReferenceBoardWindowController?
+    /// AI 问棋窗口。留引用是为了再次触发时把已有窗口带到前台而不是新开一个，
+    /// 顺带保住窗口里那份对话上下文
+    private var aiChatWindowController: AIChatWindowController?
     #endif
 
     // 用于存储订阅
@@ -538,6 +546,8 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.quickAllEngineScores, text: "皮卡鱼快估本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { self.quickAllEngineScores() }
         actionDefinitions.registerAction(.pikafishQuickMove, text: "皮卡鱼快速应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
         #endif
+        // 三端都注册：Mac 开独立窗口，iOS/iPad 弹全屏 sheet，分支在 showAIChat 里
+        actionDefinitions.registerAction(.openAIChat, text: "AI 问棋", shortcuts: [.sequence(",ai")], supportedModes: [.normal]) { self.showAIChat() }
         actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal]) { self.updateFenScore(self.currentFenId, score: nil) }
         actionDefinitions.registerAction(.openYunku, text: "打开云库", shortcuts: [.single("y")], supportedModes: [.normal]) { self.openYunku() }
         actionDefinitions.registerAction(.deleteMove, text: "删招", shortcuts: [.sequence(",d")], supportedModes: [.normal]) { self.removeCurrentStep() }
@@ -1750,8 +1760,16 @@ class ViewModel: ObservableObject {
         }
     }
 
-    /// 远程分析进行中标志：防止并发 /eval 请求同时驱动同一个引擎进程。
-    /// 供 RemoteControlServer 的只读 /eval 接口使用（Release 也启用），故不限 DEBUG
+    #endif
+
+    // MARK: - 只读 MultiPV 分析（跨平台）
+    //
+    // 两个消费方：macOS 的远程 /eval 接口（供 MCP 桥接外部 Claude），以及三端的
+    // app 内 AI 问棋（AnalysisToolbox 的 evaluate 工具）。两者都是只读分析，
+    // 都要与 app 内的评估任务抢同一个引擎，所以共用下面这套忙碌互斥。
+
+    /// 分析进行中标志：防止并发请求同时驱动同一个引擎。
+    /// 供 Release 也启用的只读接口使用，故不限 DEBUG
     private var isRemoteAnalyzing = false
 
     enum RemoteAnalyzeError: Error, LocalizedError {
@@ -1761,25 +1779,54 @@ class ViewModel: ObservableObject {
         var errorDescription: String? {
             switch self {
             case .engineBusy: return "引擎忙碌中（有评估任务在进行）"
+            #if os(macOS)
             case .engineUnavailable: return "引擎不可用（仅支持 Apple Silicon Mac）"
+            #else
+            case .engineUnavailable: return "引擎不可用"
+            #endif
             }
         }
     }
 
-    /// 远程操控（/eval）专用：对指定局面做 MultiPV 引擎分析。
-    /// 只读分析，不写入数据库；与 app 内评估共用引擎进程，忙碌时直接拒绝。
+    /// 对指定局面做 MultiPV 引擎分析。
+    /// 只读分析，不写入数据库；与 app 内评估共用引擎，忙碌时直接拒绝。
     /// @MainActor：忙碌标志与惰性创建的 service ivar 都是主线程状态；
     /// 引擎评估的 await 挂起期间不占用主线程
     @MainActor
-    func remoteEngineAnalyze(fen: String, multiPV: Int, movetime: Int) async throws -> [PikafishService.PVLine] {
+    func remoteEngineAnalyze(fen: String, multiPV: Int, movetime: Int) async throws -> [EnginePVLine] {
         if isRemoteAnalyzing { throw RemoteAnalyzeError.engineBusy }
-        if let queue = evaluationQueue, !queue.isIdle { throw RemoteAnalyzeError.engineBusy }
-        guard let service = ensurePikafishService() else { throw RemoteAnalyzeError.engineUnavailable }
         isRemoteAnalyzing = true
         defer { isRemoteAnalyzing = false }
+
+        #if os(macOS)
+        if let queue = evaluationQueue, !queue.isIdle { throw RemoteAnalyzeError.engineBusy }
+        guard let service = ensurePikafishService() else { throw RemoteAnalyzeError.engineUnavailable }
         return try await service.analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
+        #elseif os(iOS)
+        // iOS 侧与「AI 应招」共用同一个内嵌引擎实例，正在应招时不能插队
+        if isEvaluatingIOS { throw RemoteAnalyzeError.engineBusy }
+        return await ensurePikafishServiceIOS()
+            .analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
+        #else
+        throw RemoteAnalyzeError.engineUnavailable
+        #endif
     }
 
+    /// 中断正在进行的只读分析。
+    ///
+    /// 用户点「停止」时必须调——只取消 Swift Task 不会让引擎停下来，它会把剩下的
+    /// movetime 跑完：Mac 上白烧 CPU，iPhone 上白烧电。
+    /// 引擎收到 stop 会立刻发 bestmove，analyzePosition 因此提前返回已有结果。
+    @MainActor
+    func stopRemoteEngineAnalyze() {
+        #if os(macOS)
+        pikafishService?.stopCurrentSearch()
+        #elseif os(iOS)
+        pikafishServiceIOS?.stopCurrentSearch()
+        #endif
+    }
+
+    #if os(macOS)
     func queryAllEngineScores() {
         guard let queue = ensureEvaluationQueue() else { return }
         let game = session.sessionData.currentGame2
@@ -2049,7 +2096,43 @@ class ViewModel: ObservableObject {
         }
         #endif
     }
-    
+
+    /// 打开 AI 问棋窗口。已开着就带到前台——对话上下文留在窗口里，
+    /// 每次都新建会把追问的前情丢掉
+    func showAIChat() {
+        #if os(macOS)
+        if let controller = aiChatWindowController, controller.window?.isVisible == true {
+            controller.chat.reloadConfig()
+            controller.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+        let controller = AIChatWindowController(viewModel: self)
+        aiChatWindowController = controller
+        controller.showWindow(nil)
+        #else
+        showingAIChat = true
+        #endif
+    }
+
+    /// 打开问棋并直接发出一个现成的问题（评论区的「问 AI」快捷入口用）
+    func askAI(_ question: String) {
+        showAIChat()
+        #if os(macOS)
+        aiChatWindowController?.chat.ask(question)
+        #else
+        // iOS 的 ChatViewModel 建在 sheet 里，这里够不着，
+        // 挂起来等 sheet 起来自己取
+        pendingAIQuestion = question
+        #endif
+    }
+
+    /// 常用的两种问法。做成常量而不是散在视图里：三端要一致，
+    /// 措辞也直接决定模型往哪个方向答
+    enum AIQuickQuestion {
+        static let analyzePosition = "分析一下这个局面。"
+        static let whyLastMoveIsBad = "为什么这一步不好？"
+    }
+
     func showSearchResultsWindow() {
         #if os(macOS)
         let searchResults = session.searchCurrentMove()
@@ -2116,6 +2199,13 @@ class ViewModel: ObservableObject {
     var currentFenComment: String? { session.currentFenComment }
     var currentMoveComment: String? { session.currentMoveComment }
     var hasCurrentMove: Bool { session.currentMove != nil }
+    /// 走当前这一步之前的局面。问「这步为什么不好」时要以它为准评估
+    var previousFen: String? { session.previousFenObject?.fen }
+    /// 按 fen 找笔记本里的 fenId；不在库里返回 nil（不新建）。
+    /// 必须先 normalizeFen：库里存的是归一化形式，直接查会因为着数计数不同而全部落空
+    func notebookFenId(for fen: String) -> Int? {
+        session.databaseView.getIdForFen(normalizeFen(fen))
+    }
     /// 当前手的着法记谱文本（评论面板标题用）
     var currentMoveNotation: String? { session.currentMove.map { session.getMoveString(move: $0) } }
     var currentMoveBadReason: String? { session.currentMoveBadReason }

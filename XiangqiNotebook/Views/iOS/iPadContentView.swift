@@ -128,6 +128,9 @@ struct iPadContentView: View {
             ReviewListView(viewModel: viewModel)
                 .frame(minWidth: 400, minHeight: 300)
         }
+        .sheet(isPresented: $viewModel.showingAIChat) {
+            iPhoneAIChatSheet(viewModel: viewModel)
+        }
         .alert(viewModel.globalAlertTitle, isPresented: $viewModel.showingGlobalAlert) {
             Button("确定") { }
         } message: {

@@ -56,11 +56,36 @@ struct CommentView: View {
         .insetBox(background: background, border: border)
     }
 
+    /// 分区标题右侧的「问 AI」快捷入口。
+    ///
+    /// 两个入口问的是不同的东西：局面评论区问的是眼下这个局面，「不好的原因」问的是
+    /// 走到这里的**上一步**。后者尤其省事——那时局面已经是走完之后的了，
+    /// 手打问题很容易说不清指的是哪一步。
+    private func askAIButton(_ question: String) -> some View {
+        Button("问 AI") { viewModel.askAI(question) }
+            .buttonStyle(.plain)
+            .font(.system(size: Theme.fs(9.5), weight: .bold))
+            .foregroundColor(Theme.variant)
+    }
+
+    /// 标题行：左标题、右快捷入口。编辑态不显示按钮——那时候是在写笔记，不是在提问
+    @ViewBuilder
+    private func header(_ title: String, color: Color = Theme.groupHeader,
+                        ask question: String?) -> some View {
+        HStack(spacing: 6) {
+            GroupHeader(title, color: color)
+            Spacer(minLength: 0)
+            if let question, !viewModel.isCommentEditing {
+                askAIButton(question)
+            }
+        }
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             // 第一列：局面评论区
             VStack(alignment: .leading, spacing: 5) {
-                GroupHeader("局面评论区")
+                header("局面评论区", ask: ViewModel.AIQuickQuestion.analyzePosition)
                 commentBox(
                     text: viewModel.currentFenComment ?? "",
                     isEditing: viewModel.isCommentEditing,
@@ -86,7 +111,8 @@ struct CommentView: View {
 
                 if showsBadReason {
                     VStack(alignment: .leading, spacing: 5) {
-                        GroupHeader("不好的原因", color: Theme.bad)
+                        header("不好的原因", color: Theme.bad,
+                               ask: ViewModel.AIQuickQuestion.whyLastMoveIsBad)
                         commentBox(
                             text: viewModel.currentMoveBadReason ?? "",
                             isEditing: viewModel.isCommentEditing,

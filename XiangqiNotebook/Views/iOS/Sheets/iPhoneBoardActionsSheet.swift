@@ -139,6 +139,11 @@ struct iPhoneBoardActionsSheet: View {
 
     private var actionItems: [ActionItem] {
         [
+            // 放在最前：看着棋盘想提问是最常见的触发点
+            ActionItem(label: "AI 问棋", danger: false) {
+                dismiss()
+                viewModel.actionDefinitions.getActionInfo(.openAIChat)?.action()
+            },
             ActionItem(label: "打开云库", danger: false) { viewModel.actionDefinitions.getActionInfo(.openYunku)?.action() },
             ActionItem(label: "终局", danger: false) { viewModel.actionDefinitions.getActionInfo(.toEnd)?.action() },
             ActionItem(label: "更新数据", danger: false) { viewModel.actionDefinitions.getActionInfo(.checkDataVersion)?.action() },

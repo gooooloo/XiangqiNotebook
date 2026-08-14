@@ -200,7 +200,35 @@ struct UCIMoveToFenTests {
         """
         let lines = PikafishService.parsePVLines(from: response)
         #expect(lines.count == 1)
+        // 折算值保持不变——数据库里的引擎分是按这个存的
         #expect(lines[0].scoreCp == 30000 - 3)
+        // 同时给出明确的杀棋步数，免得上层从 29997 反推
+        #expect(lines[0].mate == 3)
+    }
+
+    @Test func testParsePVLines_mateAgainst() {
+        let response = """
+        info depth 15 multipv 1 score mate -2 nodes 5000 time 10 pv h2e2 e9d9
+        bestmove h2e2
+        """
+        let lines = PikafishService.parsePVLines(from: response)
+        #expect(lines[0].mate == -2)
+        #expect(lines[0].scoreCp == -30000 + 2)
+    }
+
+    @Test func testParsePVLines_normalScoreHasNilMate() {
+        let response = """
+        info depth 12 multipv 1 score cp 35 nodes 5000 time 10 pv h2e2 h9g7
+        bestmove h2e2
+        """
+        #expect(PikafishService.parsePVLines(from: response)[0].mate == nil)
+    }
+
+    @Test func testParseMate_readsOnlyMateScores() {
+        #expect(PikafishService.parseMate(from: "info depth 15 score mate 3 pv h2e2") == 3)
+        #expect(PikafishService.parseMate(from: "info depth 15 score mate -2 pv h2e2") == -2)
+        #expect(PikafishService.parseMate(from: "info depth 12 score cp 35 pv h2e2") == nil)
+        #expect(PikafishService.parseMate(from: "info string hello") == nil)
     }
 
     @Test func testParsePVLines_ignoresLinesWithoutPV() {

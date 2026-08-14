@@ -62,6 +62,7 @@ class ActionDefinitions {
         case queryAllEngineScores  // 搜索本对局每一步的引擎分数
         case quickAllEngineScores  // 快速估分本局所有局面
         case pikafishQuickMove     // 皮卡鱼快速应招
+        case openAIChat            // AI 问棋窗口
 
         // toggles
         case setFilterNone

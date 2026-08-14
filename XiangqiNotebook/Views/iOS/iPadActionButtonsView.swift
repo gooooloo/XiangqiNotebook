@@ -31,6 +31,7 @@ struct iPadActionButtonsView: View {
                     LargeButton(viewModel: viewModel, actionKey: .openYunku)
                     LargeButton(viewModel: viewModel, actionKey: .fix)
                     LargeButton(viewModel: viewModel, actionKey: .markPath)
+                    LargeButton(viewModel: viewModel, actionKey: .openAIChat)
                     LargeButton(viewModel: viewModel, actionKey: .referenceBoard)
                     LargeButton(viewModel: viewModel, actionKey: .previousPath)
                     LargeButton(viewModel: viewModel, actionKey: .nextPath)

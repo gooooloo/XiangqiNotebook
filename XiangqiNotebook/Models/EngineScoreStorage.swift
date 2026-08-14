@@ -68,6 +68,15 @@ class EngineScoreStorage {
         for (fenId, score) in remote.scores where local.scores[fenId] == nil {
             local.scores[fenId] = score
         }
+        // 分析缓存冲突时留信息量大的那条（更宽的 multiPV、更久的 movetime）：
+        // 它能服务的请求是另一条的超集，留窄的等于白丢一次已经算过的账
+        for (fenId, remoteAnalysis) in remote.analyses {
+            if let localAnalysis = local.analyses[fenId],
+               localAnalysis.supersedes(remoteAnalysis) {
+                continue
+            }
+            local.analyses[fenId] = remoteAnalysis
+        }
         local.dataVersion = max(local.dataVersion, remote.dataVersion)
     }
 

@@ -304,38 +304,12 @@ class RemoteControlServer {
         }
     }
 
+    /// 字段与 app 内 AI 的 get_position 工具同源（见 `PositionSnapshot`），
+    /// 两条路不会漂移。改用 JSONSerialization 顺带修掉了手写转义漏掉控制字符的问题——
+    /// 注释里若含  之类，旧的字符串拼接会产出非法 JSON。
     @MainActor
     private func buildStateJSON(_ vm: ViewModel) -> String {
-        let fen = escapeJSON(vm.currentFen)
-        let displayFen = escapeJSON(vm.displayFen)
-        let mode = escapeJSON(vm.currentAppMode.rawValue)
-        let comment = vm.currentFenComment.map { "\"\(escapeJSON($0))\"" } ?? "null"
-        let moveComment = vm.currentMoveComment.map { "\"\(escapeJSON($0))\"" } ?? "null"
-        let score = escapeJSON(vm.displayScore)
-        let engineScore = escapeJSON(vm.displayEngineScore)
-        let orientation = vm.isCurrentBlackOrientation ? "black" : "red"
-        let windowTitle = escapeJSON(vm.windowTitle)
-
-        let nextMoves = vm.currentNextMovesListDisplay.map { item in
-            "\"\(escapeJSON(item.moveString))\""
-        }.joined(separator: ",")
-
-        let variants = vm.currentGameVariantListDisplay.map { item in
-            "\"\(escapeJSON(item.moveString))\""
-        }.joined(separator: ",")
-
-        let filters = vm.currentFilters.map { "\"\(escapeJSON($0))\"" }.joined(separator: ",")
-
-        return "{\"fen\":\"\(fen)\",\"displayFen\":\"\(displayFen)\",\"mode\":\"\(mode)\","
-            + "\"step\":\(vm.currentGameStepDisplay),\"maxStep\":\(vm.maxGameStepDisplay),"
-            + "\"orientation\":\"\(orientation)\",\"isHorizontalFlipped\":\(vm.isCurrentHorizontalFlipped),"
-            + "\"comment\":\(comment),\"moveComment\":\(moveComment),"
-            + "\"score\":\"\(score)\",\"engineScore\":\"\(engineScore)\","
-            + "\"showPath\":\(vm.showPath),\"showAllNextMoves\":\(vm.showAllNextMoves),"
-            + "\"showLastMove\":\(vm.showLastMove),\"isLocked\":\(vm.isAnyMoveLocked),"
-            + "\"isBookmarked\":\(vm.isBookmarked),\"isInReview\":\(vm.isCurrentFenInReview),"
-            + "\"filters\":[\(filters)],\"nextMoves\":[\(nextMoves)],"
-            + "\"variants\":[\(variants)],\"windowTitle\":\"\(windowTitle)\"}"
+        AnalysisToolbox.json(vm.currentPositionSnapshot().remoteStateDictionary())
     }
 
     // MARK: - Eval (Pikafish MultiPV)
@@ -354,42 +328,7 @@ class RemoteControlServer {
         return EvalParams(fen: fen, multiPV: multiPV, movetime: movetime)
     }
 
-    /// 把 UCI 主变序列转成中文着法序列（逐步应用到局面上；遇到非法着法截断）
-    static func chinesePV(fen: String, uciMoves: [String]) -> [String] {
-        var currentFen = fen
-        var result: [String] = []
-        for uci in uciMoves {
-            guard let nextFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uci, fen: currentFen) else { break }
-            result.append(Move.stringifyMove(fen1: currentFen, fen2: nextFen, backup: uci, isHorizontalFlipped: false))
-            currentFen = nextFen
-        }
-        return result
-    }
-
     // MARK: - Apply Moves
-
-    struct AppliedMove: Equatable {
-        let uci: String
-        let chinese: String
-        let fen: String
-    }
-
-    /// 把一串 UCI 着法依次应用到局面上（纯函数，便于单测）。
-    /// 只做机械移动（起点须有子），不校验象棋规则合法性。
-    /// 返回成功应用的着法列表；failedIndex 指向首个无法应用的着法（全部成功则为 nil）
-    static func applyUCIMoves(fen: String, uciMoves: [String]) -> (applied: [AppliedMove], failedIndex: Int?) {
-        var currentFen = fen
-        var applied: [AppliedMove] = []
-        for (index, uci) in uciMoves.enumerated() {
-            guard let nextFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uci, fen: currentFen) else {
-                return (applied, index)
-            }
-            let chinese = Move.stringifyMove(fen1: currentFen, fen2: nextFen, backup: uci, isHorizontalFlipped: false)
-            applied.append(AppliedMove(uci: uci, chinese: chinese, fen: nextFen))
-            currentFen = nextFen
-        }
-        return (applied, nil)
-    }
 
     private func handleApply(body: String, connection: NWConnection) {
         guard let jsonData = body.data(using: .utf8),
@@ -401,29 +340,29 @@ class RemoteControlServer {
             return
         }
 
-        let fenParts = fen.split(separator: " ")
-        guard XiangqiBoardUtils.isValidBoardFen(fen),
-              fenParts.count >= 2, ["r", "b", "w"].contains(String(fenParts[1])) else {
+        guard AnalysisToolbox.isValidPositionFen(fen) else {
             sendJSONResponse(connection: connection, status: "400 Bad Request",
                              body: #"{"error":"Invalid fen (expect board + side, e.g. '.../RNBAKABNR r')"}"#)
             return
         }
 
-        let result = Self.applyUCIMoves(fen: fen, uciMoves: moves)
+        let result = AnalysisToolbox.applyUCIMoves(fen: fen, uciMoves: moves)
         if let failedIndex = result.failedIndex {
             sendJSONResponse(connection: connection, status: "400 Bad Request",
-                             body: "{\"error\":\"Cannot apply move at index \(failedIndex): "
-                                + "\(escapeJSON(moves[failedIndex])) (malformed or no piece at source)\"}")
+                             body: AnalysisToolbox.errorJSON(
+                                "Cannot apply move at index \(failedIndex): "
+                                + "\(moves[failedIndex]) (malformed or no piece at source)"))
             return
         }
 
-        let steps = result.applied.map { step in
-            "{\"uci\":\"\(escapeJSON(step.uci))\",\"chinese\":\"\(escapeJSON(step.chinese))\",\"fen\":\"\(escapeJSON(step.fen))\"}"
-        }.joined(separator: ",")
-        let finalFen = result.applied.last?.fen ?? fen
         sendJSONResponse(connection: connection, status: "200 OK",
-                         body: "{\"startFen\":\"\(escapeJSON(fen))\",\"steps\":[\(steps)],"
-                            + "\"finalFen\":\"\(escapeJSON(finalFen))\"}")
+                         body: AnalysisToolbox.json([
+                            "startFen": fen,
+                            "steps": result.applied.map {
+                                ["uci": $0.uci, "chinese": $0.chinese, "fen": $0.fen]
+                            },
+                            "finalFen": result.applied.last?.fen ?? fen,
+                         ]))
     }
 
     private func handleEval(body: String, connection: NWConnection) {
@@ -444,9 +383,7 @@ class RemoteControlServer {
             guard let self else { return }
 
             let fen = params.fen ?? vm.currentFen
-            let fenParts = fen.split(separator: " ")
-            guard XiangqiBoardUtils.isValidBoardFen(fen),
-                  fenParts.count >= 2, ["r", "b", "w"].contains(String(fenParts[1])) else {
+            guard AnalysisToolbox.isValidPositionFen(fen) else {
                 self.sendJSONResponse(connection: connection, status: "400 Bad Request",
                                       body: #"{"error":"Invalid fen (expect board + side, e.g. '.../RNBAKABNR r')"}"#)
                 return
@@ -455,26 +392,30 @@ class RemoteControlServer {
             do {
                 let lines = try await vm.remoteEngineAnalyze(
                     fen: fen, multiPV: params.multiPV, movetime: params.movetime)
-                let sideToMove = String(fenParts[1]) == "b" ? "black" : "red"
-                let lineJSONs = lines.map { line -> String in
-                    let uci = line.moves.map { "\"\(self.escapeJSON($0))\"" }.joined(separator: ",")
-                    let chinese = Self.chinesePV(fen: fen, uciMoves: line.moves)
-                        .map { "\"\(self.escapeJSON($0))\"" }.joined(separator: ",")
-                    let depth = line.depth.map(String.init) ?? "null"
-                    return "{\"rank\":\(line.multipv),\"scoreCp\":\(line.scoreCp),\"depth\":\(depth),"
-                        + "\"pvUci\":[\(uci)],\"pvChinese\":[\(chinese)]}"
-                }.joined(separator: ",")
-                let responseBody = "{\"fen\":\"\(self.escapeJSON(fen))\",\"sideToMove\":\"\(sideToMove)\","
-                    + "\"scorePerspective\":\"sideToMove\","
-                    + "\"engine\":\"\(self.escapeJSON(PikafishService.engineVersion))\","
-                    + "\"movetimeMs\":\(params.movetime),\"lines\":[\(lineJSONs)]}"
-                self.sendJSONResponse(connection: connection, status: "200 OK", body: responseBody)
+                self.sendJSONResponse(connection: connection, status: "200 OK",
+                                      body: AnalysisToolbox.json([
+                                        "fen": fen,
+                                        "sideToMove": AnalysisToolbox.sideToMove(fen: fen),
+                                        "scorePerspective": "sideToMove",
+                                        "engine": vm.engineVersionDescription,
+                                        "movetimeMs": params.movetime,
+                                        "lines": lines.map { line in
+                                            [
+                                                "rank": line.multipv,
+                                                "scoreCp": line.scoreCp,
+                                                "depth": line.depth as Any? ?? NSNull(),
+                                                "pvUci": line.moves,
+                                                "pvChinese": AnalysisToolbox.chinesePV(
+                                                    fen: fen, uciMoves: line.moves),
+                                            ] as [String: Any]
+                                        },
+                                      ]))
             } catch let error as ViewModel.RemoteAnalyzeError {
                 self.sendJSONResponse(connection: connection, status: "409 Conflict",
-                                      body: "{\"error\":\"\(self.escapeJSON(error.localizedDescription))\"}")
+                                      body: AnalysisToolbox.errorJSON(error.localizedDescription))
             } catch {
                 self.sendJSONResponse(connection: connection, status: "500 Internal Server Error",
-                                      body: "{\"error\":\"\(self.escapeJSON(error.localizedDescription))\"}")
+                                      body: AnalysisToolbox.errorJSON(error.localizedDescription))
             }
         }
     }
