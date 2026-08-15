@@ -56,6 +56,19 @@ class PikafishService: @unchecked Sendable {
         return nil
     }
 
+    /// 从 UCI info 行中解析杀棋步数。
+    /// `score mate 3` → 3（走子方 3 步成杀）；`score mate -2` → -2（走子方 2 步被杀）；
+    /// 非杀棋行返回 nil
+    static func parseMate(from infoLine: String) -> Int? {
+        let parts = infoLine.split(separator: " ")
+        guard let scoreIndex = parts.firstIndex(of: "score"),
+              scoreIndex + 2 < parts.count,
+              parts[scoreIndex + 1] == "mate" else {
+            return nil
+        }
+        return Int(parts[scoreIndex + 2])
+    }
+
     // MARK: - Engine Lifecycle
 
     /// 启动引擎进程
@@ -181,13 +194,9 @@ class PikafishService: @unchecked Sendable {
 
     // MARK: - MultiPV Analysis
 
-    /// 单条主变（MultiPV 分析结果中的一条候选线路）
-    struct PVLine {
-        let multipv: Int      // 1-based 排名
-        let scoreCp: Int      // 分数（走子方视角，厘兵值；杀棋折算为 ±30000 附近）
-        let depth: Int?
-        let moves: [String]   // UCI 着法序列
-    }
+    /// 单条主变。形状与 iOS 内嵌引擎共用（见 `EngineAnalyzing.swift`），
+    /// 保留这个别名是为了不动既有调用点与测试。
+    typealias PVLine = EnginePVLine
 
     /// 从引擎响应中解析 MultiPV 各线路。
     /// 同一 multipv 序号取最后一次出现（搜索更深的结果覆盖浅的）；
@@ -210,7 +219,8 @@ class PikafishService: @unchecked Sendable {
                 depth = Int(parts[dIdx + 1])
             }
             let moves = Array(parts[(pvIdx + 1)...])
-            linesByIndex[multipv] = PVLine(multipv: multipv, scoreCp: score, depth: depth, moves: moves)
+            linesByIndex[multipv] = PVLine(multipv: multipv, scoreCp: score,
+                                           mate: parseMate(from: line), depth: depth, moves: moves)
         }
         return linesByIndex.keys.sorted().compactMap { linesByIndex[$0] }
     }

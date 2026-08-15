@@ -220,6 +220,42 @@ internal class Database: ObservableObject {
         dirtyEngineKeys.insert(engineKey)
     }
 
+    // MARK: - 分析缓存
+
+    /// 找一条够用的 MultiPV 分析缓存。
+    ///
+    /// 先看自己这台设备的 engineKey，没有再看别的——iOS 的分数刻意与 Mac 分文件存
+    /// （引擎配置不同，数值不完全可比），但对讲解而言，**用 Mac 算好的候选线路
+    /// 远胜过让 iPhone 现场烧电重算一遍**。所以跨 key 读取是有意为之，
+    /// 代价由返回值里的 engine 字段如实交代。
+    func findUsableEngineAnalysis(fenId: Int, preferredKey: String,
+                                  multiPV: Int, movetimeMs: Int) -> CachedAnalysis? {
+        if let own = engineScores[preferredKey]?.analyses[fenId],
+           own.satisfies(multiPV: multiPV, movetimeMs: movetimeMs) {
+            return own
+        }
+        // 别人的结果里挑信息量最大的一条，结果才稳定（字典遍历顺序不保证）
+        return engineScores
+            .filter { $0.key != preferredKey }
+            .compactMap { $0.value.analyses[fenId] }
+            .filter { $0.satisfies(multiPV: multiPV, movetimeMs: movetimeMs) }
+            .max { ($0.movetimeMs, $0.multiPV) < ($1.movetimeMs, $1.multiPV) }
+    }
+
+    /// 写入分析缓存并标记脏。已有更宽更久的结果时不覆盖
+    func setEngineAnalysis(fenId: Int, engineKey: String, analysis: CachedAnalysis) {
+        if engineScores[engineKey] == nil {
+            engineScores[engineKey] = EngineScoreData()
+        }
+        if let existing = engineScores[engineKey]?.analyses[fenId],
+           existing.supersedes(analysis) {
+            return
+        }
+        engineScores[engineKey]?.analyses[fenId] = analysis
+        engineScores[engineKey]?.dataVersion += 1
+        dirtyEngineKeys.insert(engineKey)
+    }
+
     /// 保存所有脏的引擎分数文件
     func saveEngineScores() throws {
         for key in dirtyEngineKeys {

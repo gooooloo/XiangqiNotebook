@@ -396,6 +396,8 @@ struct MacMenuCommands: Commands {
             menuButton(.quickAllEngineScores)
             menuButton(.queryAllEngineScores)
             Divider()
+            menuButton(.openAIChat)
+            Divider()
             menuButton(.referenceBoard)
             menuButton(.searchCurrentMove)
             Divider()

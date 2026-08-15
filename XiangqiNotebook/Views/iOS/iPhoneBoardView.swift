@@ -47,6 +47,9 @@ struct iPhoneBoardView: View {
         .sheet(isPresented: $viewModel.showEditCommentIOS) {
             iPhoneEditCommentView(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showingAIChat) {
+            iPhoneAIChatSheet(viewModel: viewModel)
+        }
     }
 
     // MARK: - 固定顶栏

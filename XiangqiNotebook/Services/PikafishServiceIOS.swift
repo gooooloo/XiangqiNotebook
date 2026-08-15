@@ -70,6 +70,32 @@ final class PikafishServiceIOS {
         }
     }
 
+    /// MultiPV 多变着分析：返回前 N 条候选线路及各自分数与主变。
+    /// 只读分析，不涉及数据库；供 app 内 AI 问棋的 evaluate 工具使用。
+    ///
+    /// 与 `evaluatePosition` 共用同一个引擎实例，调用方须自行保证不并发
+    /// （ViewModel.remoteEngineAnalyze 用 isRemoteAnalyzing / isEvaluatingIOS 互斥）。
+    func analyzePosition(fen: String, multiPV: Int, movetime: Int) async -> [EnginePVLine] {
+        configureIfNeeded()
+
+        let uciFen = PikafishFenConversion.convertFenToUCI(fen)
+        bridge.setPosition(fen: uciFen, moves: [])
+
+        return await withCheckedContinuation { continuation in
+            bridge.goMultiPV(movetimeMs: movetime, multiPV: multiPV) { lines in
+                continuation.resume(returning: lines.map {
+                    EnginePVLine(
+                        multipv: $0.multipv,
+                        scoreCp: $0.scoreCp,
+                        mate: $0.mateInMoves?.intValue,
+                        depth: $0.depth,
+                        moves: $0.pvMoves
+                    )
+                })
+            }
+        }
+    }
+
     /// 中断当前搜索
     func stopCurrentSearch() {
         bridge.stop()

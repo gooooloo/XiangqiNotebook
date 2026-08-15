@@ -12,6 +12,7 @@ struct iPhoneMoreOptionsView: View {
 
     private enum MoreSheet: Identifiable {
         case openings, bookmarks, importPGN, exportPGN, boardAppearance, engine
+        case aiChat, aiSettings
         var id: Self { self }
     }
 
@@ -23,6 +24,10 @@ struct iPhoneMoreOptionsView: View {
                     group(title: "开局与收藏", rows: [
                         row(icon: "❖", title: "开局库", subtitle: "按布局体系浏览棋谱") { sheet = .openings },
                         row(icon: "☆", title: "书签", subtitle: "\(viewModel.bookmarkList.count) 个收藏局面", value: "\(viewModel.bookmarkList.count)") { sheet = .bookmarks },
+                    ])
+                    group(title: "AI 问棋", rows: [
+                        row(icon: "☷", title: "问棋", subtitle: "就当前局面向 AI 提问") { sheet = .aiChat },
+                        row(icon: "⚙", title: "AI 设置", subtitle: "服务地址 · 模型 · API key") { sheet = .aiSettings },
                     ])
                     group(title: "训练数据", rows: [
                         row(icon: "▤", title: "学习统计", subtitle: "复习库总览") { viewModel.showReviewListIOS = true },
@@ -65,6 +70,11 @@ struct iPhoneMoreOptionsView: View {
             case .exportPGN: iPhoneExportSheet(viewModel: viewModel)
             case .boardAppearance: iPhoneBoardAppearanceSheet()
             case .engine: iPhoneEngineSheet(viewModel: viewModel)
+            case .aiChat: iPhoneAIChatSheet(viewModel: viewModel)
+            case .aiSettings:
+                AISettingsView(
+                    isPresented: Binding(get: { sheet != nil }, set: { if !$0 { sheet = nil } })
+                )
             }
         }
     }
