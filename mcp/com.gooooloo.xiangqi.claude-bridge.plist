@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Claude 桥接的 launchd 常驻模板。安装步骤见同目录 README.md：
+     把两处 __占位符__ 换成本机绝对路径（node 用 `which node` 查）再装。 -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.gooooloo.xiangqi.claude-bridge</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__NODE_PATH__</string>
+        <string>__REPO_PATH__/mcp/claude-bridge.mjs</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <!-- launchd 环境的 PATH 极简（找不到 ~/.local/bin 下的 claude），
+         桥接自己会按固定路径探测 claude，这里只需保证基本命令可用 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <!-- 网络需要代理才能连 api.anthropic.com 的机器（如 v2ray），
+             取消注释并按本机代理端口填写，否则 claude 会报 authentication_failed：
+        <key>HTTPS_PROXY</key>
+        <string>http://127.0.0.1:1087</string>
+        <key>HTTP_PROXY</key>
+        <string>http://127.0.0.1:1087</string>
+        -->
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/xiangqi-claude-bridge.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/xiangqi-claude-bridge.log</string>
+</dict>
+</plist>

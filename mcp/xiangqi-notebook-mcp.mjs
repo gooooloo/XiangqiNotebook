@@ -2,7 +2,7 @@
 // 象棋笔记本 MCP server（stdio）
 //
 // 一个零依赖的薄桥：把 MCP tool 调用翻译成对 XiangqiNotebook 远程操控
-// HTTP 服务（localhost:9214，仅 DEBUG 构建）的请求。
+// HTTP 服务（localhost:9214，只读分析接口 Release 构建也启用）的请求。
 //
 // 注册到 Claude Code:
 //   claude mcp add xiangqi-notebook -- node /Users/qidu/dev/XiangqiNotebook/mcp/xiangqi-notebook-mcp.mjs
@@ -42,7 +42,7 @@ async function readToken() {
     return (await readFile(TOKEN_PATH, "utf8")).trim();
   } catch {
     throw new Error(
-      "读不到远程操控 token 文件。请确认象棋笔记本（DEBUG 构建）正在运行。",
+      "读不到远程操控 token 文件。请确认象棋笔记本正在运行。",
     );
   }
 }
@@ -58,7 +58,7 @@ async function api(path, { method = "GET", body, binary = false } = {}) {
     });
   } catch {
     throw new Error(
-      "连不上象棋笔记本（localhost:9214）。请确认 app（DEBUG 构建）正在运行。",
+      "连不上象棋笔记本（localhost:9214）。请确认 app 正在运行。",
     );
   }
   if (binary) {
@@ -121,6 +121,42 @@ const TOOLS = [
     },
   },
   {
+    name: "evaluate_move",
+    description:
+      "评估某一具体着法的好坏——要评点「为什么走X不好」时用这个，不要自己拿 evaluate 加 apply_moves 拼。" +
+      "它会跑两次引擎（走之前、走之后），并把所有分数统一换算到【走这步一方】的视角：" +
+      "scoreBefore 是走最佳能得到的分，scoreAfter 是走了这步之后实际能得到的分，lossCp 是两者之差（正数=亏）。" +
+      "同时给出引擎首选（bestInstead）、对手最强反击（opponentBestReplies），" +
+      "以及这步在候选里的排名（rankAmongCandidates，null 表示连前几名都没进）。" +
+      "杀棋看 mate 字段：正数为该方 N 步成杀，负数为 N 步被杀。" +
+      "失败以 {ok:false,error:{code,message}} 返回：ENGINE_BUSY 可稍等重试，ILLEGAL_MOVE 换一步。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fen: {
+          type: "string",
+          description: "要评估的局面，格式「棋盘 r|b」。省略则用 app 当前局面",
+        },
+        move: {
+          type: "string",
+          description:
+            "要评估的着法。UCI（h2e2）或中文着法（炮二平五、车9平6）都行——" +
+            "推荐直接传中文，省得自己换算坐标算错。必须是当前走子方的着法；传对方的子会报错。",
+        },
+        multipv: {
+          type: "integer",
+          description: "对比用的候选线路数，1-10，默认 3",
+        },
+        movetime_ms: {
+          type: "integer",
+          description: "单次引擎思考时长（毫秒），默认 5000。本工具跑两次引擎，总耗时约两倍",
+        },
+      },
+      required: ["move"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "apply_moves",
     description:
       "把一串 UCI 着法（如 ['h2e2','h9g7']）依次应用到局面上，返回每步的中文着法名和走完后的 fen。" +
@@ -159,6 +195,17 @@ async function callTool(name, args = {}) {
       if (args.multipv !== undefined) body.multipv = args.multipv;
       if (args.movetime_ms !== undefined) body.movetime = args.movetime_ms;
       return textContent(await api("/eval", { method: "POST", body }));
+    }
+
+    case "evaluate_move": {
+      // 薄透传：/eval_move 在 app 内直接复用 AnalysisToolbox.execute，
+      // 中文着法解析、mover 视角换算都在 Swift 侧，这里不重复实现。
+      // 该端点恒回 200，业务失败在 body 的 ok:false 里，模型自行分支
+      const body = { move: args.move };
+      if (args.fen !== undefined) body.fen = args.fen;
+      if (args.multipv !== undefined) body.multipv = args.multipv;
+      if (args.movetime_ms !== undefined) body.movetime_ms = args.movetime_ms;
+      return textContent(await api("/eval_move", { method: "POST", body }));
     }
 
     case "apply_moves":

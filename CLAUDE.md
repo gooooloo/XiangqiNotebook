@@ -171,8 +171,8 @@ xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -dest
 app 启动后会自动在 `localhost:9214` 启动 HTTP 服务器（`RemoteControlServer`，macOS 专属）。
 接口按能力分两层，编译门禁不同：
 
-- **只读分析接口（Release 也启用）**：`/state`、`/eval`、`/apply`、`/screenshot`——
-  查局面、皮卡鱼引擎分析、走子计算、截图，均只读，不改数据；供 MCP server 桥接给 Claude。
+- **只读分析接口（Release 也启用）**：`/state`、`/eval`、`/eval_move`、`/apply`、`/screenshot`——
+  查局面、皮卡鱼引擎分析、着法评估、走子计算、截图，均只读，不改数据；供 MCP server 桥接给 Claude。
 - **驱动接口（仅 DEBUG）**：`/action`、`/actions`——能触发 app 内任意操作，属开发/自动化测试
   专用，不随正式版发行，以缩小攻击面。
 
@@ -215,6 +215,11 @@ curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval -d '{
 
 # 把 UCI 着法序列应用到局面上（机械移动，不校验规则），返回每步中文着法名与新 fen
 curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/apply -d '{"fen":"rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r","moves":["h2e2","h9g7"]}'
+
+# 评估某一具体着法（跑两次引擎，分数统一为走子方视角）。move 收 UCI 或中文着法；
+# 语义与 app 内 AI 的 evaluate_move 工具完全一致（内部就是同一份代码）。
+# 响应恒为 200：成功 {"ok":true,...}，业务失败 {"ok":false,"error":{code,message}}
+curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval_move -d '{"move":"炮二平五","multipv":5}'
 ```
 
 **注意（shell 代理）**：本机 shell 环境可能设有 `HTTP_PROXY`/`HTTPS_PROXY`（v2ray）,会劫持发往
@@ -229,7 +234,8 @@ app 挂起在暂停态）,必须只跑单元测试：`-only-testing:XiangqiNoteb
 
 `mcp/xiangqi-notebook-mcp.mjs` 是零依赖 Node（≥18）stdio MCP server,把 MCP 工具调用桥接到上述
 远程操控 HTTP 接口。提供工具：`get_position`（当前局面与笔记）、`evaluate`（皮卡鱼 MultiPV 分析）、
-`apply_moves`（沿变着走子）、`screenshot`（窗口截图）。
+`evaluate_move`（评估某一具体着法，经 `/eval_move`）、`apply_moves`（沿变着走子）、
+`screenshot`（窗口截图）。
 
 ```bash
 # 注册到 Claude Code
@@ -238,6 +244,34 @@ claude mcp add xiangqi-notebook -- node /Users/qidu/dev/XiangqiNotebook/mcp/xian
 
 Claude Desktop 则在 `~/Library/Application Support/Claude/claude_desktop_config.json` 的
 `mcpServers` 中加入 `{"command": "node", "args": ["<仓库路径>/mcp/xiangqi-notebook-mcp.mjs"]}`。
+
+### Claude Code（订阅）线路：app 内问棋走本机 claude CLI（macOS 专属）
+
+app 内 AI 问棋的设置页可选「Claude Code（订阅）」线路：不填 API key，用本机 Claude Code
+的订阅登录跑问棋。链路与端口：
+
+```
+app ClaudeCodeClient ──HTTP+NDJSON──▶ mcp/claude-bridge.mjs（127.0.0.1:9216，launchd 常驻）
+                                        │ spawn: claude -p --output-format stream-json …
+                                        ▼
+                                      claude CLI ──MCP──▶ xiangqi-notebook-mcp.mjs ──▶ 9214
+```
+
+- 端口表：9213 = PGNHttpServer，9214 = RemoteControlServer，9216 = claude-bridge。
+- 桥接必须是沙盒外独立进程：app 开了 App Sandbox，子进程继承沙盒读不了 `~/.claude`
+  与钥匙串凭据。安装/手测/排障见 `mcp/README.md`。
+- 鉴权方向与 RemoteControlServer 相反：桥接启动时把随机 token 写进 app 容器
+  `.../Application Support/XiangqiNotebook/claude-bridge-token.txt`，app 读它构造
+  `X-ClaudeBridge-Token` 头。
+- 工具循环在 claude 进程内部（一次 `send` 返回终稿，`toolCalls` 恒空），工具过程经
+  `LLMToolEvent` 回调透传给 `ChatViewModel` 生成与其他线路一致的工具轨迹。
+- 多轮对话是无状态重放（历史渲染进 prompt），刻意不用 `--resume`：`wireMessages` 是
+  唯一真相源，取消/失败后剪本地数组即可回滚。
+- app 侧关键类型：`AIWireFormat`（线路枚举，iOS 上 allCases 不含 claudeCode）、
+  `LLMClientFactory`（单点分派）、`ClaudeCodeClient`（NDJSON 解析全是纯函数，有单测）。
+- 合规边界：这是「订阅用户本人脚本化使用 Claude Code」（headless 属官方支持用法）；
+  订阅凭证不可随 app 分发给第三方，Agent SDK + 订阅 OAuth 亦被条款禁止——不要把这条
+  线路改造成 Agent SDK 或对外服务。
 
 ### UI 变更验证流程
 

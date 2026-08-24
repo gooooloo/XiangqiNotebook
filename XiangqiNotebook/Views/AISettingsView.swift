@@ -1,13 +1,16 @@
 import SwiftUI
 
 /// AI 服务配置页，三端共用。
-/// 只做 OpenAI 兼容格式——预设按钮只是帮着少打字，选「自定义」可以填任何兼容服务。
+/// 线路分两种：OpenAI 兼容（预设按钮只是帮着少打字，可填任何兼容服务）；
+/// Claude Code 订阅（仅 macOS，走本机 claude CLI，见 mcp/claude-bridge.mjs）。
 struct AISettingsView: View {
 
     @Binding var isPresented: Bool
 
+    @State private var wireFormat: AIWireFormat = .openAICompatible
     @State private var baseURL = ""
     @State private var model = ""
+    @State private var claudeModel = ""
     @State private var apiKey = ""
     @State private var currency = AIPricing.empty.currency
     @State private var inputPrice = ""
@@ -29,13 +32,23 @@ struct AISettingsView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    baseURLSection
-                    Divider()
-                    modelSection
-                    Divider()
-                    apiKeySection
-                    Divider()
-                    pricingSection
+                    // iOS 只有一种线路，单选段的 Picker 显示出来反而突兀
+                    if AIWireFormat.allCases.count > 1 {
+                        wireFormatSection
+                        Divider()
+                    }
+                    switch wireFormat {
+                    case .openAICompatible:
+                        baseURLSection
+                        Divider()
+                        modelSection
+                        Divider()
+                        apiKeySection
+                        Divider()
+                        pricingSection
+                    case .claudeCode:
+                        claudeCodeSection
+                    }
                     Divider()
                     testSection
                 }
@@ -64,6 +77,32 @@ struct AISettingsView: View {
     }
 
     // MARK: - 各段
+
+    private var wireFormatSection: some View {
+        section("线路") {
+            Picker("", selection: $wireFormat) {
+                ForEach(AIWireFormat.allCases) { format in
+                    Text(format.displayName).tag(format)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .onChange(of: wireFormat) { _ in testState = .idle }
+        }
+    }
+
+    /// Claude Code（订阅）线路：没有地址、key、单价可填——地址固定 localhost、
+    /// 鉴权走本地 token 文件、计费在订阅内
+    private var claudeCodeSection: some View {
+        section("模型（可选）") {
+            field(text: $claudeModel, placeholder: "sonnet", monospaced: true)
+            hint("传给 claude --model：可填 sonnet / opus / haiku 或完整模型名，留空用 CLI 默认。"
+                 + "用量计在 Claude 订阅内，不按 token 单独收费。")
+            hint("需要本机装有 Claude Code（已登录订阅），且桥接服务在运行："
+                 + "node mcp/claude-bridge.mjs，安装 launchd 常驻见 mcp/README.md。"
+                 + "工具调用经由本 app 的分析接口完成，app 开着即可。")
+        }
+    }
 
     private var baseURLSection: some View {
         section("服务地址") {
@@ -260,7 +299,8 @@ struct AISettingsView: View {
     // MARK: - 逻辑
 
     private var draftConfig: AIConfig {
-        AIConfig(baseURL: baseURL, model: model, apiKey: apiKey,
+        AIConfig(wireFormat: wireFormat, baseURL: baseURL, model: model, apiKey: apiKey,
+                 claudeModel: claudeModel,
                  pricing: AIPricing(
                     currency: currency,
                     inputPerMillion: Self.price(inputPrice),
@@ -288,8 +328,10 @@ struct AISettingsView: View {
 
     private func load() {
         let config = AIConfig.load()
+        wireFormat = config.wireFormat
         baseURL = config.baseURL
         model = config.model
+        claudeModel = config.claudeModel
         apiKey = config.apiKey
         currency = config.pricing.currency
         inputPrice = Self.priceText(config.pricing.inputPerMillion)
@@ -307,13 +349,21 @@ struct AISettingsView: View {
         }
     }
 
-    /// 真发一次最小请求：光校验格式说明不了服务是否可用、key 对不对、
-    /// 这个模型认不认工具调用
+    /// 按线路分派测试。OpenAI 兼容真发一次最小请求（光校验格式说明不了服务是否可用、
+    /// key 对不对、这个模型认不认工具调用）；Claude Code 探桥接的 /health
+    /// （桥接在不在跑、claude 在不在、登没登录）——不真跑一轮 claude，那要十几秒。
     private func runTest() {
         save(andClose: false)
         guard saveError == nil else { return }
 
         testState = .testing
+        switch wireFormat {
+        case .openAICompatible: runOpenAICompatibleTest()
+        case .claudeCode: runBridgeTest()
+        }
+    }
+
+    private func runOpenAICompatibleTest() {
         let client = LLMClient(config: draftConfig)
         Task { @MainActor in
             do {
@@ -324,6 +374,19 @@ struct AISettingsView: View {
                 testState = answered
                     ? .success("连接正常，模型接受工具调用")
                     : .failure("服务有响应，但没返回内容，换个模型试试")
+            } catch {
+                testState = .failure((error as? LLMError)?.errorDescription
+                                     ?? error.localizedDescription)
+            }
+        }
+    }
+
+    private func runBridgeTest() {
+        Task { @MainActor in
+            do {
+                let health = try await ClaudeCodeClient.health()
+                let subscription = health.subscriptionType.map { "（\($0) 订阅）" } ?? ""
+                testState = .success("桥接正常，claude 已登录\(subscription)")
             } catch {
                 testState = .failure((error as? LLMError)?.errorDescription
                                      ?? error.localizedDescription)

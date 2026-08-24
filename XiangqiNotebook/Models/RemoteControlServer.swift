@@ -7,7 +7,7 @@ import Security
 /// 本地操控 / 分析 HTTP 服务（localhost:9214）。
 ///
 /// 接口按能力分两类，编译门禁不同：
-/// - **只读分析接口**（Release 也启用）：/state、/eval、/apply、/screenshot——
+/// - **只读分析接口**（Release 也启用）：/state、/eval、/eval_move、/apply、/screenshot——
 ///   供 MCP server 桥接给 Claude，只读局面/引擎分析/走子计算/截图，不改数据。
 /// - **驱动接口**（仅 DEBUG）：/action、/actions——能触发 app 内任意操作，
 ///   属开发/自动化测试专用，不随正式版发行，以缩小攻击面。
@@ -192,6 +192,8 @@ class RemoteControlServer {
             handleState(connection: connection)
         case ("POST", "/eval"):
             handleEval(body: body, connection: connection)
+        case ("POST", "/eval_move"):
+            handleEvalMove(body: body, connection: connection)
         case ("POST", "/apply"):
             handleApply(body: body, connection: connection)
         // 驱动接口（仅 DEBUG）：能触发 app 内任意操作，不随正式版发行
@@ -326,6 +328,30 @@ class RemoteControlServer {
         let multiPV = min(10, max(1, json?["multipv"] as? Int ?? 3))
         let movetime = min(60000, max(500, json?["movetime"] as? Int ?? 5000))
         return EvalParams(fen: fen, multiPV: multiPV, movetime: movetime)
+    }
+
+    // MARK: - Eval Move
+
+    /// evaluate_move 工具的远程入口，语义与 app 内 AI 的同名工具完全一致——
+    /// 直接复用 `AnalysisToolbox.execute`，中文着法解析、mover 视角换算、
+    /// rank 判断都不重复实现，两条路（MCP、app 内）永不漂移。
+    ///
+    /// 响应恒为 200：成功 `{"ok":true,...}`，业务失败 `{"ok":false,"error":{code,message}}`。
+    /// 与 /eval 的「HTTP 状态码 + {"error":字符串}」不同——本端点面向模型而非人，
+    /// 沿用工具层契约，让模型按 ok 字段分支（引擎忙就重试、着法非法就换一步）。
+    private func handleEvalMove(body: String, connection: NWConnection) {
+        guard let vm = viewModel else {
+            sendJSONResponse(connection: connection, status: "503 Service Unavailable",
+                             body: #"{"error":"ViewModel not available"}"#)
+            return
+        }
+        // 同 handleEval：引擎分析耗时数秒，丢进 MainActor Task，不阻塞 server 队列
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await AnalysisToolbox(host: vm)
+                .execute(toolName: "evaluate_move", argumentsJSON: body)
+            self.sendJSONResponse(connection: connection, status: "200 OK", body: result)
+        }
     }
 
     // MARK: - Apply Moves
