@@ -540,11 +540,11 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.queryScore, text: "云库查分", shortcuts: [.single("s")], supportedModes: [.normal]) { Task { await self.queryFenScore() } }
         #if os(macOS) && arch(arm64)
-        actionDefinitions.registerAction(.quickEngineScore, text: "皮卡鱼快速估分", shortcuts: [.sequence(",qs")], supportedModes: [.normal]) { self.quickEngineScore() }
-        actionDefinitions.registerAction(.queryEngineScore, text: "皮卡鱼深度评分", shortcuts: [.sequence(",Qs")], supportedModes: [.normal]) { self.queryEngineScore() }
-        actionDefinitions.registerAction(.queryAllEngineScores, text: "皮卡鱼深评本局", shortcuts: [.sequence(",Qa")], supportedModes: [.normal]) { self.queryAllEngineScores() }
-        actionDefinitions.registerAction(.quickAllEngineScores, text: "皮卡鱼快估本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { self.quickAllEngineScores() }
-        actionDefinitions.registerAction(.pikafishQuickMove, text: "皮卡鱼快速应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
+        actionDefinitions.registerAction(.quickEngineScore, text: "快速估分", shortcuts: [.sequence(",qs")], supportedModes: [.normal]) { self.quickEngineScore() }
+        actionDefinitions.registerAction(.queryEngineScore, text: "深度评分", shortcuts: [.sequence(",Qs")], supportedModes: [.normal]) { self.queryEngineScore() }
+        actionDefinitions.registerAction(.queryAllEngineScores, text: "深评本局", shortcuts: [.sequence(",Qa")], supportedModes: [.normal]) { self.queryAllEngineScores() }
+        actionDefinitions.registerAction(.quickAllEngineScores, text: "快估本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { self.quickAllEngineScores() }
+        actionDefinitions.registerAction(.pikafishQuickMove, text: "快速应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
         #endif
         // 三端都注册：Mac 开独立窗口，iOS/iPad 弹全屏 sheet，分支在 showAIChat 里
         actionDefinitions.registerAction(.openAIChat, text: "AI 问棋", shortcuts: [.sequence(",ai")], supportedModes: [.normal]) { self.showAIChat() }
