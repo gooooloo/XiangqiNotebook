@@ -263,6 +263,84 @@ struct ChatViewModelTests {
         #expect(!chat.isRunning)
     }
 
+    // MARK: - Claude Code 线路（工具在客户端内部执行，经事件透传）
+
+    /// 模拟 ClaudeCodeClient：只实现四参 send，工具过程经 onToolEvent 透传，
+    /// 一次返回终稿、toolCalls 恒空。三参版抛错——若循环走到它，
+    /// 说明 existential 派发掉进了默认实现，那是协议接错了。
+    private final class ClaudeStyleClient: LLMSending, @unchecked Sendable {
+        private(set) var sentMessageLog: [[LLMMessage]] = []
+
+        func send(messages: [LLMMessage], tools: [[String: Any]],
+                  onReasoning: @escaping (String) -> Void) async throws -> LLMResponse {
+            throw LLMError.serverError(598)
+        }
+
+        func send(messages: [LLMMessage], tools: [[String: Any]],
+                  onReasoning: @escaping (String) -> Void,
+                  onToolEvent: @escaping (LLMToolEvent) -> Void) async throws -> LLMResponse {
+            sentMessageLog.append(messages)
+            onReasoning("先看引擎候选")
+            onToolEvent(.started(name: "get_position", argumentsJSON: "{}"))
+            onToolEvent(.finished(name: "get_position", argumentsJSON: "{}",
+                                  resultJSON: #"{"ok":true,"step":3,"sideToMove":"red","nextMoves":[]}"#))
+            onToolEvent(.started(name: "evaluate", argumentsJSON: #"{"multipv":5}"#))
+            onToolEvent(.finished(name: "evaluate", argumentsJSON: #"{"multipv":5}"#,
+                                  resultJSON: #"{"ok":true,"lines":[{"scoreCp":32,"pvChinese":["炮二平五"]}]}"#))
+            return LLMResponse(content: "红方略优。", toolCalls: [],
+                               usage: TokenUsage(promptTokens: 900, cachedTokens: 200,
+                                                 completionTokens: 150))
+        }
+    }
+
+    @Test func testClaudeRoute_dispatchesToFourParameterSend() async {
+        // ClaudeStyleClient 的三参版抛 598：本测试通过本身就证明
+        // 循环调的是带 onToolEvent 的协议方法，而不是默认实现
+        let viewModel = makeViewModel()
+        let client = ClaudeStyleClient()
+        let chat = ChatViewModel(viewModel: viewModel, config: configured,
+                                 clientFactory: { _ in client })
+        await ask(chat, "现在局面怎么样")
+
+        #expect(chat.errorText == nil)
+        #expect(chat.messages.last?.text == "红方略优。")
+    }
+
+    @Test func testClaudeRoute_toolEventsCountIntoTheAnswer() async {
+        // 工具跑在 claude 进程内部，次数只能靠事件计——页脚的「调了 N 次工具」
+        // 必须与其他线路同一口径
+        let viewModel = makeViewModel()
+        let client = ClaudeStyleClient()
+        let chat = ChatViewModel(viewModel: viewModel, config: configured,
+                                 clientFactory: { _ in client })
+        await ask(chat, "问")
+
+        #expect(chat.messages.last?.toolCallCount == 2)
+        #expect(chat.messages.last?.usage?.promptTokens == 900)
+        // 一次返回终稿 → 只有一轮请求
+        #expect(client.sentMessageLog.count == 1)
+        // 回答落地后轨迹清空，与其他线路一致
+        #expect(chat.traces.isEmpty)
+    }
+
+    @Test func testClaudeRoute_followUpCarriesHistoryOnly() async {
+        // 追问要带上此前的问答，且不能混进工具中间态（本线路一轮收敛，本就没有）
+        let viewModel = makeViewModel()
+        let client = ClaudeStyleClient()
+        let chat = ChatViewModel(viewModel: viewModel, config: configured,
+                                 clientFactory: { _ in client })
+        await ask(chat, "第一问")
+        await ask(chat, "第二问")
+
+        let second = client.sentMessageLog[1]
+        #expect(second.first?.role == .system)
+        #expect(second.contains { $0.role == .user && $0.content == "第一问" })
+        #expect(second.contains { $0.role == .assistant && $0.content == "红方略优。" })
+        #expect(second.last?.content == "第二问")
+        #expect(!second.contains { $0.role == .tool })
+        #expect(!second.contains { !$0.toolCalls.isEmpty })
+    }
+
     // MARK: - 追问保持上下文
 
     @Test func testFollowUp_carriesPriorTurns() async {

@@ -1,6 +1,37 @@
 import Foundation
 import Security
 
+// MARK: - 线路格式
+
+/// AI 问棋支持的线路类型。请求怎么拼、流式怎么读、鉴权怎么带都跟着它走；
+/// 新增一种格式时在 `LLMClientFactory.make` 加一个分支即可，调用处不必知道有几种。
+enum AIWireFormat: String, CaseIterable, Identifiable {
+    /// OpenAI Chat Completions 兼容端点（DeepSeek、Kimi、智谱、通义、Ollama 等）
+    case openAICompatible
+    /// 本机 Claude Code CLI（订阅计费），经 mcp/claude-bridge.mjs 桥接
+    case claudeCode
+
+    var id: String { rawValue }
+
+    /// iOS 上不列出 claudeCode：它依赖本机的 claude CLI 与沙盒外的桥接进程，iPhone 上没有。
+    /// 配置存本地 UserDefaults、不跨设备同步，不存在别的设备把该值带过来的问题；
+    /// `AIConfig.load` 仍会把不在此列表内的存量值兜底回退成 openAICompatible。
+    static var allCases: [AIWireFormat] {
+        #if os(macOS)
+        [.openAICompatible, .claudeCode]
+        #else
+        [.openAICompatible]
+        #endif
+    }
+
+    var displayName: String {
+        switch self {
+        case .openAICompatible: return "OpenAI 兼容"
+        case .claudeCode: return "Claude Code（订阅）"
+        }
+    }
+}
+
 // MARK: - 服务预设
 
 /// 常见 OpenAI 兼容服务的地址与建议模型，只是帮用户少打字。
@@ -156,17 +187,30 @@ struct CostLine: Equatable {
 /// 地址、模型名与单价存 UserDefaults（沿用 `CourseVideoStorage`、`ShortcutUsageStats` 的
 /// 本地存储惯例，不进 iCloud 文档同步）；API key 存钥匙串。
 struct AIConfig: Equatable {
+    var wireFormat: AIWireFormat = .openAICompatible
     var baseURL: String
     var model: String
     var apiKey: String
+    /// claudeCode 线路的模型名（传给 `claude --model`，空则用 CLI 默认）。
+    /// 与 `model` 分开存：两条线路的模型名互不通用，共用一个字段的话，
+    /// 切换线路会把 deepseek-chat 之类误传给 claude
+    var claudeModel: String = ""
     var pricing: AIPricing = .empty
 
     static let empty = AIConfig(baseURL: "", model: "", apiKey: "")
 
-    /// 三项齐全才算配好——缺任何一项都发不出请求
+    /// 发出请求所需的配置是否齐全，按线路格式各有要求
     var isConfigured: Bool {
-        !baseURL.trimmed.isEmpty && !model.trimmed.isEmpty && !apiKey.trimmed.isEmpty
-            && Self.chatCompletionsURL(from: baseURL) != nil
+        switch wireFormat {
+        case .openAICompatible:
+            // 三项齐全才算配好——缺任何一项都发不出请求
+            return !baseURL.trimmed.isEmpty && !model.trimmed.isEmpty && !apiKey.trimmed.isEmpty
+                && Self.chatCompletionsURL(from: baseURL) != nil
+        case .claudeCode:
+            // 地址固定 localhost、鉴权走本地 token 文件、模型可空（用 CLI 默认），
+            // 没有非填不可的字段；桥接进程在不在跑留到真发请求时再报
+            return true
+        }
     }
 
     // MARK: 地址规范化
@@ -215,8 +259,10 @@ struct AIConfig: Equatable {
     // MARK: 持久化
 
     private enum Keys {
+        static let wireFormat = "aiChatWireFormat"
         static let baseURL = "aiChatBaseURL"
         static let model = "aiChatModel"
+        static let claudeModel = "aiChatClaudeModel"
         static let currency = "aiChatCurrency"
         static let inputPrice = "aiChatInputPricePerMillion"
         static let outputPrice = "aiChatOutputPricePerMillion"
@@ -234,10 +280,18 @@ struct AIConfig: Equatable {
             outputPerMillion: userDefaults.object(forKey: Keys.outputPrice) as? Double,
             cachedPerMillion: userDefaults.object(forKey: Keys.cachedPrice) as? Double)
 
+        // 存量值不在 allCases 内（如 iOS 构建读到脏数据）就回退成 openAICompatible
+        let wireFormat = userDefaults.string(forKey: Keys.wireFormat)
+            .flatMap(AIWireFormat.init(rawValue:))
+            .flatMap { AIWireFormat.allCases.contains($0) ? $0 : nil }
+            ?? .openAICompatible
+
         return AIConfig(
+            wireFormat: wireFormat,
             baseURL: baseURL,
             model: userDefaults.string(forKey: Keys.model) ?? "",
             apiKey: keyStore.read() ?? "",
+            claudeModel: userDefaults.string(forKey: Keys.claudeModel) ?? "",
             // 没填过价就用预设里核对过的建议价兜底。放在这里而不是只放设置页，
             // 是为了让花费显示开箱即用——不必先去开一次设置、点一下预设
             pricing: stored.isConfigured
@@ -253,8 +307,10 @@ struct AIConfig: Equatable {
     /// 这不是假设，是已经发生过一次的事故
     func save(userDefaults: UserDefaults = .standard,
               keyStore: APIKeyStoring = AIKeychain()) throws {
+        userDefaults.set(wireFormat.rawValue, forKey: Keys.wireFormat)
         userDefaults.set(baseURL.trimmed, forKey: Keys.baseURL)
         userDefaults.set(model.trimmed, forKey: Keys.model)
+        userDefaults.set(claudeModel.trimmed, forKey: Keys.claudeModel)
         userDefaults.set(pricing.currency, forKey: Keys.currency)
         Self.setOptionalDouble(pricing.inputPerMillion, forKey: Keys.inputPrice, in: userDefaults)
         Self.setOptionalDouble(pricing.outputPerMillion, forKey: Keys.outputPrice, in: userDefaults)

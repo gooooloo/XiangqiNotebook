@@ -85,13 +85,16 @@ final class ChatViewModel: ObservableObject {
 
     /// 完整对话（含工具中间态），供追问时保持上下文
     private var wireMessages: [LLMMessage] = [.system(AIChatPrompt.system)]
+    /// 本轮已调用的工具次数。做成属性而不是循环里的局部变量：Claude Code 线路的
+    /// 工具在客户端内部执行，经 `LLMToolEvent` 回调计数，局部变量够不着
+    private var toolCallCount = 0
     private var runningTask: Task<Void, Never>?
     /// 重试用：记住上一次没成功的提问
     private var lastFailedInput: String?
 
     init(viewModel: ViewModel,
          config: AIConfig = .load(),
-         clientFactory: @escaping (AIConfig) -> LLMSending = { LLMClient(config: $0) }) {
+         clientFactory: @escaping (AIConfig) -> LLMSending = { LLMClientFactory.make(config: $0) }) {
         self.viewModel = viewModel
         self.toolbox = AnalysisToolbox(host: viewModel)
         self.config = config
@@ -143,6 +146,7 @@ final class ChatViewModel: ObservableObject {
 
         clearError()
         traces = []
+        toolCallCount = 0
         progressStep = 0
         clearProgress()
         messages.append(DisplayMessage(kind: .user, text: question))
@@ -184,7 +188,6 @@ final class ChatViewModel: ObservableObject {
     private func runToolLoop(question: String) async {
         let client = clientFactory(config)
         let startedAt = Date()
-        var toolCallCount = 0
         var usage = TokenUsage.zero
 
         for step in 1...Self.maxIterations {
@@ -203,6 +206,9 @@ final class ChatViewModel: ObservableObject {
                     tools: AnalysisToolbox.toolSpecs,
                     onReasoning: { [weak self] chunk in
                         Task { @MainActor in self?.appendReasoning(chunk) }
+                    },
+                    onToolEvent: { [weak self] event in
+                        Task { @MainActor in self?.handleRemoteToolEvent(event) }
                     })
             } catch {
                 lastFailedInput = question
@@ -215,8 +221,7 @@ final class ChatViewModel: ObservableObject {
             if let step = response.usage { usage = usage + step }
 
             guard !response.toolCalls.isEmpty else {
-                finish(text: response.content, toolCallCount: toolCallCount,
-                       startedAt: startedAt, usage: usage)
+                finish(text: response.content, startedAt: startedAt, usage: usage)
                 return
             }
 
@@ -245,11 +250,28 @@ final class ChatViewModel: ObservableObject {
         // 到顶还没收敛：把最后说过的话拿出来，别让用户一无所获。
         // recordInWire: false —— 这段话本就在对话记录里，不能再入档一遍
         hitIterationLimit = true
-        finish(text: lastAssistantText(), toolCallCount: toolCallCount,
-               startedAt: startedAt, usage: usage, recordInWire: false)
+        finish(text: lastAssistantText(), startedAt: startedAt, usage: usage, recordInWire: false)
     }
 
-    private func finish(text: String?, toolCallCount: Int, startedAt: Date,
+    /// Claude Code 线路的工具在 claude 进程内部执行，事件经客户端透传到这里，
+    /// 生成与本地执行路径一致的进度提示与工具轨迹。其他线路不会触发（默认实现忽略回调）。
+    private func handleRemoteToolEvent(_ event: LLMToolEvent) {
+        guard isRunning else { return }
+        switch event {
+        case .started(let name, let argumentsJSON):
+            toolCallCount += 1
+            let arguments = AnalysisToolbox.parseArgumentsJSON(argumentsJSON)
+            progressText = AnalysisToolbox.progressDescription(toolName: name, arguments: arguments)
+        case .finished(let name, let argumentsJSON, let resultJSON):
+            let arguments = AnalysisToolbox.parseArgumentsJSON(argumentsJSON)
+            traces.append(ToolTrace(
+                title: AnalysisToolbox.progressDescription(toolName: name, arguments: arguments),
+                summary: AnalysisToolbox.resultSummary(toolName: name, resultJSON: resultJSON)))
+            progressText = "模型正在读取分析结果…"
+        }
+    }
+
+    private func finish(text: String?, startedAt: Date,
                         usage: TokenUsage, recordInWire: Bool = true) {
         let body = (text?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap {
             $0.isEmpty ? nil : $0

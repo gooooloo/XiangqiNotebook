@@ -377,6 +377,59 @@ struct AIConfigTests {
         #expect(AIProviderPreset.matching(baseURL: "https://api.minimaxi.com/v1")?.name == "MiniMax 国内")
     }
 
+    // MARK: - 线路格式
+
+    @Test func testWireFormat_defaultsToOpenAICompatible() throws {
+        // 没存过的老用户升级上来，一切照旧
+        let defaults = try scratchDefaults(#function)
+        let loaded = AIConfig.load(userDefaults: defaults, keyStore: InMemoryKeyStore())
+        #expect(loaded.wireFormat == .openAICompatible)
+    }
+
+    @Test func testWireFormat_roundTripsThroughUserDefaults() throws {
+        let defaults = try scratchDefaults(#function)
+        let keyStore = InMemoryKeyStore()
+        var config = AIConfig.empty
+        config.wireFormat = .claudeCode
+        config.claudeModel = "opus"
+        try config.save(userDefaults: defaults, keyStore: keyStore)
+
+        let loaded = AIConfig.load(userDefaults: defaults, keyStore: keyStore)
+        #expect(loaded.wireFormat == .claudeCode)
+        #expect(loaded.claudeModel == "opus")
+    }
+
+    @Test func testWireFormat_unknownStoredValueFallsBack() throws {
+        // 将来删掉某种格式（或 iOS 构建读到 macOS 才有的值）时不能崩、不能卡死在没法用的线路上
+        let defaults = try scratchDefaults(#function)
+        defaults.set("telepathy", forKey: "aiChatWireFormat")
+        let loaded = AIConfig.load(userDefaults: defaults, keyStore: InMemoryKeyStore())
+        #expect(loaded.wireFormat == .openAICompatible)
+    }
+
+    @Test func testIsConfigured_claudeCodeNeedsNoFields() {
+        // 地址固定、鉴权走本地 token 文件、模型可空——没有非填不可的项。
+        // 桥接在不在跑是运行时的事，isConfigured 拦不了也不该拦
+        var config = AIConfig.empty
+        config.wireFormat = .claudeCode
+        #expect(config.isConfigured)
+    }
+
+    @Test func testClaudeModel_isIndependentFromOpenAIModel() throws {
+        // 两条线路的模型名互不通用，必须分开存——共用一个字段的话，
+        // 切换线路会把 deepseek-chat 之类误传给 claude --model
+        let defaults = try scratchDefaults(#function)
+        let keyStore = InMemoryKeyStore()
+        var config = AIConfig(baseURL: "https://api.deepseek.com/v1",
+                              model: "deepseek-chat", apiKey: "k")
+        config.claudeModel = "sonnet"
+        try config.save(userDefaults: defaults, keyStore: keyStore)
+
+        let loaded = AIConfig.load(userDefaults: defaults, keyStore: keyStore)
+        #expect(loaded.model == "deepseek-chat")
+        #expect(loaded.claudeModel == "sonnet")
+    }
+
     // MARK: - 凭据安全
 
     @Test func testSave_neverTouchesTheRealKeychainFromTests() throws {

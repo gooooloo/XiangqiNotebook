@@ -138,6 +138,10 @@ enum LLMError: Error, LocalizedError, Equatable {
     case timeout(seconds: Int)
     case network(String)
     case malformedResponse(String)
+    // Claude Code（订阅）线路专用
+    case bridgeUnreachable
+    case claudeNotLoggedIn
+    case claudeNotFound
 
     var errorDescription: String? {
         switch self {
@@ -163,20 +167,39 @@ enum LLMError: Error, LocalizedError, Equatable {
             return "连不上服务：\(detail)"
         case .malformedResponse(let detail):
             return "返回内容看不懂：\(detail)"
+        case .bridgeUnreachable:
+            return "连不上 Claude 桥接服务（127.0.0.1:9216）。请先启动它："
+                + "在仓库目录运行 node mcp/claude-bridge.mjs，"
+                + "或按 mcp/README.md 安装 launchd 常驻服务。"
+        case .claudeNotLoggedIn:
+            return "本机 claude 尚未登录。在终端运行 claude 完成订阅登录后再试。"
+        case .claudeNotFound:
+            return "本机没找到 claude 命令。安装 Claude Code 并登录后，重启桥接服务再试。"
         }
     }
 
     /// 换个 key 或换个模型才有用的错误，重试按钮没有意义
     var isRetryable: Bool {
         switch self {
-        case .rateLimited, .serverError, .timeout, .network: return true
+        case .rateLimited, .serverError, .timeout, .network,
+             // 起桥接 / 登录之后重试就能过，按钮留着
+             .bridgeUnreachable, .claudeNotLoggedIn: return true
         case .notConfigured, .invalidBaseURL, .unauthorized,
-             .toolsUnsupported, .badRequest, .malformedResponse: return false
+             .toolsUnsupported, .badRequest, .malformedResponse, .claudeNotFound: return false
         }
     }
 }
 
 // MARK: - 客户端
+
+/// Claude Code 线路上工具在 claude 进程内部执行、app 的循环看不见，
+/// 客户端把过程透传出来，供界面生成与其他线路一致的工具轨迹。
+/// `name` 已剥掉 MCP 前缀（evaluate 而非 mcp__xiangqi-notebook__evaluate），
+/// `AnalysisToolbox.progressDescription` / `resultSummary` 可直接用。
+enum LLMToolEvent: Equatable {
+    case started(name: String, argumentsJSON: String)
+    case finished(name: String, argumentsJSON: String, resultJSON: String)
+}
 
 /// 发一轮对话请求的能力。
 /// 抽成协议只为一件事：让 `ChatViewModel` 的工具循环能在单测里被脚本化驱动，
@@ -187,11 +210,40 @@ protocol LLMSending {
     func send(messages: [LLMMessage],
               tools: [[String: Any]],
               onReasoning: @escaping (String) -> Void) async throws -> LLMResponse
+
+    /// 带工具事件回调的版本。工具在客户端内部执行的线路（Claude Code）必须实现它；
+    /// 其余线路的工具由调用方执行，用协议扩展里的默认实现（忽略回调）即可。
+    /// 必须是协议 requirement 而不能只放扩展——否则经 existential 调用时
+    /// 静态派发到默认实现，真正的实现永远不会被调到。
+    func send(messages: [LLMMessage],
+              tools: [[String: Any]],
+              onReasoning: @escaping (String) -> Void,
+              onToolEvent: @escaping (LLMToolEvent) -> Void) async throws -> LLMResponse
 }
 
 extension LLMSending {
     func send(messages: [LLMMessage], tools: [[String: Any]]) async throws -> LLMResponse {
         try await send(messages: messages, tools: tools, onReasoning: { _ in })
+    }
+
+    /// 默认忽略工具事件，转调三参版——`LLMClient` 与既有测试替身零改动
+    func send(messages: [LLMMessage],
+              tools: [[String: Any]],
+              onReasoning: @escaping (String) -> Void,
+              onToolEvent: @escaping (LLMToolEvent) -> Void) async throws -> LLMResponse {
+        try await send(messages: messages, tools: tools, onReasoning: onReasoning)
+    }
+}
+
+/// 按线路格式挑客户端。单点分派：新增一种格式时只有这里要改，调用处不必知道有几种
+enum LLMClientFactory {
+    static func make(config: AIConfig, session: URLSession = .shared) -> LLMSending {
+        switch config.wireFormat {
+        case .openAICompatible:
+            return LLMClient(config: config, session: session)
+        case .claudeCode:
+            return ClaudeCodeClient(config: config, session: session)
+        }
     }
 }
 
