@@ -29,6 +29,9 @@ final class ChatViewModel: ObservableObject {
         /// 花费明细，展开时显示。存下来而不是渲染时现算：
         /// 这是「当时那次调用按当时单价」的账，用户中途改了价不该把旧账改掉
         var costLines: [CostLine] = []
+        /// 没有金额时明细页脚的替代说明（如 claudeCode 的「订阅计费」）；
+        /// nil 时视图显示默认的「未填单价」文案
+        var costFootnote: String?
         /// 已存进局面注释，按钮就地变灰
         var savedToComment: Bool = false
     }
@@ -293,15 +296,16 @@ final class ChatViewModel: ObservableObject {
             elapsedSeconds: max(1, Int(Date().timeIntervalSince(startedAt).rounded())),
             usage: reported,
             costText: reported.flatMap {
-                config.pricing.formattedCost(promptTokens: $0.promptTokens,
-                                             cachedTokens: $0.cachedTokens,
-                                             completionTokens: $0.completionTokens)
+                config.effectivePricing.formattedCost(promptTokens: $0.promptTokens,
+                                                      cachedTokens: $0.cachedTokens,
+                                                      completionTokens: $0.completionTokens)
             },
             costLines: reported.map {
-                config.pricing.breakdown(promptTokens: $0.promptTokens,
-                                         cachedTokens: $0.cachedTokens,
-                                         completionTokens: $0.completionTokens)
-            } ?? []))
+                config.effectivePricing.breakdown(promptTokens: $0.promptTokens,
+                                                  cachedTokens: $0.cachedTokens,
+                                                  completionTokens: $0.completionTokens)
+            } ?? [],
+            costFootnote: config.wireFormat == .claudeCode ? "订阅计费，无额外费用" : nil))
         traces = []
         lastFailedInput = nil
     }

@@ -199,6 +199,15 @@ struct AIConfig: Equatable {
 
     static let empty = AIConfig(baseURL: "", model: "", apiKey: "")
 
+    /// 算钱时用的单价。
+    ///
+    /// `pricing` 存在一组全局共享的 key 里，是给 openAICompatible 线路填的；
+    /// claudeCode 走订阅计费、没有按量单价，拿那套单价乘 Claude 的 token 数
+    /// 只会算出一个看着像真的的错数，这里直接给空——金额不显示，token 明细照出
+    var effectivePricing: AIPricing {
+        wireFormat == .claudeCode ? .empty : pricing
+    }
+
     /// 发出请求所需的配置是否齐全，按线路格式各有要求
     var isConfigured: Bool {
         switch wireFormat {

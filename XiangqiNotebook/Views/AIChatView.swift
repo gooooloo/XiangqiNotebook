@@ -238,7 +238,7 @@ struct AIChatView: View {
                 }
                 .foregroundColor(AIChatPalette.textSecondary)
             } else {
-                Text("未填单价，只统计用量")
+                Text(message.costFootnote ?? "未填单价，只统计用量")
             }
         }
         .font(.system(size: 10, design: .monospaced))
