@@ -2609,6 +2609,31 @@ class ViewModel: ObservableObject {
         return result
     }
 
+    /// 导入一节课程视频的棋谱：多条线路合并为目标课程棋书中的一个棋局，
+    /// 并关联视频文件路径与各局面的视频时间戳（mm:ss）
+    func importCourseGame(
+        bookPath: [String],
+        name: String,
+        lines: [CourseImportService.LineInput],
+        videoPath: String?
+    ) throws -> CourseImportService.ImportResult {
+        session.setupDefaultBooksIfNeeded()
+        let databaseView = DatabaseView.full(database: sessionManager.database)
+        let bookId = try CourseImportService.resolveCourseBook(path: bookPath, databaseView: databaseView)
+        let result = try CourseImportService.importCourseGame(
+            bookId: bookId, name: name, lines: lines, databaseView: databaseView)
+        if let videoPath {
+            setCourseVideoPath(videoPath, for: result.gameId)
+            for (fenId, seconds) in result.fenTimestamps {
+                let total = Int(seconds.rounded())
+                let timestamp = String(format: "%02d:%02d", total / 60, total % 60)
+                setCourseVideoTimestamp(timestamp, for: result.gameId, fenId: fenId)
+            }
+        }
+        session.dataChanged.toggle()
+        return result
+    }
+
     func exportPGNCurrentDatabaseViewContent() -> String {
         let rootFenId = session.sessionData.currentGame2[0]
         return PGNExportService.exportCurrentDatabaseView(databaseView: session.databaseView, rootFenId: rootFenId)

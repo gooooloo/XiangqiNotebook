@@ -173,8 +173,8 @@ app 启动后会自动在 `localhost:9214` 启动 HTTP 服务器（`RemoteContro
 
 - **只读分析接口（Release 也启用）**：`/state`、`/eval`、`/eval_move`、`/apply`、`/screenshot`——
   查局面、皮卡鱼引擎分析、着法评估、走子计算、截图，均只读，不改数据；供 MCP server 桥接给 Claude。
-- **驱动接口（仅 DEBUG）**：`/action`、`/actions`——能触发 app 内任意操作，属开发/自动化测试
-  专用，不随正式版发行，以缩小攻击面。
+- **驱动接口（仅 DEBUG）**：`/action`、`/actions`、`/import_course`——能触发 app 内任意操作/
+  写入数据，属开发/自动化测试专用，不随正式版发行，以缩小攻击面。
 
 切分逻辑在 `RemoteControlServer` 内部用 `#if DEBUG` 按接口包裹；服务本身与只读接口在
 Release 也编译。历史上（1.0.8 及之前）整个服务仅 DEBUG。
@@ -224,6 +224,33 @@ curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval_move 
 
 **注意（shell 代理）**：本机 shell 环境可能设有 `HTTP_PROXY`/`HTTPS_PROXY`（v2ray）,会劫持发往
 localhost 的 curl 请求导致挂起。命令行调用远程操控接口时务必加 `--noproxy '*'`。
+
+**注意（Claude Code 沙箱）**：命令沙箱的网络白名单不含 localhost，沙箱内 curl 本机端口会报
+`Operation not permitted`（配合 `-s` 时表现为静默空响应，极易误判成服务端问题）。调用
+9213/9214/9216 等本机接口的命令需要沙箱豁免运行。
+
+**注意（必须走 IPv6）**：`RemoteControlServer` 的 NWListener 实际只在 IPv6 可达。curl 会先试
+`::1` 所以正常；但用 `127.0.0.1`（如 Python urllib 默认地址序）连接不仅自身挂起，v4-mapped
+连接还会把整个监听队列打进假死态——之后所有请求超时，只能重启 app 恢复。脚本访问本服务
+一律写 `http://[::1]:9214`。（服务端对 v4-mapped 连接的处理是既有隐患，待修。）
+
+### 课程视频棋谱导入
+
+讲课视频（软件棋盘录屏）可自动识别棋谱并导入课程棋书，工具在 `tools/`：
+
+```bash
+# 1. 逐视频识别（零依赖纯 Python + ffmpeg;若视频开头无标准开局画面,--calib-video 借同课程其他视频标定）
+python3 tools/xq_video2pgn.py <视频.mp4> --out-dir out [--calib-video <有标准开局的视频.mp4>]
+# 输出: out/<名>.pgn(可直接 PGN 导入)、out/<名>.lines.txt(人读校对)、out/<名>.meta.json(导入用)
+
+# 2. 批量导入运行中的 DEBUG app（每视频一局,多线路合并为着法树,自动关联视频路径与局面时间戳）
+python3 tools/import_course_videos.py out --book 李享堃 半途列炮
+```
+
+app 侧链路：`/import_course`（DEBUG）→ `ViewModel.importCourseGame` →
+`CourseImportService`（同名去重、复用 `PGNParser` 的 FEN 归一化保证与既有局面合并、
+刻意不做镜像归一以保持与视频画面对应）+ `CourseVideoStorage` 时间戳（mm:ss）。
+导入后需触发 `save` action 或等待 app 自行存库。
 
 **注意（测试与运行中的 app）**：`xcodebuild test` 全量运行会包含 UI 测试（XiangqiNotebookUITests）,
 它会尝试终止并重启 app——若用户正开着 app（尤其在 Xcode 调试器下,SIGTERM 会被 lldb 拦截导致

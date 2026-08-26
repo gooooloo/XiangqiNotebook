@@ -202,6 +202,8 @@ class RemoteControlServer {
             handleAction(body: body, connection: connection)
         case ("GET", "/actions"):
             handleListActions(connection: connection)
+        case ("POST", "/import_course"):
+            handleImportCourse(body: body, connection: connection)
         #endif
         default:
             sendJSONResponse(connection: connection, status: "404 Not Found",
@@ -285,6 +287,58 @@ class RemoteControlServer {
                 sendJSONResponse(connection: connection, status: "400 Bad Request",
                                  body: "{\"error\":\"Action not registered: \(escapeJSON(actionName))\"}")
             }
+            }
+        }
+    }
+    #endif
+
+    // MARK: - Import Course（仅 DEBUG：把课程视频识别出的棋谱线路导入课程棋书）
+
+    #if DEBUG
+    private func handleImportCourse(body: String, connection: NWConnection) {
+        guard let jsonData = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let name = json["name"] as? String,
+              let bookPath = json["bookPath"] as? [String],
+              let linesJson = json["lines"] as? [[String: Any]] else {
+            sendJSONResponse(connection: connection, status: "400 Bad Request",
+                             body: #"{"error":"需要 name、bookPath、lines 字段"}"#)
+            return
+        }
+        var lines: [CourseImportService.LineInput] = []
+        for lineJson in linesJson {
+            guard let moves = lineJson["moves"] as? [String] else {
+                sendJSONResponse(connection: connection, status: "400 Bad Request",
+                                 body: #"{"error":"lines 各项需要 moves 字段"}"#)
+                return
+            }
+            lines.append(CourseImportService.LineInput(
+                startFen: lineJson["startFen"] as? String,
+                moves: moves,
+                times: lineJson["times"] as? [Double] ?? []))
+        }
+        let videoPath = json["videoPath"] as? String
+
+        guard let vm = viewModel else {
+            sendJSONResponse(connection: connection, status: "503 Service Unavailable",
+                             body: #"{"error":"ViewModel not available"}"#)
+            return
+        }
+
+        DispatchQueue.main.sync {
+            MainActor.assumeIsolated {
+                do {
+                    let result = try vm.importCourseGame(
+                        bookPath: bookPath, name: name, lines: lines, videoPath: videoPath)
+                    sendJSONResponse(connection: connection, status: "200 OK",
+                                     body: "{\"ok\":true,\"gameId\":\"\(result.gameId.uuidString)\","
+                                         + "\"lines\":\(result.lineCount),\"moves\":\(result.moveCount),"
+                                         + "\"timestamps\":\(result.fenTimestamps.count)}")
+                } catch {
+                    // 业务失败也回 200，错误语义在 body 里（与 /eval_move 的约定一致）
+                    sendJSONResponse(connection: connection, status: "200 OK",
+                                     body: "{\"ok\":false,\"error\":\"\(escapeJSON(String(describing: error)))\"}")
+                }
             }
         }
     }
