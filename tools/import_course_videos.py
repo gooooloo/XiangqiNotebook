@@ -20,6 +20,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import sys
 import urllib.request
 
@@ -33,6 +34,9 @@ def main():
     ap.add_argument("out_dir", help="xq_video2pgn.py 的输出目录（含 *.meta.json）")
     ap.add_argument("--book", nargs="+", required=True,
                     help="课程棋书路径（「课程」之下），如: --book 李享堃 半途列炮")
+    ap.add_argument("--name", default=None,
+                    help="短名前缀：棋局命名为 <前缀>-<编号>（编号取视频文件名开头数字），"
+                         "如 --name 李-半途列炮 → 李-半途列炮-001。省略则用完整文件名")
     args = ap.parse_args()
 
     token = open(TOKEN_PATH).read().strip()
@@ -43,7 +47,16 @@ def main():
     failures = 0
     for path in metas:
         meta = json.load(open(path))
-        name = os.path.basename(path).replace(".meta.json", "")
+        base = os.path.basename(path).replace(".meta.json", "")
+        if args.name:
+            m = re.match(r"(\d+)", base)
+            if not m:
+                print(f"{base[:20]:22s} ✗ 文件名无编号前缀，无法用 --name 命名")
+                failures += 1
+                continue
+            name = f"{args.name}-{m.group(1)}"
+        else:
+            name = base
         payload = {
             "bookPath": args.book,
             "name": name,

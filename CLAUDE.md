@@ -244,7 +244,8 @@ python3 tools/xq_video2pgn.py <视频.mp4> --out-dir out [--calib-video <有标�
 # 输出: out/<名>.pgn(可直接 PGN 导入)、out/<名>.lines.txt(人读校对)、out/<名>.meta.json(导入用)
 
 # 2. 批量导入运行中的 DEBUG app（每视频一局,多线路合并为着法树,自动关联视频路径与局面时间戳）
-python3 tools/import_course_videos.py out --book 李享堃 半途列炮
+#    --name 生成短棋局名 <前缀>-<视频编号>（如 李-半途列炮-001）,同名去重按此名判断
+python3 tools/import_course_videos.py out --book 李享堃 半途列炮 --name 李-半途列炮
 ```
 
 app 侧链路：`/import_course`（DEBUG）→ `ViewModel.importCourseGame` →
