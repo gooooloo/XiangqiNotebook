@@ -164,6 +164,26 @@ struct SessionManagerTests {
         #expect(game.contains(3))
     }
 
+    @Test func testSetFilters_PreservesAttackPointSettings() {
+        let database = createTestDatabase()
+        let manager = createSessionManager(database: database)
+
+        // 打开攻击点位相关的四个开关
+        manager.mainSession.sessionData.showRedAttackPoints = true
+        manager.mainSession.sessionData.showBlackAttackPoints = true
+        manager.mainSession.sessionData.attackPointsRedPalaceOnly = true
+        manager.mainSession.sessionData.attackPointsBlackPalaceOnly = true
+
+        // 切换筛选（loadGame/loadBook/loadBookmark 也都走这条路径）
+        manager.setFilters([Session.filterRedOpeningOnly])
+
+        let data = manager.mainSession.sessionData
+        #expect(data.showRedAttackPoints == true)
+        #expect(data.showBlackAttackPoints == true)
+        #expect(data.attackPointsRedPalaceOnly == true)
+        #expect(data.attackPointsBlackPalaceOnly == true)
+    }
+
     // MARK: - loadGame Tests
 
     @Test func testLoadGame_SwitchesToSpecificGameView() {

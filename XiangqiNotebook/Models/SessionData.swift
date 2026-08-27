@@ -14,6 +14,10 @@ class SessionData: Codable {
     var showPath: Bool = true
     var showAllNextMoves: Bool = false
     var showLastMove: Bool = true
+    var showRedAttackPoints: Bool = false
+    var showBlackAttackPoints: Bool = false
+    var attackPointsRedPalaceOnly: Bool = false
+    var attackPointsBlackPalaceOnly: Bool = false
     var showRealGameList: Bool = false
     var autoExtendGameWhenPlayingBoardFen: Bool = true
     var isCommentEditing: Bool = false
@@ -49,6 +53,10 @@ class SessionData: Codable {
         case showPath = "show_path"
         case showAllNextMoves = "show_all_next_moves"
         case showLastMove = "show_last_move"
+        case showRedAttackPoints = "show_red_attack_points"
+        case showBlackAttackPoints = "show_black_attack_points"
+        case attackPointsRedPalaceOnly = "attack_points_red_palace_only"
+        case attackPointsBlackPalaceOnly = "attack_points_black_palace_only"
         case showRealGameList = "show_real_game_list"
         case autoExtendGameWhenPlayingBoardFen = "auto_extend_game_when_playing_board_fen"
         case isCommentEditing = "is_comment_editing"
@@ -79,6 +87,10 @@ class SessionData: Codable {
         showPath = try container.decodeIfPresent(Bool.self, forKey: .showPath) ?? true
         showAllNextMoves = try container.decodeIfPresent(Bool.self, forKey: .showAllNextMoves) ?? false
         showLastMove = try container.decodeIfPresent(Bool.self, forKey: .showLastMove) ?? true
+        showRedAttackPoints = try container.decodeIfPresent(Bool.self, forKey: .showRedAttackPoints) ?? false
+        showBlackAttackPoints = try container.decodeIfPresent(Bool.self, forKey: .showBlackAttackPoints) ?? false
+        attackPointsRedPalaceOnly = try container.decodeIfPresent(Bool.self, forKey: .attackPointsRedPalaceOnly) ?? false
+        attackPointsBlackPalaceOnly = try container.decodeIfPresent(Bool.self, forKey: .attackPointsBlackPalaceOnly) ?? false
         showRealGameList = try container.decodeIfPresent(Bool.self, forKey: .showRealGameList) ?? false
         autoExtendGameWhenPlayingBoardFen = try container.decodeIfPresent(Bool.self, forKey: .autoExtendGameWhenPlayingBoardFen) ?? true
         isCommentEditing = try container.decodeIfPresent(Bool.self, forKey: .isCommentEditing) ?? false
@@ -114,6 +126,10 @@ class SessionData: Codable {
         try container.encode(showPath, forKey: .showPath)
         try container.encode(showAllNextMoves, forKey: .showAllNextMoves)
         try container.encode(showLastMove, forKey: .showLastMove)
+        try container.encode(showRedAttackPoints, forKey: .showRedAttackPoints)
+        try container.encode(showBlackAttackPoints, forKey: .showBlackAttackPoints)
+        try container.encode(attackPointsRedPalaceOnly, forKey: .attackPointsRedPalaceOnly)
+        try container.encode(attackPointsBlackPalaceOnly, forKey: .attackPointsBlackPalaceOnly)
         try container.encode(showRealGameList, forKey: .showRealGameList)
         try container.encode(autoExtendGameWhenPlayingBoardFen, forKey: .autoExtendGameWhenPlayingBoardFen)
         try container.encode(isCommentEditing, forKey: .isCommentEditing)

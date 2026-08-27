@@ -122,6 +122,10 @@ class SessionManager: ObservableObject {
             newSessionData.showPath = mainSession.sessionData.showPath
             newSessionData.showAllNextMoves = true
         }
+        newSessionData.showRedAttackPoints = mainSession.sessionData.showRedAttackPoints
+        newSessionData.showBlackAttackPoints = mainSession.sessionData.showBlackAttackPoints
+        newSessionData.attackPointsRedPalaceOnly = mainSession.sessionData.attackPointsRedPalaceOnly
+        newSessionData.attackPointsBlackPalaceOnly = mainSession.sessionData.attackPointsBlackPalaceOnly
         newSessionData.autoExtendGameWhenPlayingBoardFen = mainSession.sessionData.autoExtendGameWhenPlayingBoardFen
         newSessionData.isCommentEditing = mainSession.sessionData.isCommentEditing
         newSessionData.focusedPracticeGamePath = focusedPath
@@ -334,6 +338,10 @@ class SessionManager: ObservableObject {
         temp.isBlackOrientation = main.isBlackOrientation
         temp.isHorizontalFlipped = main.isHorizontalFlipped
         temp.gameStepLimitation = main.gameStepLimitation
+        temp.showRedAttackPoints = main.showRedAttackPoints
+        temp.showBlackAttackPoints = main.showBlackAttackPoints
+        temp.attackPointsRedPalaceOnly = main.attackPointsRedPalaceOnly
+        temp.attackPointsBlackPalaceOnly = main.attackPointsBlackPalaceOnly
 
         // 设置专注练习特有状态
         temp.focusedPracticeGamePath = main.currentGame2  // 保存当前完整路径

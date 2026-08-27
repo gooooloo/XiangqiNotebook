@@ -11,6 +11,10 @@ class BoardViewModel: Equatable {
     private var currentFenPathGroups: [PathGroup]
     private var nextMovesPathGroups: [PathGroup]
     private var lastMoveSquares: (from: String, to: String)?
+    private var showRedAttackPoints: Bool = false
+    private var showBlackAttackPoints: Bool = false
+    private var attackPointsRedPalaceOnly: Bool = false
+    private var attackPointsBlackPalaceOnly: Bool = false
 
     static func == (lhs: BoardViewModel, rhs: BoardViewModel) -> Bool {
         return lhs.pieceViewModels == rhs.pieceViewModels
@@ -83,6 +87,35 @@ class BoardViewModel: Equatable {
     public func getLastMoveKey() -> String {
         guard let squares = lastMoveSquares else { return "" }
         return "\(squares.from)-\(squares.to)"
+    }
+
+    public func getShowRedAttackPoints() -> Bool {
+        return self.showRedAttackPoints
+    }
+
+    public func getShowBlackAttackPoints() -> Bool {
+        return self.showBlackAttackPoints
+    }
+
+    /// 红方攻击点位 → 攻击子数。开关关闭时返回空，省去每次渲染的计算
+    public func getRedAttackCounts() -> [String: Int] {
+        guard showRedAttackPoints else { return [:] }
+        return filterAttackCounts(MoveRules.getAttackedSquareCounts(isRed: true, piecesBySquare: piecesBySquare))
+    }
+
+    /// 黑方攻击点位 → 攻击子数。开关关闭时返回空，省去每次渲染的计算
+    public func getBlackAttackCounts() -> [String: Int] {
+        guard showBlackAttackPoints else { return [:] }
+        return filterAttackCounts(MoveRules.getAttackedSquareCounts(isRed: false, piecesBySquare: piecesBySquare))
+    }
+
+    /// 九宫过滤：开了哪侧就只保留哪侧九宫内的攻击点（都开=两宫，都关=不过滤）
+    private func filterAttackCounts(_ counts: [String: Int]) -> [String: Int] {
+        guard attackPointsRedPalaceOnly || attackPointsBlackPalaceOnly else { return counts }
+        return counts.filter {
+            (attackPointsRedPalaceOnly && MoveRules.isInRedPalace($0.key)) ||
+            (attackPointsBlackPalaceOnly && MoveRules.isInBlackPalace($0.key))
+        }
     }
     
     public func getCurrentTurn() -> String {
@@ -165,6 +198,19 @@ class BoardViewModel: Equatable {
 
     public func updateLastMoveSquares(_ squares: (from: String, to: String)?) {
         self.lastMoveSquares = squares
+    }
+
+    public func updateShowRedAttackPoints(_ show: Bool) {
+        self.showRedAttackPoints = show
+    }
+
+    public func updateShowBlackAttackPoints(_ show: Bool) {
+        self.showBlackAttackPoints = show
+    }
+
+    public func updateAttackPointsPalaceOnly(red: Bool, black: Bool) {
+        self.attackPointsRedPalaceOnly = red
+        self.attackPointsBlackPalaceOnly = black
     }
 
     public func updateShouldAnimate(_ shouldAnimate: Bool) {

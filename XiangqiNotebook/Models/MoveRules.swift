@@ -435,6 +435,231 @@ struct MoveRules {
         return squares
     }
     
+    // MARK: - 攻击点位（控制点）计算
+
+    /// 某一方全部棋子的攻击点位 → 攻击该点的棋子数。
+    /// 「攻击」取几何控制语义：若该点上站着敌子，能否吃到它。与走子规则的区别：
+    /// - 被己方棋子占据的点也算（保护同样是控制）
+    /// - 炮：只有炮架之后的点算攻击点，炮架之前可平移到的空点不算
+    /// - 不考虑吃子后己方是否被将军（被钉住的子仍视为在控制）
+    static func getAttackedSquareCounts(isRed: Bool, piecesBySquare: [String: String]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        let prefix = isRed ? "r" : "b"
+        for (square, piece) in piecesBySquare where piece.hasPrefix(prefix) {
+            for target in getAttackSquares(fromSquare: square, piecesBySquare: piecesBySquare) {
+                counts[target, default: 0] += 1
+            }
+        }
+        return counts
+    }
+
+    /// 单个棋子的攻击点位集合（语义见 getAttackedSquareCounts）
+    static func getAttackSquares(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
+        guard let piece = piecesBySquare[fromSquare] else { return [] }
+
+        switch piece {
+        case "rR", "bR":
+            return getRookAttacks(fromSquare: fromSquare, piecesBySquare: piecesBySquare)
+        case "rC", "bC":
+            return getCannonAttacks(fromSquare: fromSquare, piecesBySquare: piecesBySquare)
+        case "rN", "bN":
+            return getKnightAttacks(fromSquare: fromSquare, piecesBySquare: piecesBySquare)
+        case "rB", "bB":
+            return getElephantAttacks(fromSquare: fromSquare, piecesBySquare: piecesBySquare)
+        case "rA", "bA":
+            return getAdvisorAttacks(fromSquare: fromSquare, piecesBySquare: piecesBySquare)
+        case "rK", "bK":
+            return getKingAttacks(fromSquare: fromSquare)
+        case "rP", "bP":
+            return getPawnAttacks(fromSquare: fromSquare, piecesBySquare: piecesBySquare)
+        default:
+            return []
+        }
+    }
+
+    /// 是否在红方九宫内：d-f 列 × 0-2 行
+    static func isInRedPalace(_ square: String) -> Bool {
+        let (col, row) = squareToCoordinate(square)
+        return (3...5).contains(col) && (0...2).contains(row)
+    }
+
+    /// 是否在黑方九宫内：d-f 列 × 7-9 行
+    static func isInBlackPalace(_ square: String) -> Bool {
+        let (col, row) = squareToCoordinate(square)
+        return (3...5).contains(col) && (7...9).contains(row)
+    }
+
+    private static let orthogonalDirections = [
+        (colDelta: 1, rowDelta: 0),
+        (colDelta: -1, rowDelta: 0),
+        (colDelta: 0, rowDelta: 1),
+        (colDelta: 0, rowDelta: -1)
+    ]
+
+    private static func isInsideBoard(col: Int, row: Int) -> Bool {
+        return col >= 0 && col < BoardConstants.columns.count &&
+               row >= 0 && row < BoardConstants.rows.count
+    }
+
+    // 车：沿直线的空点，加上（不论颜色的）第一个挡子所在点
+    private static func getRookAttacks(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
+        var squares = Set<String>()
+        let (fromCol, fromRow) = squareToCoordinate(fromSquare)
+
+        for direction in orthogonalDirections {
+            var col = fromCol + direction.colDelta
+            var row = fromRow + direction.rowDelta
+            while isInsideBoard(col: col, row: row) {
+                let targetSquare = coordinateToSquare(col: col, row: row)
+                squares.insert(targetSquare)
+                if piecesBySquare[targetSquare] != nil { break }
+                col += direction.colDelta
+                row += direction.rowDelta
+            }
+        }
+        return squares
+    }
+
+    // 炮：炮架之后的空点，加上（不论颜色的）炮架后第一个子所在点；炮架前的点不算
+    private static func getCannonAttacks(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
+        var squares = Set<String>()
+        let (fromCol, fromRow) = squareToCoordinate(fromSquare)
+
+        for direction in orthogonalDirections {
+            var col = fromCol + direction.colDelta
+            var row = fromRow + direction.rowDelta
+            var foundPlatform = false
+            while isInsideBoard(col: col, row: row) {
+                let targetSquare = coordinateToSquare(col: col, row: row)
+                if foundPlatform {
+                    squares.insert(targetSquare)
+                    if piecesBySquare[targetSquare] != nil { break }
+                } else if piecesBySquare[targetSquare] != nil {
+                    foundPlatform = true
+                }
+                col += direction.colDelta
+                row += direction.rowDelta
+            }
+        }
+        return squares
+    }
+
+    // 马：不蹩腿的八个落点（不论落点上是谁）
+    private static func getKnightAttacks(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
+        var squares = Set<String>()
+        let (fromCol, fromRow) = squareToCoordinate(fromSquare)
+
+        let moves = [
+            (col: -1, row: 2, blockingSquare: (0, 1)),
+            (col: 1, row: 2, blockingSquare: (0, 1)),
+            (col: -1, row: -2, blockingSquare: (0, -1)),
+            (col: 1, row: -2, blockingSquare: (0, -1)),
+            (col: -2, row: 1, blockingSquare: (-1, 0)),
+            (col: -2, row: -1, blockingSquare: (-1, 0)),
+            (col: 2, row: 1, blockingSquare: (1, 0)),
+            (col: 2, row: -1, blockingSquare: (1, 0))
+        ]
+
+        for move in moves {
+            let newCol = fromCol + move.col
+            let newRow = fromRow + move.row
+            guard isInsideBoard(col: newCol, row: newRow) else { continue }
+
+            let blockingSquare = coordinateToSquare(col: fromCol + move.blockingSquare.0, row: fromRow + move.blockingSquare.1)
+            if piecesBySquare[blockingSquare] != nil { continue }
+
+            squares.insert(coordinateToSquare(col: newCol, row: newRow))
+        }
+        return squares
+    }
+
+    // 相/象：不塞田心的四个落点（不论落点上是谁）
+    private static func getElephantAttacks(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
+        var squares = Set<String>()
+        let currentPiece = piecesBySquare[fromSquare]!
+        let (fromCol, fromRow) = squareToCoordinate(fromSquare)
+        let isRed = currentPiece.hasPrefix("r")
+
+        let moves = [(col: 2, row: 2), (col: 2, row: -2), (col: -2, row: 2), (col: -2, row: -2)]
+
+        for move in moves {
+            let newCol = fromCol + move.col
+            let newRow = fromRow + move.row
+            guard newCol >= 0 && newCol < BoardConstants.columns.count else { continue }
+            if isRed {
+                guard newRow >= 0 && newRow <= 4 else { continue }
+            } else {
+                guard newRow >= 5 && newRow <= 9 else { continue }
+            }
+
+            let blockingSquare = coordinateToSquare(col: fromCol + move.col / 2, row: fromRow + move.row / 2)
+            if piecesBySquare[blockingSquare] != nil { continue }
+
+            squares.insert(coordinateToSquare(col: newCol, row: newRow))
+        }
+        return squares
+    }
+
+    // 士/仕：九宫内的斜向落点（不论落点上是谁）
+    private static func getAdvisorAttacks(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
+        var squares = Set<String>()
+        let currentPiece = piecesBySquare[fromSquare]!
+        let (fromCol, fromRow) = squareToCoordinate(fromSquare)
+        let isRed = currentPiece.hasPrefix("r")
+
+        let validColumns = 3...5
+        let validRows = isRed ? 0...2 : 7...9
+
+        for move in [(col: 1, row: 1), (col: 1, row: -1), (col: -1, row: 1), (col: -1, row: -1)] {
+            let newCol = fromCol + move.col
+            let newRow = fromRow + move.row
+            guard validColumns.contains(newCol) && validRows.contains(newRow) else { continue }
+            squares.insert(coordinateToSquare(col: newCol, row: newRow))
+        }
+        return squares
+    }
+
+    // 帅/将：九宫内横竖相邻的落点（几何控制，不考虑将帅对脸限制）
+    private static func getKingAttacks(fromSquare: String) -> Set<String> {
+        var squares = Set<String>()
+        let (fromCol, fromRow) = squareToCoordinate(fromSquare)
+        // 从当前所在行推断属于哪侧九宫（王必在己方九宫内）
+        let validColumns = 3...5
+        let validRows = fromRow <= 2 ? 0...2 : 7...9
+
+        for direction in orthogonalDirections {
+            let newCol = fromCol + direction.colDelta
+            let newRow = fromRow + direction.rowDelta
+            guard validColumns.contains(newCol) && validRows.contains(newRow) else { continue }
+            squares.insert(coordinateToSquare(col: newCol, row: newRow))
+        }
+        return squares
+    }
+
+    // 兵/卒：身前一点，过河后加左右两点（不论落点上是谁）
+    private static func getPawnAttacks(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
+        var squares = Set<String>()
+        let currentPiece = piecesBySquare[fromSquare]!
+        let (fromCol, fromRow) = squareToCoordinate(fromSquare)
+        let isRed = currentPiece.hasPrefix("r")
+
+        let newRow = fromRow + (isRed ? 1 : -1)
+        if newRow >= 0 && newRow < BoardConstants.rows.count {
+            squares.insert(coordinateToSquare(col: fromCol, row: newRow))
+        }
+
+        let hasCrossedRiver = (isRed && fromRow > 4) || (!isRed && fromRow < 5)
+        if hasCrossedRiver {
+            if fromCol > 0 {
+                squares.insert(coordinateToSquare(col: fromCol - 1, row: fromRow))
+            }
+            if fromCol < BoardConstants.columns.count - 1 {
+                squares.insert(coordinateToSquare(col: fromCol + 1, row: fromRow))
+            }
+        }
+        return squares
+    }
+
     // 兵/卒的移动规则
     private static func getPawnMoves(fromSquare: String, piecesBySquare: [String: String]) -> Set<String> {
         var squares = Set<String>()

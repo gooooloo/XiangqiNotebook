@@ -501,6 +501,10 @@ class ViewModel: ObservableObject {
 
         boardViewModel.updateLastMoveSquares(showLastMove ? currentMoveSquares : nil)
 
+        boardViewModel.updateShowRedAttackPoints(showRedAttackPoints)
+        boardViewModel.updateShowBlackAttackPoints(showBlackAttackPoints)
+        boardViewModel.updateAttackPointsPalaceOnly(red: attackPointsRedPalaceOnly, black: attackPointsBlackPalaceOnly)
+
         // 通知 ViewModel 的观察者（View）
         objectWillChange.send()
     }
@@ -855,6 +859,66 @@ class ViewModel: ObservableObject {
           isOn: { self.showLastMove },
           action: { newValue in
             self.toggleShowLastMove()
+          }
+        )
+
+        // 攻击点位 - 只依赖当前局面、不泄露棋谱信息，所有模式可用
+        actionDefinitions.registerToggleAction(
+          .toggleShowRedAttackPoints,
+          text: "红方攻击点位",
+          shortcuts: [.sequence(",ar")],
+          supportedModes: ActionDefinitions.allModes,
+          isEnabled: { true },
+          isOn: { self.showRedAttackPoints },
+          // 尊重目标值而非无条件翻转：远程 /action 带 value 调用时保持幂等
+          action: { newValue in
+            if newValue != self.showRedAttackPoints {
+              self.toggleShowRedAttackPoints()
+            }
+          }
+        )
+
+        actionDefinitions.registerToggleAction(
+          .toggleShowBlackAttackPoints,
+          text: "黑方攻击点位",
+          shortcuts: [.sequence(",ab")],
+          supportedModes: ActionDefinitions.allModes,
+          isEnabled: { true },
+          isOn: { self.showBlackAttackPoints },
+          action: { newValue in
+            if newValue != self.showBlackAttackPoints {
+              self.toggleShowBlackAttackPoints()
+            }
+          }
+        )
+
+        // 攻击点位九宫过滤：按红/黑九宫分别收窄显示范围，构思杀法时聚焦某侧九宫。
+        // 都开显示两宫，都关不过滤
+        actionDefinitions.registerToggleAction(
+          .toggleAttackPointsRedPalaceOnly,
+          text: "只显示红方九宫",
+          shortcuts: [.sequence(",agr")],
+          supportedModes: ActionDefinitions.allModes,
+          isEnabled: { self.showRedAttackPoints || self.showBlackAttackPoints },
+          isOn: { self.attackPointsRedPalaceOnly },
+          action: { newValue in
+            if newValue != self.attackPointsRedPalaceOnly {
+              self.toggleAttackPointsRedPalaceOnly()
+            }
+          }
+        )
+
+        actionDefinitions.registerToggleAction(
+          .toggleAttackPointsBlackPalaceOnly,
+          text: "只显示黑方九宫",
+          shortcuts: [.sequence(",agb")],
+          supportedModes: ActionDefinitions.allModes,
+          isEnabled: { self.showRedAttackPoints || self.showBlackAttackPoints },
+          isOn: { self.attackPointsBlackPalaceOnly },
+          action: { newValue in
+            if newValue != self.attackPointsBlackPalaceOnly {
+              self.toggleAttackPointsBlackPalaceOnly()
+            }
           }
         )
 
@@ -2472,6 +2536,10 @@ class ViewModel: ObservableObject {
     var showPath: Bool { session.showPath }
     var showAllNextMoves: Bool { session.showAllNextMoves }
     var showLastMove: Bool { session.showLastMove }
+    var showRedAttackPoints: Bool { session.showRedAttackPoints }
+    var showBlackAttackPoints: Bool { session.showBlackAttackPoints }
+    var attackPointsRedPalaceOnly: Bool { session.attackPointsRedPalaceOnly }
+    var attackPointsBlackPalaceOnly: Bool { session.attackPointsBlackPalaceOnly }
     var showRealGameList: Bool { session.showRealGameList }
     var showGameBrowserSidebar: Bool { session.showGameBrowserSidebar }
     var isCommentEditing: Bool { session.isCommentEditing }
@@ -2739,6 +2807,22 @@ class ViewModel: ObservableObject {
 
     func toggleShowLastMove() {
         session.toggleShowLastMove()
+    }
+
+    func toggleShowRedAttackPoints() {
+        session.toggleShowRedAttackPoints()
+    }
+
+    func toggleShowBlackAttackPoints() {
+        session.toggleShowBlackAttackPoints()
+    }
+
+    func toggleAttackPointsRedPalaceOnly() {
+        session.toggleAttackPointsRedPalaceOnly()
+    }
+
+    func toggleAttackPointsBlackPalaceOnly() {
+        session.toggleAttackPointsBlackPalaceOnly()
     }
 
     func toggleShowRealGameList() {

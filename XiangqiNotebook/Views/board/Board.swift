@@ -134,6 +134,22 @@ struct XiangqiBoard: View {
                     }
                 }
                 
+                // 2.5 攻击点位层（棋子上方）：红/黑双方的控制点小圆点
+                if viewModel.getShowRedAttackPoints() || viewModel.getShowBlackAttackPoints() {
+                    AttackPointsView(
+                        redCounts: viewModel.getRedAttackCounts(),
+                        blackCounts: viewModel.getBlackAttackCounts(),
+                        squareSize: squareSize,
+                        squareSizeWidth: squareSizeWidth,
+                        squareSizeHeight: squareSizeHeight,
+                        pieceDiffX: pieceDiffX,
+                        pieceDiffY: pieceDiffY,
+                        orientation: viewModel.getOrientation(),
+                        isHorizontalFlipped: viewModel.getIsHorizontalFlipped()
+                    )
+                    .allowsHitTesting(false)
+                }
+
                 // 3. 高亮层 (最上层)
                 // 先显示选中的方格
                 if let selectedSquare = selectedSquare {

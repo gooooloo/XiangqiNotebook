@@ -528,6 +528,22 @@ class Session: ObservableObject {
         sessionData.showLastMove
     }
 
+    var showRedAttackPoints: Bool {
+        sessionData.showRedAttackPoints
+    }
+
+    var showBlackAttackPoints: Bool {
+        sessionData.showBlackAttackPoints
+    }
+
+    var attackPointsRedPalaceOnly: Bool {
+        sessionData.attackPointsRedPalaceOnly
+    }
+
+    var attackPointsBlackPalaceOnly: Bool {
+        sessionData.attackPointsBlackPalaceOnly
+    }
+
     var showRealGameList: Bool {
         sessionData.showRealGameList
     }
@@ -1087,6 +1103,26 @@ extension Session {
 
     func toggleShowLastMove() {
         sessionData.showLastMove.toggle()
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
+    }
+
+    func toggleShowRedAttackPoints() {
+        sessionData.showRedAttackPoints.toggle()
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
+    }
+
+    func toggleShowBlackAttackPoints() {
+        sessionData.showBlackAttackPoints.toggle()
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
+    }
+
+    func toggleAttackPointsRedPalaceOnly() {
+        sessionData.attackPointsRedPalaceOnly.toggle()
+        notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
+    }
+
+    func toggleAttackPointsBlackPalaceOnly() {
+        sessionData.attackPointsBlackPalaceOnly.toggle()
         notifyDataChanged(markDatabaseDirty: false, markSessionDirty: true)
     }
 

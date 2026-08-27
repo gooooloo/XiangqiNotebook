@@ -86,6 +86,10 @@ class ActionDefinitions {
         case toggleShowPath  // 新增：显示路径按钮
         case toggleShowAllNextMoves  // 新增：显示所有下一步按钮
         case toggleShowLastMove  // 新增：显示来源招法按钮
+        case toggleShowRedAttackPoints  // 红方攻击点位
+        case toggleShowBlackAttackPoints  // 黑方攻击点位
+        case toggleAttackPointsRedPalaceOnly  // 攻击点位仅显示红方九宫
+        case toggleAttackPointsBlackPalaceOnly  // 攻击点位仅显示黑方九宫
         case toggleShowRealGameList  // 新增：显示实战列表按钮
         case toggleBookmark  // 新增：显示路径按钮
         case toggleIsCommentEditing

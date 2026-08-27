@@ -644,4 +644,168 @@ struct XiangqiMoveRulesTests {
         #expect(moves.contains("f0"))
         #expect(moves.count == 2)
     }
+
+    // MARK: - Attack Squares (攻击点位) Tests
+
+    @Test func testRookAttacks_IncludesProtectedOwnPiece() {
+        var board = emptyBoardWithKings()
+        board["e4"] = "rR"
+        board["e2"] = "rP"   // 己方兵挡路
+        board["e7"] = "bP"   // 敌方卒挡路
+
+        let attacks = MoveRules.getAttackSquares(fromSquare: "e4", piecesBySquare: board)
+
+        // 挡子所在点不论颜色都算攻击点（保护己方兵、攻击敌方卒）
+        #expect(attacks.contains("e2"))
+        #expect(attacks.contains("e7"))
+        // 挡子之后的点不算
+        #expect(!attacks.contains("e1"))
+        #expect(!attacks.contains("e8"))
+        // 空点算
+        #expect(attacks.contains("e3"))
+        #expect(attacks.contains("e5"))
+        #expect(attacks.contains("a4"))
+        #expect(attacks.contains("i4"))
+    }
+
+    @Test func testCannonAttacks_OnlyBeyondPlatform() {
+        var board = emptyBoardWithKings()
+        board["b2"] = "rC"
+        board["b5"] = "rP"   // 炮架
+        board["b8"] = "bR"   // 炮架后第一个子
+
+        let attacks = MoveRules.getAttackSquares(fromSquare: "b2", piecesBySquare: board)
+
+        // 炮架之前可平移的空点不算攻击点
+        #expect(!attacks.contains("b3"))
+        #expect(!attacks.contains("b4"))
+        // 炮架本身不算
+        #expect(!attacks.contains("b5"))
+        // 炮架之后的空点与第一个子算
+        #expect(attacks.contains("b6"))
+        #expect(attacks.contains("b7"))
+        #expect(attacks.contains("b8"))
+        // 隔子之后不算
+        #expect(!attacks.contains("b9"))
+        // 无炮架方向：整条线都不算
+        #expect(!attacks.contains("a2"))
+        #expect(!attacks.contains("b1"))
+    }
+
+    @Test func testKnightAttacks_LegBlocking() {
+        var board = emptyBoardWithKings()
+        board["e4"] = "rN"
+        board["e5"] = "rP"   // 蹩住向上两个方向的马腿
+        board["d6"] = "bR"
+
+        let attacks = MoveRules.getAttackSquares(fromSquare: "e4", piecesBySquare: board)
+
+        // 被蹩腿的落点不算（d6 上有敌车也吃不到）
+        #expect(!attacks.contains("d6"))
+        #expect(!attacks.contains("f6"))
+        // 其余六个落点都算
+        #expect(attacks.contains("d2"))
+        #expect(attacks.contains("f2"))
+        #expect(attacks.contains("c3"))
+        #expect(attacks.contains("c5"))
+        #expect(attacks.contains("g3"))
+        #expect(attacks.contains("g5"))
+    }
+
+    @Test func testPawnAttacks_BeforeAndAfterRiver() {
+        var board = emptyBoardWithKings()
+        board["c3"] = "rP"   // 未过河
+        board["g6"] = "rP"   // 已过河
+        board["g7"] = "rR"   // 己方车在过河兵身前
+
+        let beforeRiver = MoveRules.getAttackSquares(fromSquare: "c3", piecesBySquare: board)
+        #expect(beforeRiver == ["c4"])
+
+        let afterRiver = MoveRules.getAttackSquares(fromSquare: "g6", piecesBySquare: board)
+        // 身前被己方车占据也算（保护），过河后加左右
+        #expect(afterRiver == ["g7", "f6", "h6"])
+    }
+
+    @Test func testKingAttacks_PalaceOnly() {
+        let board = emptyBoardWithKings()
+
+        let redKing = MoveRules.getAttackSquares(fromSquare: "e0", piecesBySquare: board)
+        #expect(redKing == ["d0", "f0", "e1"])
+
+        let blackKing = MoveRules.getAttackSquares(fromSquare: "e9", piecesBySquare: board)
+        #expect(blackKing == ["d9", "f9", "e8"])
+    }
+
+    @Test func testAttackedSquareCounts_AggregatesAndFiltersByColor() {
+        var board = emptyBoardWithKings()
+        board["a4"] = "rR"
+        board["e2"] = "rC"
+        board["e4"] = "rP"   // 红炮的炮架（红兵）
+        board["c4"] = "bR"   // 黑车
+
+        let redCounts = MoveRules.getAttackedSquareCounts(isRed: true, piecesBySquare: board)
+
+        // 红车沿 4 路攻击到第一个挡子（黑车 c4）为止
+        #expect(redCounts["b4"] == 1)
+        #expect(redCounts["c4"] == 1)
+        #expect(redCounts["d4"] == nil)
+        // a 路空点被红车攻击
+        #expect(redCounts["a5"] == 1)
+        // 红炮隔着炮架（e4 红兵）的攻击点
+        #expect(redCounts["e6"] == 1)
+        // e5 被红炮（隔架）和红兵（e4 向前）同时攻击
+        #expect(redCounts["e5"] == 2)
+        // 黑方棋子的控制点不出现在红方结果里
+        #expect(redCounts["c9"] == nil)
+
+        let blackCounts = MoveRules.getAttackedSquareCounts(isRed: false, piecesBySquare: board)
+        // 黑车向右攻击到红兵 e4 为止
+        #expect(blackCounts["d4"] == 1)
+        #expect(blackCounts["e4"] == 1)
+        #expect(blackCounts["f4"] == nil)
+        // 黑车向左攻击到红车 a4 为止
+        #expect(blackCounts["b4"] == 1)
+        #expect(blackCounts["a4"] == 1)
+    }
+
+    @Test func testIsInRedPalace() {
+        // 红方九宫四角与中心
+        #expect(MoveRules.isInRedPalace("d0"))
+        #expect(MoveRules.isInRedPalace("f0"))
+        #expect(MoveRules.isInRedPalace("d2"))
+        #expect(MoveRules.isInRedPalace("f2"))
+        #expect(MoveRules.isInRedPalace("e1"))
+        // 黑方九宫不算
+        #expect(!MoveRules.isInRedPalace("e8"))
+        // 列超界、行超界
+        #expect(!MoveRules.isInRedPalace("c0"))
+        #expect(!MoveRules.isInRedPalace("g2"))
+        #expect(!MoveRules.isInRedPalace("d3"))
+    }
+
+    @Test func testIsInBlackPalace() {
+        // 黑方九宫四角与中心
+        #expect(MoveRules.isInBlackPalace("d7"))
+        #expect(MoveRules.isInBlackPalace("f7"))
+        #expect(MoveRules.isInBlackPalace("d9"))
+        #expect(MoveRules.isInBlackPalace("f9"))
+        #expect(MoveRules.isInBlackPalace("e8"))
+        // 红方九宫不算
+        #expect(!MoveRules.isInBlackPalace("e1"))
+        // 列超界、行超界
+        #expect(!MoveRules.isInBlackPalace("c9"))
+        #expect(!MoveRules.isInBlackPalace("g7"))
+        #expect(!MoveRules.isInBlackPalace("e6"))
+    }
+
+    @Test func testAttackedSquareCounts_MultipleAttackers() {
+        var board = emptyBoardWithKings()
+        board["a4"] = "rR"
+        board["c2"] = "rN"   // 马 c2 不蹩腿可跳 b4
+
+        let counts = MoveRules.getAttackedSquareCounts(isRed: true, piecesBySquare: board)
+
+        // b4 同时被车（沿 4 路）和马（c2→b4）攻击
+        #expect(counts["b4"] == 2)
+    }
 }
