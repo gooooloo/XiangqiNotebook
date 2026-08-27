@@ -122,6 +122,8 @@ class SessionManager: ObservableObject {
             newSessionData.showPath = mainSession.sessionData.showPath
             newSessionData.showAllNextMoves = true
         }
+        newSessionData.showLastMove = mainSession.sessionData.showLastMove
+        newSessionData.showRealGameList = mainSession.sessionData.showRealGameList
         newSessionData.showRedAttackPoints = mainSession.sessionData.showRedAttackPoints
         newSessionData.showBlackAttackPoints = mainSession.sessionData.showBlackAttackPoints
         newSessionData.attackPointsRedPalaceOnly = mainSession.sessionData.attackPointsRedPalaceOnly
@@ -338,6 +340,7 @@ class SessionManager: ObservableObject {
         temp.isBlackOrientation = main.isBlackOrientation
         temp.isHorizontalFlipped = main.isHorizontalFlipped
         temp.gameStepLimitation = main.gameStepLimitation
+        temp.showLastMove = main.showLastMove
         temp.showRedAttackPoints = main.showRedAttackPoints
         temp.showBlackAttackPoints = main.showBlackAttackPoints
         temp.attackPointsRedPalaceOnly = main.attackPointsRedPalaceOnly

@@ -184,6 +184,20 @@ struct SessionManagerTests {
         #expect(data.attackPointsBlackPalaceOnly == true)
     }
 
+    @Test func testSetFilters_PreservesDisplayToggles() {
+        let database = createTestDatabase()
+        let manager = createSessionManager(database: database)
+
+        // 都设成非默认值，确保是「保留」而不是「恰好等于默认值」
+        manager.mainSession.sessionData.showLastMove = false
+        manager.mainSession.sessionData.showRealGameList = true
+
+        manager.setFilters([Session.filterRedOpeningOnly])
+
+        #expect(manager.mainSession.sessionData.showLastMove == false)
+        #expect(manager.mainSession.sessionData.showRealGameList == true)
+    }
+
     // MARK: - loadGame Tests
 
     @Test func testLoadGame_SwitchesToSpecificGameView() {
