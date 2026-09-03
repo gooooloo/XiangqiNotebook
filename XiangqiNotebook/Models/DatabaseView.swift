@@ -49,12 +49,19 @@ final class DatabaseView {
         return fenIdFilter(fenId)
     }
 
+    /// 新对象的 id。目前从不物理删除局面/着法，id 连续，`count + 1` 即可且 O(1)；
+    /// 一旦出现空洞（历史数据、外部写入），`count + 1` 会静默覆盖既有对象，此时退回 `max + 1`
+    static func nextId<V>(in objects: [Int: V]) -> Int {
+        let candidate = objects.count + 1
+        return objects[candidate] == nil ? candidate : (objects.keys.max() ?? 0) + 1
+    }
+
     /// 获取或创建 fenId（如果 fen 不存在则创建新的 FenObject）
     func ensureFenId(for fen: String) -> Int {
         if let fenId = getIdForFen(fen) {
             return fenId
         }
-        let newId = database.databaseData.fenObjects2.count + 1
+        let newId = Self.nextId(in: database.databaseData.fenObjects2)
         let fenObject = FenObject(fen: fen, fenId: newId)
         database.databaseData.fenObjects2[newId] = fenObject
         database.databaseData.fenToId[fen] = newId
@@ -120,7 +127,7 @@ final class DatabaseView {
 
         // Create new move
         let newMove = Move(sourceFenId: source, targetFenId: target)
-        let newMoveId = database.databaseData.moveObjects.count + 1
+        let newMoveId = Self.nextId(in: database.databaseData.moveObjects)
         database.databaseData.moveObjects[newMoveId] = newMove
         database.databaseData.moveToId[[source, target]] = newMoveId
         markDirty()
