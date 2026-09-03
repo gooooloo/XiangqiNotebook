@@ -136,6 +136,9 @@ def stream_frames(video, fps):
         yield idx, buf
         idx += 1
     proc.wait()
+    # 中途出错（文件损坏、磁盘满）不能静默当作「视频结束」，否则识别结果是半截还不报错
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg 解码失败（exit {proc.returncode}）: {video}")
 
 
 # ---------------------------------------------------------------- 标定
@@ -768,11 +771,16 @@ def main():
     args = ap.parse_args()
 
     global FRAME_W, FRAME_H
-    probe = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0",
-         "-show_entries", "stream=width,height", "-of", "csv=p=0", args.video],
-        capture_output=True, text=True, check=True).stdout.strip().split(",")
-    FRAME_W, FRAME_H = int(probe[0]), int(probe[1])
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=width,height", "-of", "csv=p=0", args.video],
+            capture_output=True, text=True, check=True).stdout.strip().split(",")
+        FRAME_W, FRAME_H = int(probe[0]), int(probe[1])
+    except FileNotFoundError:
+        sys.exit("找不到 ffprobe/ffmpeg，请先安装（brew install ffmpeg）")
+    except (subprocess.CalledProcessError, ValueError, IndexError) as e:
+        sys.exit(f"ffprobe 读不到视频尺寸（{args.video}）：{e}")
 
     grid = templates = None
     sources = [args.video] + ([args.calib_video] if args.calib_video else [])
