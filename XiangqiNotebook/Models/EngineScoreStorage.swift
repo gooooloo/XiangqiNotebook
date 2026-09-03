@@ -96,6 +96,13 @@ class EngineScoreStorage {
             withIntermediateDirectories: true
         )
 
+        // 远端文件只有 iCloud 占位（.<name>.icloud）、尚未下载：此时 loadEngineScore 读不到，
+        // 不合并就整文件覆盖会抹掉另一台设备的评估结果。触发下载并让调用方本次跳过
+        if DatabaseStorage.isICloudURL(url), hasUndownloadedPlaceholder(for: url) {
+            try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+            throw EngineScoreStorageError.remoteNotDownloaded(engineKey)
+        }
+
         // 合并远端（engineScoreData 是引用类型，内存中的数据同时获得远端补充）
         if let remote = loadEngineScore(engineKey: engineKey) {
             merge(remote: remote, into: engineScoreData)
@@ -112,6 +119,14 @@ class EngineScoreStorage {
         }
 
         print("[EngineScoreStorage] 保存成功: \(engineKey), \(engineScoreData.scores.count) 条分数")
+    }
+
+    /// 实体文件不存在、但同目录下有 iCloud 占位文件 ".<name>.icloud"
+    static func hasUndownloadedPlaceholder(for url: URL) -> Bool {
+        guard !FileManager.default.fileExists(atPath: url.path) else { return false }
+        let placeholder = url.deletingLastPathComponent()
+            .appendingPathComponent("." + url.lastPathComponent + ".icloud")
+        return FileManager.default.fileExists(atPath: placeholder.path)
     }
 
     // MARK: - Directory Listing
@@ -141,6 +156,8 @@ class EngineScoreStorage {
 
 // MARK: - Errors
 enum EngineScoreStorageError: Error {
+    /// 远端分数文件尚未从 iCloud 下载完成（已触发下载），本次不能安全写入
+    case remoteNotDownloaded(String)
     case urlUnavailable
     case fileOperationFailed
 }
