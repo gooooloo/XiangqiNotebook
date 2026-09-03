@@ -18,9 +18,18 @@ import Foundation
 @MainActor
 final class PikafishServiceIOS {
 
-    enum EngineError: Error {
+    enum EngineError: Error, LocalizedError {
         /// 引擎正被另一个调用方占用（AI 应招 / 问棋分析互斥）
         case busy
+        /// bundle 里没有 NNUE 网络文件：不能 go，引擎会在校验网络时直接 exit() 杀掉进程
+        case networkMissing
+
+        var errorDescription: String? {
+            switch self {
+            case .busy: return "引擎忙碌中（AI 问棋正在分析），请稍后再试"
+            case .networkMissing: return "引擎评估网络文件缺失，无法评估"
+            }
+        }
     }
 
     /// 引擎版本，须与 Mac 版 PikafishService.engineVersion 保持一致
@@ -42,21 +51,29 @@ final class PikafishServiceIOS {
     }
 
     private let bridge = PikafishEngineBridge()
-    private var isConfigured = false
+    /// NNUE 只加载一次（解析 50MB 权重是秒级操作）
+    private var networkLoaded = false
+    /// Threads/Hash 是否处于工作配置；releaseResources 后为 false，下次评估前重新应用
+    private var optionsApplied = false
     /// 是否有一次搜索在飞。见类型注释
     private(set) var isBusy = false
 
-    private func configureIfNeeded() {
-        guard !isConfigured else { return }
-        isConfigured = true
+    private static let workingHashMB = 64
 
-        if let nnuePath = Bundle.main.path(forResource: "pikafish", ofType: "nnue") {
+    private func configureIfNeeded() throws {
+        if !networkLoaded {
+            guard let nnuePath = Bundle.main.path(forResource: "pikafish", ofType: "nnue") else {
+                throw EngineError.networkMissing
+            }
             bridge.loadNetwork(path: nnuePath)
+            networkLoaded = true
         }
-
-        let threadCount = min(4, max(1, ProcessInfo.processInfo.activeProcessorCount / 2))
-        bridge.setThreads(threadCount)
-        bridge.setHashMB(64)
+        if !optionsApplied {
+            let threadCount = min(4, max(1, ProcessInfo.processInfo.activeProcessorCount / 2))
+            bridge.setThreads(threadCount)
+            bridge.setHashMB(Self.workingHashMB)
+            optionsApplied = true
+        }
     }
 
     /// 评估局面，movetime 固定 3 秒（与 Self.movetimeMs 一致）。引擎忙碌时抛 `EngineError.busy`
@@ -64,7 +81,7 @@ final class PikafishServiceIOS {
         guard !isBusy else { throw EngineError.busy }
         isBusy = true
         defer { isBusy = false }
-        configureIfNeeded()
+        try configureIfNeeded()
 
         let uciFen = PikafishFenConversion.convertFenToUCI(fen)
         bridge.setPosition(fen: uciFen, moves: [])
@@ -94,7 +111,7 @@ final class PikafishServiceIOS {
         guard !isBusy else { throw EngineError.busy }
         isBusy = true
         defer { isBusy = false }
-        configureIfNeeded()
+        try configureIfNeeded()
 
         let uciFen = PikafishFenConversion.convertFenToUCI(fen)
         bridge.setPosition(fen: uciFen, moves: [])
@@ -119,13 +136,18 @@ final class PikafishServiceIOS {
         bridge.stop()
     }
 
-    /// 释放置换表与线程池内存，供 App 进入后台/内存紧张/低电量时调用。
+    /// 进后台/内存紧张时缩减引擎占用。
     /// 先 stop() 再 searchClear()：searchClear 内部会阻塞等待搜索线程结束，
     /// 若不先发 stop 信号，搜索线程要等到 movetime（最多 3 秒）自然到期才会返回，
-    /// 调用方（主线程）会被这几秒钟卡住
+    /// 调用方（主线程）会被这几秒钟卡住。
+    /// searchClear 只是把置换表清零并不释放内存，真正把 64MB 还回去要靠把 Hash 缩到 1MB、
+    /// 线程池缩到 1（引擎按新值重新分配）；下次评估前 configureIfNeeded 再恢复工作配置
     func releaseResources() {
         bridge.stop()
         bridge.searchClear()
+        bridge.setHashMB(1)
+        bridge.setThreads(1)
+        optionsApplied = false
     }
 }
 #endif

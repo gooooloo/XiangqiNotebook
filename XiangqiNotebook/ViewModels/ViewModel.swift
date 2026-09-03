@@ -1941,6 +1941,8 @@ class ViewModel: ObservableObject {
                 .analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
         } catch PikafishServiceIOS.EngineError.busy {
             throw RemoteAnalyzeError.engineBusy
+        } catch {
+            throw RemoteAnalyzeError.engineUnavailable
         }
         #else
         throw RemoteAnalyzeError.engineUnavailable
@@ -2042,10 +2044,10 @@ class ViewModel: ObservableObject {
         do {
             result = try await service.evaluatePosition(fen: fen)
         } catch {
-            // 只可能是 busy：问棋分析正占着引擎
+            // busy（问棋分析正占着引擎）或 NNUE 缺失，文案由 EngineError 提供
             platformService.showWarningAlert(
-                title: "引擎忙碌中",
-                message: "AI 问棋正在分析，请稍后再试。"
+                title: "无法评估",
+                message: error.localizedDescription
             )
             return
         }
@@ -2726,6 +2728,17 @@ class ViewModel: ObservableObject {
 
     func getBookObjectUnfiltered(_ bookId: UUID) -> BookObject? {
         return session.databaseView.getBookObjectUnfiltered(bookId)
+    }
+
+    /// 当前是否处于「特定棋局」筛选。View 层用它，不直接引用 Session 的筛选常量
+    var isSpecificGameFilterActive: Bool {
+        currentFilters.contains(Session.filterSpecificGame)
+    }
+
+    /// PGN 导入时的「我的棋手名」，跨次记忆（UserDefaults）。View 层经此读写，不直接碰 UserDefaults
+    var pgnImportUsername: String {
+        get { UserDefaults.standard.string(forKey: "pgnImportUsername") ?? "" }
+        set { UserDefaults.standard.set(newValue.trimmingCharacters(in: .whitespaces), forKey: "pgnImportUsername") }
     }
 
     func addGame(to bookId: UUID, name: String?, redPlayerName: String, blackPlayerName: String, gameDate: Date, gameResult: GameResult, iAmRed: Bool, iAmBlack: Bool, startingFenId: Int?, isFullyRecorded: Bool) -> UUID {
