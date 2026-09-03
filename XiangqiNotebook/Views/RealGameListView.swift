@@ -54,7 +54,7 @@ private struct RealGameListItemView: View {
     }()
 
     private var isCurrentlyLoaded: Bool {
-        viewModel.currentFilters.contains(Session.filterSpecificGame) &&
+        viewModel.isSpecificGameFilterActive &&
             viewModel.currentSpecificGameId == game.id
     }
 

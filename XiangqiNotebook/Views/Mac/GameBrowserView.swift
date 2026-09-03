@@ -87,7 +87,7 @@ struct GameBrowserView: View {
             expandedBookIds = viewModel.gameBrowserExpandedBookIds
 
             // 自动定位到当前特定棋局（优先级最高）
-            if viewModel.currentFilters.contains(Session.filterSpecificGame),
+            if viewModel.isSpecificGameFilterActive,
                let gameId = viewModel.currentSpecificGameId {
                 selectedGameId = gameId
                 for book in viewModel.allBookObjects {
