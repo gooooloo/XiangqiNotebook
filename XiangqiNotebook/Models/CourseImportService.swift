@@ -77,9 +77,13 @@ enum CourseImportService {
         var gameMoveIdSet = Set<Int>()
         var fenTimestamps: [Int: Double] = [:]
 
-        // 先整体校验再写库，避免半成品棋局落库
+        // 先整体校验再写库，避免半成品棋局落库。
+        // 棋局只有一个起点（startingFenId 取第一条线路），起始局面不同的线路会成为从起点不可达的孤边
         var fenSequences: [[String]] = []
         for (index, line) in lines.enumerated() {
+            if line.startFen != lines[0].startFen {
+                throw ImportError.invalidLine(index + 1, "起始局面与第一条线路不一致")
+            }
             var pgnGame = PGNGame()
             pgnGame.coordinateMoves = line.moves
             pgnGame.startingFen = line.startFen
