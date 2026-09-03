@@ -73,6 +73,14 @@ struct EngineScoreDataTests {
 
 #if os(macOS)
 struct PikafishEngineKeyTests {
+    @Test func testHashSizeScalesWithMemory() {
+        let gb: UInt64 = 1 << 30
+        #expect(PikafishService.hashSizeMB(physicalMemoryBytes: 8 * gb) == 1024)
+        #expect(PikafishService.hashSizeMB(physicalMemoryBytes: 16 * gb) == 2048)
+        #expect(PikafishService.hashSizeMB(physicalMemoryBytes: 64 * gb) == 4096, "上限 4GB")
+        #expect(PikafishService.hashSizeMB(physicalMemoryBytes: 1 * gb) == 256, "下限 256MB")
+    }
+
     @Test func testEngineKeyConstants() {
         #expect(PikafishService.engineVersion == "Pikafish_dev-20260213-391d491a")
         #expect(PikafishService.searchDepth == 34)

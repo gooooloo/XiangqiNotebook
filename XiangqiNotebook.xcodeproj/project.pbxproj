@@ -577,7 +577,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "PIKAFISH=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pikafish\"\nNNUE=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pikafish.nnue\"\nENTITLEMENTS=\"${PROJECT_DIR}/XiangqiNotebook/Resources/pikafish.entitlements\"\ncase \"${PLATFORM_NAME}\" in\n    iphone*)\n        /bin/rm -f \"${PIKAFISH}\"\n        exit 0\n        ;;\nesac\nif [ -f \"${PIKAFISH}\" ]; then\n    /usr/bin/codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" --entitlements \"${ENTITLEMENTS}\" --timestamp=none --generate-entitlement-der \"${PIKAFISH}\"\nfi\n";
+			shellScript = "PIKAFISH=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pikafish\"\nNNUE=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pikafish.nnue\"\nENTITLEMENTS=\"${PROJECT_DIR}/XiangqiNotebook/Resources/pikafish.entitlements\"\ncase \"${PLATFORM_NAME}\" in\n    iphone*)\n        /bin/rm -f \"${PIKAFISH}\"\n        exit 0\n        ;;\nesac\nif [ -z \"${EXPANDED_CODE_SIGN_IDENTITY}\" ]; then\n    echo \"warning: EXPANDED_CODE_SIGN_IDENTITY 为空，跳过 pikafish 子进程签名\"\n    exit 0\nfi\nif [ -f \"${PIKAFISH}\" ]; then\n    /usr/bin/codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" --entitlements \"${ENTITLEMENTS}\" --timestamp=none --generate-entitlement-der \"${PIKAFISH}\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
