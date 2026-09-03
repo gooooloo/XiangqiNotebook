@@ -265,6 +265,29 @@ class ActionDefinitions {
     // MARK: - 统一快捷键查找表
     
     private var shortcutLookup: [ShortcutKey: ActionKey] = [:]
+    /// 被不同操作重复注册的快捷键（后注册者静默覆盖前者）。ViewModel 里近百处注册全靠人工保证唯一，
+    /// 已两次出现同键重复的回归（如 `,l`）；这里记录下来供断言与测试兜底
+    private(set) var duplicateShortcutRegistrations: [String] = []
+
+    private func registerShortcuts(_ shortcuts: [ShortcutType], for key: ActionKey) {
+        for shortcut in shortcuts {
+            let shortcutKey: ShortcutKey
+            switch shortcut {
+            case .single(let char):
+                shortcutKey = .single(char)
+            case .modified(let modifiers, let char):
+                shortcutKey = .modified(modifiers, char)
+            case .sequence(let sequence):
+                shortcutKey = .sequence(sequence)
+            }
+            if let existing = shortcutLookup[shortcutKey], existing != key {
+                let description = "\(shortcutKey) 同时注册给 \(existing) 与 \(key)"
+                duplicateShortcutRegistrations.append(description)
+                assertionFailure("快捷键重复注册：\(description)")
+            }
+            shortcutLookup[shortcutKey] = key
+        }
+    }
     
     /// 获取指定操作的信息
     func getActionInfo(_ key: ActionKey) -> ActionInfo? {
@@ -312,18 +335,7 @@ class ActionDefinitions {
         actionMap[key] = actionInfo
 
         // 将每个快捷键都注册到查找表
-        for shortcut in shortcuts {
-            let shortcutKey: ShortcutKey
-            switch shortcut {
-            case .single(let char):
-                shortcutKey = .single(char)
-            case .modified(let modifiers, let char):
-                shortcutKey = .modified(modifiers, char)
-            case .sequence(let sequence):
-                shortcutKey = .sequence(sequence)
-            }
-            shortcutLookup[shortcutKey] = key
-        }
+        registerShortcuts(shortcuts, for: key)
     }
     
   
@@ -339,18 +351,7 @@ class ActionDefinitions {
         )
 
         // 将每个快捷键都注册到统一快捷键查找表
-        for shortcut in shortcuts {
-            let shortcutKey: ShortcutKey
-            switch shortcut {
-            case .single(let char):
-                shortcutKey = .single(char)
-            case .modified(let modifiers, let char):
-                shortcutKey = .modified(modifiers, char)
-            case .sequence(let sequence):
-                shortcutKey = .sequence(sequence)
-            }
-            shortcutLookup[shortcutKey] = key
-        }
+        registerShortcuts(shortcuts, for: key)
     }
 
     
