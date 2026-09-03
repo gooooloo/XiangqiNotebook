@@ -39,15 +39,32 @@ def main():
                          "如 --name 李-半途列炮 → 李-半途列炮-001。省略则用完整文件名")
     args = ap.parse_args()
 
-    token = open(TOKEN_PATH).read().strip()
+    try:
+        with open(TOKEN_PATH) as f:
+            token = f.read().strip()
+    except OSError:
+        sys.exit(f"读不到远程操控 token（{TOKEN_PATH}）。请先启动 DEBUG 版 XiangqiNotebook app。")
     metas = sorted(glob.glob(os.path.join(args.out_dir, "*.meta.json")))
     if not metas:
         sys.exit(f"{args.out_dir} 下没有 meta.json")
 
     failures = 0
     for path in metas:
-        meta = json.load(open(path))
         base = os.path.basename(path).replace(".meta.json", "")
+        try:
+            with open(path) as f:
+                meta = json.load(f)
+            payload_lines = [
+                {"startFen": g["start_fen"],
+                 "moves": [p["move"] for p in g["plies"]],
+                 "times": [p["t"] for p in g["plies"]]}
+                for g in meta["games"]
+            ]
+            video = meta["video"]
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print(f"{base[:20]:22s} ✗ meta.json 无法解析：{e}")
+            failures += 1
+            continue
         if args.name:
             m = re.match(r"(\d+)", base)
             if not m:
@@ -60,13 +77,8 @@ def main():
         payload = {
             "bookPath": args.book,
             "name": name,
-            "videoPath": meta["video"],
-            "lines": [
-                {"startFen": g["start_fen"],
-                 "moves": [p["move"] for p in g["plies"]],
-                 "times": [p["t"] for p in g["plies"]]}
-                for g in meta["games"]
-            ],
+            "videoPath": video,
+            "lines": payload_lines,
         }
         # 服务端 NWListener 只在 IPv6 上可达：连 127.0.0.1 会挂起，必须用 [::1]
         req = urllib.request.Request(

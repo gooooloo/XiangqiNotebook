@@ -93,6 +93,8 @@ const ALLOWED_TOOLS = [
 ].join(",");
 
 /// 内置工具全部禁用：问棋不需要文件系统与网络，攻击面越小越好。
+/// 主开关是 claudeArgs 里的 `--tools ""`（按白名单语义关掉全部内置工具，MCP 工具不受影响，
+/// 已实测）；下面这份黑名单只是对旧版 CLI 的兜底，会随 CLI 升级失效，不要依赖它。
 /// headless 下未预批准的工具调用会被直接拒绝并把结果喂回模型，不会挂起等确认。
 const DISALLOWED_TOOLS = [
   "Bash", "Read", "Write", "Edit", "Glob", "Grep",
@@ -113,6 +115,7 @@ function claudeArgs({ systemPrompt, model }) {
         "xiangqi-notebook": { command: process.execPath, args: [MCP_SCRIPT] },
       },
     }),
+    "--tools", "",
     "--allowedTools", ALLOWED_TOOLS,
     "--disallowedTools", DISALLOWED_TOOLS,
   ];
@@ -321,6 +324,7 @@ function handleChat(payload, res) {
       code: err?.code === "ENOENT" ? "CLAUDE_NOT_FOUND" : "CLAUDE_FAILED",
       message: err?.code === "ENOENT" ? "本机未找到 claude 命令" : String(err?.message ?? err),
     });
+    releaseSlot();
     cleanup();
   });
 
@@ -332,19 +336,26 @@ function handleChat(payload, res) {
         message: `claude 异常退出（exit ${code}）` + (stderrTail ? `：${stderrTail.trim().slice(-500)}` : ""),
       });
     }
+    releaseSlot();
     cleanup();
   });
 
-  // app 侧取消（URLSession 断开）走到这里：立刻杀 claude，引擎那边由 app 自己停
+  // app 侧取消（URLSession 断开）走到这里：立刻杀 claude，引擎那边由 app 自己停。
+  // 飞行槽此时不能放：SIGTERM 到 claude 真正退出有最长 5 秒宽限，提前放槽会让下一个
+  // /chat 在旧进程还活着时再 spawn 一个，两者去抢 9214 的引擎
   res.on("close", () => {
     if (!res.writableEnded) kill(child);
     cleanup();
   });
 
+  /// 子进程确认退出（close/error）后才释放飞行槽
+  function releaseSlot() {
+    if (activeChild === child) activeChild = null;
+  }
+
   function cleanup() {
     clearInterval(heartbeat);
     clearTimeout(hardLimit);
-    if (activeChild === child) activeChild = null;
     if (!res.writableEnded) res.end();
   }
 

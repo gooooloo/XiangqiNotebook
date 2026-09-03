@@ -257,6 +257,13 @@ class ViewModel: ObservableObject {
             }
         }
 
+        // 8b. iCloud 冲突自动解决后告知用户，输方内容已备份到本地
+        NotificationCenter.default.addObserver(
+            forName: .iCloudConflictResolved, object: nil, queue: .main
+        ) { [weak self] note in
+            MainActor.assumeIsolated { self?.reportICloudConflictResolution(note) }
+        }
+
         // 9. 设置引擎分数的 activeEngineKey（确保加载的分数文件能立即显示）
         #if os(macOS)
         Database.shared.activeEngineKey = PikafishService.engineKey
@@ -1350,14 +1357,28 @@ class ViewModel: ObservableObject {
         // 检查远程版本（database）
         let remoteVersion = DatabaseStorage.loadDataVersionFromDefault()
 
-        if let remoteVersion = remoteVersion,
+        if session.databaseView.loadFailedAtStartup {
+            // 启动时存档存在但解码失败，内存里是空库（或此后录入的少量数据）。
+            // 即便版本号能按字节扫出来也不能走普通分支：必须确认，且先备份原存档
+            platformService.showConfirmAlert(
+                title: "存档曾加载失败",
+                message: "本次启动时存档文件存在但无法读取（文件可能损坏或与当前版本不兼容），当前数据不是从它加载的。继续保存会覆盖该存档。\n\n继续前会自动将原存档备份到本地。是否继续保存？",
+                completion: { result in
+                    if result {
+                        self.backupExistingThenSave(session: session, remoteVersionAtCheck: remoteVersion)
+                    } else {
+                        self.showWarningAlert(message: "保存取消", info: "保存取消")
+                    }
+                }
+            )
+        } else if let remoteVersion = remoteVersion,
            remoteVersion > session.currentCheckpointDataVersion {
             platformService.showConfirmAlert(
                 title: "存档文件可能在别处被修改过",
                 message: "检测到存档文件中的版本号大于当前版本号，可能存档文件在别处被修改过。请问是否要覆盖存档文件，强行保存？",
                 completion: { result in
                     if result {
-                        self.saveToDefaultWithResultNotification(session: session)
+                        self.saveAfterRecheck(session: session, remoteVersionAtCheck: remoteVersion)
                     } else {
                         self.showWarningAlert( message: "保存取消", info: "保存取消")
                     }
@@ -1371,20 +1392,47 @@ class ViewModel: ObservableObject {
                 message: "存档文件存在但无法读取其版本号（文件可能损坏或尚未从 iCloud 下载完成）。继续保存会覆盖现有存档。\n\n继续前会自动将原存档备份到本地。是否继续保存？",
                 completion: { result in
                     if result {
-                        if let backupURL = DatabaseStorage.backupExistingDatabaseFile() {
-                            print("✅ 原存档已备份到 \(backupURL.path)")
-                        } else {
-                            print("⚠️ 原存档备份失败（文件可能不可读），继续保存")
-                        }
-                        self.saveToDefaultWithResultNotification(session: session)
+                        self.backupExistingThenSave(session: session, remoteVersionAtCheck: remoteVersion)
                     } else {
                         self.showWarningAlert(message: "保存取消", info: "保存取消")
                     }
                 }
             )
         } else {
-            self.saveToDefaultWithResultNotification(session: session)
+            self.saveAfterRecheck(session: session, remoteVersionAtCheck: remoteVersion)
         }
+    }
+
+    private func backupExistingThenSave(session: Session, remoteVersionAtCheck: Int?) {
+        if let backupURL = DatabaseStorage.backupExistingDatabaseFile() {
+            print("✅ 原存档已备份到 \(backupURL.path)")
+        } else {
+            print("⚠️ 原存档备份失败（文件可能不可读），继续保存")
+        }
+        saveAfterRecheck(session: session, remoteVersionAtCheck: remoteVersionAtCheck)
+    }
+
+    /// 版本检查与真正写盘之间隔着用户弹窗（TOCTOU）：写盘前再读一次存档版本，
+    /// 与检查时不同说明这期间别处又保存过，回到 saveToDefault 重新判断（必要时再次询问）
+    private func saveAfterRecheck(session: Session, remoteVersionAtCheck: Int?) {
+        let now = DatabaseStorage.loadDataVersionFromDefault()
+        guard now == remoteVersionAtCheck else {
+            print("[ViewModel] 存档版本在确认期间发生变化（\(String(describing: remoteVersionAtCheck)) → \(String(describing: now))），重新检查")
+            saveToDefault()
+            return
+        }
+        saveToDefaultWithResultNotification(session: session)
+    }
+
+    private func reportICloudConflictResolution(_ note: Notification) {
+        let keptNewerRemote = note.userInfo?["keptNewerRemote"] as? Bool ?? false
+        let backupPath = (note.userInfo?["backupURL"] as? URL)?.path
+        let kept = keptNewerRemote ? "其他设备的较新版本，本机原文件" : "本机的较新版本，其他设备的那份"
+        let backupNote = backupPath.map { "已备份到本地：\n\($0)" } ?? "备份失败，未能留存"
+        platformService.showWarningAlert(
+            title: "iCloud 存档冲突已自动处理",
+            message: "两台设备各自保存了存档。已保留\(kept)\(backupNote)\n\n如需找回另一份中的改动，可用「恢复备份」打开该文件。"
+        )
     }
 
     func saveToDefaultWithResultNotification(session: Session) {
@@ -1410,17 +1458,13 @@ class ViewModel: ObservableObject {
                 // 数据库脏标记已由 saveAsync 处理（保存期间无新修改才转干净）
                 self.session.setSessionAndEngineScoreClean()
                 self.clearRecoverySnapshot()  // 快照内容已进正式存档，不再需要
-                if self.session.databaseDirty {
-                    self.showAlert(
-                        message: "保存成功",
-                        info: "数据已成功保存（保存期间又有新改动，可稍后再次保存）"
-                    )
-                } else {
-                    self.showAlert(
-                        message: "保存成功",
-                        info: "数据已成功保存"
-                    )
+                var info = self.session.databaseDirty
+                    ? "数据已成功保存（保存期间又有新改动，可稍后再次保存）"
+                    : "数据已成功保存"
+                if self.session.databaseView.isEngineScoreDirty {
+                    info += "\n\n部分引擎分数文件尚未从 iCloud 下载完成，本次未写入，稍后再保存一次即可"
                 }
+                self.showAlert(message: "保存成功", info: info)
             case .failure(let error):
                 self.showWarningAlert(
                     message: "保存失败",
@@ -1577,9 +1621,9 @@ class ViewModel: ObservableObject {
                 do {
                     // 委托给 DatabaseStorage 执行备份（通过 DatabaseView）
                     try DatabaseStorage.saveDatabaseBackup(self.session.databaseView.databaseDataForBackup, to: url)
-                    print("✅ 备份成功")
+                    self.platformService.showAlert(title: "备份成功", message: "已备份到：\n\(url.path)")
                 } catch {
-                    print("❌ 备份失败：\(error)")
+                    self.platformService.showWarningAlert(title: "备份失败", message: error.localizedDescription)
                 }
             }
         }
@@ -1609,7 +1653,9 @@ class ViewModel: ObservableObject {
 
                         continuation.resume(returning: true)
                     } catch {
-                        print("❌ 从选定文件恢复失败：\(error)")
+                        self.platformService.showWarningAlert(
+                            title: "恢复失败",
+                            message: "无法从所选文件恢复：\(error.localizedDescription)")
                         continuation.resume(returning: false)
                     }
                 } else {
@@ -1853,6 +1899,9 @@ class ViewModel: ObservableObject {
     /// 分析进行中标志：防止并发请求同时驱动同一个引擎。
     /// 供 Release 也启用的只读接口使用，故不限 DEBUG
     private var isRemoteAnalyzing = false
+    /// 最近一次只读分析是否被 stopRemoteEngineAnalyze 中途叫停。
+    /// 叫停后引擎立刻吐出浅层结果，这份结果不能按足额 movetime 入缓存冒充完整分析
+    private(set) var remoteAnalyzeInterrupted = false
 
     enum RemoteAnalyzeError: Error, LocalizedError {
         case engineBusy
@@ -1878,6 +1927,7 @@ class ViewModel: ObservableObject {
     func remoteEngineAnalyze(fen: String, multiPV: Int, movetime: Int) async throws -> [EnginePVLine] {
         if isRemoteAnalyzing { throw RemoteAnalyzeError.engineBusy }
         isRemoteAnalyzing = true
+        remoteAnalyzeInterrupted = false
         defer { isRemoteAnalyzing = false }
 
         #if os(macOS)
@@ -1891,6 +1941,8 @@ class ViewModel: ObservableObject {
                 .analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
         } catch PikafishServiceIOS.EngineError.busy {
             throw RemoteAnalyzeError.engineBusy
+        } catch {
+            throw RemoteAnalyzeError.engineUnavailable
         }
         #else
         throw RemoteAnalyzeError.engineUnavailable
@@ -1904,6 +1956,7 @@ class ViewModel: ObservableObject {
     /// 引擎收到 stop 会立刻发 bestmove，analyzePosition 因此提前返回已有结果。
     @MainActor
     func stopRemoteEngineAnalyze() {
+        remoteAnalyzeInterrupted = true
         #if os(macOS)
         pikafishService?.stopCurrentSearch()
         #elseif os(iOS)
@@ -1991,10 +2044,10 @@ class ViewModel: ObservableObject {
         do {
             result = try await service.evaluatePosition(fen: fen)
         } catch {
-            // 只可能是 busy：问棋分析正占着引擎
+            // busy（问棋分析正占着引擎）或 NNUE 缺失，文案由 EngineError 提供
             platformService.showWarningAlert(
-                title: "引擎忙碌中",
-                message: "AI 问棋正在分析，请稍后再试。"
+                title: "无法评估",
+                message: error.localizedDescription
             )
             return
         }
@@ -2677,6 +2730,17 @@ class ViewModel: ObservableObject {
         return session.databaseView.getBookObjectUnfiltered(bookId)
     }
 
+    /// 当前是否处于「特定棋局」筛选。View 层用它，不直接引用 Session 的筛选常量
+    var isSpecificGameFilterActive: Bool {
+        currentFilters.contains(Session.filterSpecificGame)
+    }
+
+    /// PGN 导入时的「我的棋手名」，跨次记忆（UserDefaults）。View 层经此读写，不直接碰 UserDefaults
+    var pgnImportUsername: String {
+        get { UserDefaults.standard.string(forKey: "pgnImportUsername") ?? "" }
+        set { UserDefaults.standard.set(newValue.trimmingCharacters(in: .whitespaces), forKey: "pgnImportUsername") }
+    }
+
     func addGame(to bookId: UUID, name: String?, redPlayerName: String, blackPlayerName: String, gameDate: Date, gameResult: GameResult, iAmRed: Bool, iAmBlack: Bool, startingFenId: Int?, isFullyRecorded: Bool) -> UUID {
         return session.addGame(to: bookId, name: name, redPlayerName: redPlayerName, blackPlayerName: blackPlayerName, gameDate: gameDate, gameResult: gameResult, iAmRed: iAmRed, iAmBlack: iAmBlack, startingFenId: startingFenId, isFullyRecorded: isFullyRecorded)
     }
@@ -2725,7 +2789,8 @@ class ViewModel: ObservableObject {
         if let videoPath {
             setCourseVideoPath(videoPath, for: result.gameId)
             for (fenId, seconds) in result.fenTimestamps {
-                let total = Int(seconds.rounded())
+                // 外部 JSON 的秒数未经校验：超范围 Double 转 Int 会 trap，先夹到 [0, 24h]
+                let total = Int(min(max(seconds, 0), 86_400).rounded())
                 let timestamp = String(format: "%02d:%02d", total / 60, total % 60)
                 setCourseVideoTimestamp(timestamp, for: result.gameId, fenId: fenId)
             }

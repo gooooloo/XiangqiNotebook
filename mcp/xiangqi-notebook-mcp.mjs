@@ -5,10 +5,10 @@
 // HTTP 服务（localhost:9214，只读分析接口 Release 构建也启用）的请求。
 //
 // 注册到 Claude Code:
-//   claude mcp add xiangqi-notebook -- node /Users/qidu/dev/XiangqiNotebook/mcp/xiangqi-notebook-mcp.mjs
+//   claude mcp add xiangqi-notebook -- node <仓库路径>/mcp/xiangqi-notebook-mcp.mjs
 // 注册到 Claude Desktop（claude_desktop_config.json）:
 //   { "mcpServers": { "xiangqi-notebook": { "command": "node",
-//     "args": ["/Users/qidu/dev/XiangqiNotebook/mcp/xiangqi-notebook-mcp.mjs"] } } }
+//     "args": ["<仓库路径>/mcp/xiangqi-notebook-mcp.mjs"] } } }
 //
 // 要求 Node >= 18（内建 fetch）。
 

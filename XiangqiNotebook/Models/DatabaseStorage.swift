@@ -50,7 +50,12 @@ class DatabaseStorage {
             fileData = try? Data(contentsOf: url)
         }
         guard let data = fileData else { return nil }
+        return saveOverwriteBackup(data, prefix: "database")
+    }
 
+    /// 把一份即将被覆盖/丢弃的数据写到本地 OverwriteBackups/<prefix>-<时间戳>.json
+    /// - Returns: 备份文件 URL；失败返回 nil
+    static func saveOverwriteBackup(_ data: Data, prefix: String) -> URL? {
         do {
             let dir = try FileManager.default.url(
                 for: .applicationSupportDirectory, in: .userDomainMask,
@@ -63,7 +68,7 @@ class DatabaseStorage {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyyMMdd-HHmmss"
             formatter.locale = Locale(identifier: "en_US_POSIX")
-            let backupURL = dir.appendingPathComponent("database-\(formatter.string(from: Date())).json")
+            let backupURL = dir.appendingPathComponent("\(prefix)-\(formatter.string(from: Date())).json")
             try data.write(to: backupURL, options: .atomic)
             print("✅ DatabaseStorage: 覆盖前备份已保存 - \(backupURL.path)")
             return backupURL

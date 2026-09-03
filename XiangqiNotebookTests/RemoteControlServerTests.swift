@@ -51,6 +51,15 @@ struct RemoteControlServerTests {
 
     // MARK: - /eval 参数解析
 
+    @Test func testContentLength_parsesCaseInsensitively() {
+        let header = "POST /eval HTTP/1.1\r\nHost: x\r\ncontent-length: 42\r\nX-RemoteControl-Token: t"
+        #expect(RemoteControlServer.contentLength(inHeader: header) == 42)
+    }
+
+    @Test func testContentLength_missing_ReturnsNil() {
+        #expect(RemoteControlServer.contentLength(inHeader: "GET /state HTTP/1.1\r\nHost: x") == nil)
+    }
+
     @Test func testParseEvalParams_defaults() {
         let params = RemoteControlServer.parseEvalParams(json: nil)
         #expect(params.fen == nil)

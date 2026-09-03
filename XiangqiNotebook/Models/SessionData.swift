@@ -34,6 +34,19 @@ class SessionData: Codable {
         // 所有属性都已在声明时设置了默认值
     }
 
+    /// 全字段拷贝（走 Codable 往返，新增字段自动包含；缓存字段不参与编码、不拷贝）。
+    /// setFilters 等「以当前会话为底新建会话」的场景用它，不再手工逐字段抄清单——
+    /// 那份清单已两次因漏字段导致设置在换局时被重置
+    func copy() -> SessionData {
+        // SessionData 全字段容错解码，且编码自身必然成功，这里不可能失败
+        let data = try! JSONEncoder().encode(self)
+        let copy = try! JSONDecoder().decode(SessionData.self, from: data)
+        // 解码刻意把持久化的 "review" 回退为 .normal（复习流程不跨启动恢复），
+        // 但内存拷贝必须保真：正在复习时切筛选不能把模式弄丢
+        copy.currentMode = currentMode
+        return copy
+    }
+
     // 缓存数据 - 不编码
     var totalGamePathsCount: Int? = nil
     var fenIdToGamePathCount: [Int: Int]? = nil

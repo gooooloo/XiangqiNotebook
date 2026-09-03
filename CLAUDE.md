@@ -109,7 +109,7 @@ Views ↔ ViewModels ↔ Session ↔ DatabaseView ↔ Database
 
 **平台服务**:
 - `iOSPlatformService.swift` 和 `MacOSPlatformService.swift`: 抽象平台特定功能（弹窗、文件操作等）
-- `PikafishService.swift`（仅 macOS）: 本地象棋引擎评估，支持批量评估与进度跟踪
+- `PikafishService.swift`（macOS，子进程 + UCI 管道）与 `PikafishServiceIOS.swift`（iOS，经 `PikafishEngineBridge.mm` 进程内调用 `ThirdParty/Pikafish` 子模块）: 本地象棋引擎评估；`EvaluationQueue` 负责 macOS 批量评估与进度跟踪
 
 **外部 API**:
 - `IO.swift`: 查询 ChessDB API 获取局面评估，使用 async/await，含速率限制错误处理
@@ -117,12 +117,14 @@ Views ↔ ViewModels ↔ Session ↔ DatabaseView ↔ Database
 ### 文件组织
 - `Models/`: 核心数据模型与存储层
   - 数据模型: `FenObject`、`Move`、`GameObject`、`BookObject`、`DatabaseData`、`SessionData`、`SRSData`、`EngineScoreData`
-  - 业务逻辑: `MoveRules`、`GameOperations`、`Database`、`SessionManager`、`IO`
+  - 业务逻辑: `MoveRules`、`GameOperations`、`Database`、`SessionManager`、`IO`、`CourseImportService`（课程视频棋谱导入）
   - 数据视图层: `DatabaseView`（筛选与范围化访问 Database）
   - 存储: `DatabaseStorage`、`EngineScoreStorage`、`SessionStorage`、`CourseVideoStorage`、`iCloudFileCoordinator`
-- `Views/`: UI 组件，按平台拆分（iOS/、Mac/、board/）
-- `ViewModels/`: 业务逻辑与视图状态管理
-- `Services/`: 平台抽象层（含 PikafishService 本地引擎）
+  - 本地服务: `RemoteControlServer`（9214 远程操控/分析 HTTP）、`PGNHttpServer`（9213 PGN 导入）
+  - `AI/`: app 内 AI 问棋——`AIConfig`（线路与密钥）、`AIChatPrompt`、`AnalysisToolbox`（工具定义与执行）、`LLMClient` / `LLMStreamAccumulator`（OpenAI 兼容线路）、`ClaudeCodeClient`（Claude Code 订阅线路）、`AnswerMarkdown`
+- `Views/`: UI 组件，按平台拆分（iOS/、Mac/、board/）；`DesignTokens` 为 Mac 端设计 token
+- `ViewModels/`: 业务逻辑与视图状态管理（`ViewModel` 主协调器、`ChatViewModel` 问棋对话、`BoardViewModel`、`ActionDefinitions` 快捷键/操作注册）
+- `Services/`: 平台抽象层与引擎（`PikafishService`、`PikafishServiceIOS`、`EvaluationQueue`、`EnginePVLine`）
 - `Resources/`: 棋谱资源（棋盘和棋子图片，PNG/SVG 格式）
 
 ### 主要系统功能
@@ -229,10 +231,9 @@ localhost 的 curl 请求导致挂起。命令行调用远程操控接口时务�
 `Operation not permitted`（配合 `-s` 时表现为静默空响应，极易误判成服务端问题）。调用
 9213/9214/9216 等本机接口的命令需要沙箱豁免运行。
 
-**注意（必须走 IPv6）**：`RemoteControlServer` 的 NWListener 实际只在 IPv6 可达。curl 会先试
-`::1` 所以正常；但用 `127.0.0.1`（如 Python urllib 默认地址序）连接不仅自身挂起，v4-mapped
-连接还会把整个监听队列打进假死态——之后所有请求超时，只能重启 app 恢复。脚本访问本服务
-一律写 `http://[::1]:9214`。（服务端对 v4-mapped 连接的处理是既有隐患，待修。）
+**注意（必须走 IPv6）**：`RemoteControlServer` 明确只绑定 `::1`（IPv6 回环）。curl 会先试
+`::1` 所以正常；`127.0.0.1`（如 Python urllib 默认地址序）会被直接拒绝连接（connection refused），
+不会再像早期那样把监听队列打进假死态。脚本访问本服务一律写 `http://[::1]:9214`。
 
 ### 课程视频棋谱导入
 

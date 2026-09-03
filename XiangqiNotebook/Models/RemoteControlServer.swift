@@ -83,7 +83,10 @@ class RemoteControlServer {
         let params = NWParameters.tcp
         params.acceptLocalOnly = true
         let nwPort = NWEndpoint.Port(rawValue: port)!
-        listener = try NWListener(using: params, on: nwPort)
+        // 明确只绑 IPv6 回环：此前 listener 实际只在 IPv6 可达，而 127.0.0.1 的 v4-mapped 连接
+        // 会把监听队列打进假死态（所有后续请求超时，只能重启 app）。绑死 ::1 后 v4 连接直接被拒
+        params.requiredLocalEndpoint = .hostPort(host: "::1", port: nwPort)
+        listener = try NWListener(using: params)
 
         listener?.newConnectionHandler = { [weak self] connection in
             self?.handleConnection(connection)
@@ -116,6 +119,11 @@ class RemoteControlServer {
         receiveHTTPRequest(connection: connection, accumulated: Data())
     }
 
+    /// 单个请求（头 + body）上限。/import_course 一节课的线路也远小于此；
+    /// 没有上限的话任何本机进程不带 token 也能让 app 无限吞 body
+    static let maxRequestBytes = 1 << 20
+    private static let headerTerminator = Data("\r\n\r\n".utf8)
+
     private func receiveHTTPRequest(connection: NWConnection, accumulated: Data) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
             guard let self else { return }
@@ -129,7 +137,29 @@ class RemoteControlServer {
                 return
             }
 
-            if self.hasCompleteHTTPRequest(data) || isComplete {
+            if data.count > Self.maxRequestBytes {
+                self.sendJSONResponse(connection: connection, status: "413 Payload Too Large",
+                                      body: #"{"error":"Request too large"}"#)
+                return
+            }
+
+            // 头部一到齐就先鉴权，再决定要不要继续收 body。按字节找头尾而不是先整体转字符串：
+            // body 若含非法 UTF-8，String(data:) 会失败，连接就会一直挂到对端关闭
+            if let headerEnd = data.range(of: Self.headerTerminator) {
+                let header = String(decoding: data[data.startIndex..<headerEnd.lowerBound], as: UTF8.self)
+                guard Self.extractToken(from: header) == self.authToken else {
+                    self.sendJSONResponse(connection: connection, status: "403 Forbidden",
+                                          body: #"{"error":"Missing or invalid X-RemoteControl-Token header"}"#)
+                    return
+                }
+                let bodyReceived = data.count - headerEnd.upperBound
+                if bodyReceived >= (Self.contentLength(inHeader: header) ?? 0) {
+                    self.processHTTPRequest(data: data, connection: connection)
+                    return
+                }
+            }
+
+            if isComplete {
                 self.processHTTPRequest(data: data, connection: connection)
             } else {
                 self.receiveHTTPRequest(connection: connection, accumulated: data)
@@ -137,21 +167,17 @@ class RemoteControlServer {
         }
     }
 
-    private func hasCompleteHTTPRequest(_ data: Data) -> Bool {
-        guard let str = String(data: data, encoding: .utf8) else { return false }
-        guard let headerEnd = str.range(of: "\r\n\r\n") else { return false }
-
-        let headerPart = str[str.startIndex..<headerEnd.lowerBound]
-        if let clRange = headerPart.range(of: "Content-Length: ", options: .caseInsensitive) {
-            let afterCL = headerPart[clRange.upperBound...]
-            if let lineEnd = afterCL.firstIndex(of: "\r") ?? afterCL.firstIndex(of: "\n"),
-               let contentLength = Int(afterCL[afterCL.startIndex..<lineEnd]) {
-                let bodyStart = str[headerEnd.upperBound...]
-                return bodyStart.utf8.count >= contentLength
+    /// 从头部文本解析 Content-Length（纯函数，便于单测）；没有该头返回 nil
+    static func contentLength(inHeader header: String) -> Int? {
+        // 注意 Swift 把 "\r\n" 视为一个 Character，不能按 "\r"/"\n" 逐字符拆；按 scalar 级换行集拆
+        for rawLine in header.components(separatedBy: .newlines) where !rawLine.isEmpty {
+            guard let colon = rawLine.firstIndex(of: ":") else { continue }
+            let name = rawLine[rawLine.startIndex..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+            if name == "content-length" {
+                return Int(rawLine[rawLine.index(after: colon)...].trimmingCharacters(in: .whitespaces))
             }
         }
-
-        return true
+        return nil
     }
 
     // MARK: - Routing
@@ -258,7 +284,7 @@ class RemoteControlServer {
 
         guard let actionKey = ActionDefinitions.ActionKey(rawValue: actionName) else {
             sendJSONResponse(connection: connection, status: "400 Bad Request",
-                             body: "{\"error\":\"Unknown action: \(escapeJSON(actionName))\"}")
+                             body: AnalysisToolbox.errorJSON("Unknown action: \(actionName)"))
             return
         }
 
@@ -268,13 +294,14 @@ class RemoteControlServer {
             return
         }
 
-        DispatchQueue.main.sync {
-            // 已在主队列同步执行，向编译器声明 MainActor 隔离成立
+        // async 而非 sync：action 可能弹模态（NSAlert.runModal），sync 会把 server 串行队列
+        // 卡到用户点掉弹窗为止，期间连 Release 也有的 /state 都超时
+        DispatchQueue.main.async {
             MainActor.assumeIsolated {
             if let actionInfo = vm.actionDefinitions.getActionInfo(actionKey) {
                 actionInfo.action()
-                sendJSONResponse(connection: connection, status: "200 OK",
-                                 body: "{\"success\":true,\"action\":\"\(escapeJSON(actionName))\"}")
+                self.sendJSONResponse(connection: connection, status: "200 OK",
+                                      body: AnalysisToolbox.json(["success": true, "action": actionName]))
             } else if let toggleInfo = vm.actionDefinitions.getToggleActionInfo(actionKey) {
                 let newValue: Bool
                 if let explicitValue = json["value"] as? Bool {
@@ -283,11 +310,11 @@ class RemoteControlServer {
                     newValue = !toggleInfo.isOn()
                 }
                 toggleInfo.action(newValue)
-                sendJSONResponse(connection: connection, status: "200 OK",
-                                 body: "{\"success\":true,\"action\":\"\(escapeJSON(actionName))\",\"isOn\":\(toggleInfo.isOn())}")
+                self.sendJSONResponse(connection: connection, status: "200 OK",
+                                      body: AnalysisToolbox.json(["success": true, "action": actionName, "isOn": toggleInfo.isOn()]))
             } else {
-                sendJSONResponse(connection: connection, status: "400 Bad Request",
-                                 body: "{\"error\":\"Action not registered: \(escapeJSON(actionName))\"}")
+                self.sendJSONResponse(connection: connection, status: "400 Bad Request",
+                                      body: AnalysisToolbox.errorJSON("Action not registered: \(actionName)"))
             }
             }
         }
@@ -327,19 +354,20 @@ class RemoteControlServer {
             return
         }
 
-        DispatchQueue.main.sync {
+        DispatchQueue.main.async {
             MainActor.assumeIsolated {
                 do {
                     let result = try vm.importCourseGame(
                         bookPath: bookPath, name: name, lines: lines, videoPath: videoPath)
-                    sendJSONResponse(connection: connection, status: "200 OK",
-                                     body: "{\"ok\":true,\"gameId\":\"\(result.gameId.uuidString)\","
-                                         + "\"lines\":\(result.lineCount),\"moves\":\(result.moveCount),"
-                                         + "\"timestamps\":\(result.fenTimestamps.count)}")
+                    self.sendJSONResponse(connection: connection, status: "200 OK",
+                                          body: AnalysisToolbox.json([
+                                            "ok": true, "gameId": result.gameId.uuidString,
+                                            "lines": result.lineCount, "moves": result.moveCount,
+                                            "timestamps": result.fenTimestamps.count]))
                 } catch {
                     // 业务失败也回 200，错误语义在 body 里（与 /eval_move 的约定一致）
-                    sendJSONResponse(connection: connection, status: "200 OK",
-                                     body: "{\"ok\":false,\"error\":\"\(escapeJSON(String(describing: error)))\"}")
+                    self.sendJSONResponse(connection: connection, status: "200 OK",
+                                          body: AnalysisToolbox.json(["ok": false, "error": String(describing: error)]))
                 }
             }
         }
@@ -485,6 +513,7 @@ class RemoteControlServer {
                                             [
                                                 "rank": line.multipv,
                                                 "scoreCp": line.scoreCp,
+                                                "mate": line.mate as Any? ?? NSNull(),
                                                 "depth": line.depth as Any? ?? NSNull(),
                                                 "pvUci": line.moves,
                                                 "pvChinese": AnalysisToolbox.chinesePV(
@@ -534,12 +563,5 @@ class RemoteControlServer {
         })
     }
 
-    private func escapeJSON(_ str: String) -> String {
-        str.replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\r", with: "\\r")
-            .replacingOccurrences(of: "\t", with: "\\t")
-    }
 }
 #endif

@@ -205,4 +205,49 @@ struct SessionDataTests {
         #expect(decoded.autoExtendGameWhenPlayingBoardFen == true)
         #expect(decoded.currentMode == .normal)
     }
+
+    // MARK: - copy
+
+    @Test func testCopy_preservesEveryStoredFieldIncludingReviewMode() {
+        let original = SessionData()
+        original.currentGame2 = [1, 5, 9]
+        original.currentGameStep = 2
+        original.lockedStep = 1
+        original.filters = ["red_opening"]
+        original.isBlackOrientation = true
+        original.isHorizontalFlipped = true
+        original.gameHistory = [[1, 2]]
+        original.gameStepLimitation = 7
+        original.canNavigateBeforeLockedStep = true
+        original.currentMode = .review   // 持久化解码会把 review 回退为 normal，拷贝不能
+        original.showPath = false
+        original.showAllNextMoves = true
+        original.showLastMove = false
+        original.showRedAttackPoints = true
+        original.showBlackAttackPoints = true
+        original.attackPointsRedPalaceOnly = true
+        original.attackPointsBlackPalaceOnly = true
+        original.showRealGameList = true
+        original.autoExtendGameWhenPlayingBoardFen = false
+        original.isCommentEditing = true
+        original.focusedPracticeGamePath = [1, 5]
+        original.specificGameId = UUID()
+        original.specificBookId = UUID()
+        original.allowAddingNewMoves = false
+        original.showGameBrowserSidebar = true
+        original.gameBrowserExpandedBookIds = [UUID()]
+        original.gameBrowserSelectedBookId = UUID()
+        original.gameBrowserSelectedGameId = UUID()
+
+        let copy = original.copy()
+
+        #expect(copy !== original)
+        #expect(copy.currentMode == .review)
+        // 用反射逐个比对存储属性：新增字段若在 copy() 里丢失，这里会立刻暴露
+        let originalFields = Mirror(reflecting: original).children.map { ($0.label ?? "", String(describing: $0.value)) }
+        let copyFields = Mirror(reflecting: copy).children.map { ($0.label ?? "", String(describing: $0.value)) }
+        for (o, c) in zip(originalFields, copyFields) where !o.0.hasPrefix("totalGamePathsCount") && !o.0.hasPrefix("fenIdToGamePathCount") && !o.0.hasPrefix("currentPathIndex") {
+            #expect(o == c, "字段 \(o.0) 拷贝后不一致")
+        }
+    }
 }
