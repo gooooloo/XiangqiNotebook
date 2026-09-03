@@ -15,6 +15,10 @@ class BoardViewModel: Equatable {
     private var showBlackAttackPoints: Bool = false
     private var attackPointsRedPalaceOnly: Bool = false
     private var attackPointsBlackPalaceOnly: Bool = false
+    /// 攻击点位只在局面或开关变化时算一次；body 每次重绘（拖子、高亮）都会来取，
+    /// 现算是两次全盘扫描 + 一次 FEN 解析
+    private var redAttackCounts: [String: Int] = [:]
+    private var blackAttackCounts: [String: Int] = [:]
 
     static func == (lhs: BoardViewModel, rhs: BoardViewModel) -> Bool {
         return lhs.pieceViewModels == rhs.pieceViewModels
@@ -97,16 +101,23 @@ class BoardViewModel: Equatable {
         return self.showBlackAttackPoints
     }
 
-    /// 红方攻击点位 → 攻击子数。开关关闭时返回空，省去每次渲染的计算
-    public func getRedAttackCounts() -> [String: Int] {
-        guard showRedAttackPoints else { return [:] }
-        return filterAttackCounts(MoveRules.getAttackedSquareCounts(isRed: true, piecesBySquare: piecesBySquare))
-    }
+    /// 红方攻击点位 → 攻击子数（缓存值；开关关闭时为空）
+    public func getRedAttackCounts() -> [String: Int] { redAttackCounts }
 
-    /// 黑方攻击点位 → 攻击子数。开关关闭时返回空，省去每次渲染的计算
-    public func getBlackAttackCounts() -> [String: Int] {
-        guard showBlackAttackPoints else { return [:] }
-        return filterAttackCounts(MoveRules.getAttackedSquareCounts(isRed: false, piecesBySquare: piecesBySquare))
+    /// 黑方攻击点位 → 攻击子数（缓存值；开关关闭时为空）
+    public func getBlackAttackCounts() -> [String: Int] { blackAttackCounts }
+
+    private func refreshAttackCounts() {
+        guard showRedAttackPoints || showBlackAttackPoints else {
+            redAttackCounts = [:]
+            blackAttackCounts = [:]
+            return
+        }
+        let pieces = piecesBySquare
+        redAttackCounts = showRedAttackPoints
+            ? filterAttackCounts(MoveRules.getAttackedSquareCounts(isRed: true, piecesBySquare: pieces)) : [:]
+        blackAttackCounts = showBlackAttackPoints
+            ? filterAttackCounts(MoveRules.getAttackedSquareCounts(isRed: false, piecesBySquare: pieces)) : [:]
     }
 
     /// 九宫过滤：开了哪侧就只保留哪侧九宫内的攻击点（都开=两宫，都关=不过滤）
@@ -202,16 +213,22 @@ class BoardViewModel: Equatable {
     }
 
     public func updateShowRedAttackPoints(_ show: Bool) {
+        guard showRedAttackPoints != show else { return }
         self.showRedAttackPoints = show
+        refreshAttackCounts()
     }
 
     public func updateShowBlackAttackPoints(_ show: Bool) {
+        guard showBlackAttackPoints != show else { return }
         self.showBlackAttackPoints = show
+        refreshAttackCounts()
     }
 
     public func updateAttackPointsPalaceOnly(red: Bool, black: Bool) {
+        guard attackPointsRedPalaceOnly != red || attackPointsBlackPalaceOnly != black else { return }
         self.attackPointsRedPalaceOnly = red
         self.attackPointsBlackPalaceOnly = black
+        refreshAttackCounts()
     }
 
     public func updateShouldAnimate(_ shouldAnimate: Bool) {
@@ -224,6 +241,7 @@ class BoardViewModel: Equatable {
         }
 
         self.fen = fen
+        refreshAttackCounts()
 
         assert (pieceViewModels.count == 32, "pieceViewModels 不能为空")
 
