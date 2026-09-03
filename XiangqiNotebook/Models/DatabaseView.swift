@@ -309,8 +309,9 @@ final class DatabaseView {
     /// 从备份恢复数据库
     /// - Parameter databaseData: 要恢复的数据库数据
     /// - Note: 这是对底层 Database 的委托调用，会影响所有 DatabaseView 实例
-    func restoreFromBackup(_ databaseData: DatabaseData) {
-        database.restoreFromBackup(databaseData)
+    /// 见 Database.restoreFromBackup；remoteVersion 为当前存档文件版本号，用于抬高恢复后的版本
+    func restoreFromBackup(_ databaseData: DatabaseData, remoteVersion: Int? = nil) {
+        database.restoreFromBackup(databaseData, remoteVersion: remoteVersion)
     }
 
     /// 获取数据库数据用于备份操作
