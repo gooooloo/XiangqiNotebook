@@ -1867,10 +1867,13 @@ class ViewModel: ObservableObject {
         guard let service = ensurePikafishService() else { throw RemoteAnalyzeError.engineUnavailable }
         return try await service.analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
         #elseif os(iOS)
-        // iOS 侧与「AI 应招」共用同一个内嵌引擎实例，正在应招时不能插队
-        if isEvaluatingIOS { throw RemoteAnalyzeError.engineBusy }
-        return await ensurePikafishServiceIOS()
-            .analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
+        // iOS 侧与「AI 应招」共用同一个内嵌引擎实例；互斥由 service 自己保证
+        do {
+            return try await ensurePikafishServiceIOS()
+                .analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
+        } catch PikafishServiceIOS.EngineError.busy {
+            throw RemoteAnalyzeError.engineBusy
+        }
         #else
         throw RemoteAnalyzeError.engineUnavailable
         #endif
@@ -1966,7 +1969,18 @@ class ViewModel: ObservableObject {
         defer { isEvaluatingIOS = false }
 
         let service = ensurePikafishServiceIOS()
-        guard let result = await service.evaluatePosition(fen: fen) else { return }
+        let result: PikafishServiceIOS.EvaluationResult?
+        do {
+            result = try await service.evaluatePosition(fen: fen)
+        } catch {
+            // 只可能是 busy：问棋分析正占着引擎
+            platformService.showWarningAlert(
+                title: "引擎忙碌中",
+                message: "AI 问棋正在分析，请稍后再试。"
+            )
+            return
+        }
+        guard let result else { return }
 
         // 用户思考期间点了取消：结果整个丢弃，不存分也不落子，就当没点过
         guard !aiRespondCancelled else { return }
