@@ -85,7 +85,7 @@ struct iPhoneRealGameListView: View {
     }
 
     private func isCurrentlyLoaded(_ game: GameObject) -> Bool {
-        viewModel.currentFilters.contains(Session.filterSpecificGame) &&
+        viewModel.isSpecificGameFilterActive &&
             viewModel.currentSpecificGameId == game.id
     }
 }
