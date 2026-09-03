@@ -142,3 +142,23 @@ struct EngineScoreStorageTests {
         #expect(local.dataVersion == 3)
     }
 }
+
+struct EngineScoreStoragePlaceholderTests {
+    /// 实体文件缺席、同目录有 ".<name>.icloud" 占位 → 视为未下载；实体文件在 → 不是
+    @Test func testHasUndownloadedPlaceholder() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("engine-score-placeholder-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let real = dir.appendingPathComponent("scores.json")
+        #expect(!EngineScoreStorage.hasUndownloadedPlaceholder(for: real))
+
+        let placeholder = dir.appendingPathComponent(".scores.json.icloud")
+        try Data().write(to: placeholder)
+        #expect(EngineScoreStorage.hasUndownloadedPlaceholder(for: real))
+
+        try Data("{}".utf8).write(to: real)
+        #expect(!EngineScoreStorage.hasUndownloadedPlaceholder(for: real))
+    }
+}
