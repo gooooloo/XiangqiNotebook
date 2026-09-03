@@ -1,6 +1,12 @@
 import Foundation
 import Combine
 
+extension Notification.Name {
+    /// iCloud 冲突已自动解决。userInfo: "keptNewerRemote"(Bool) 是否用冲突版本替换了本地文件，
+    /// "backupURL"(URL?) 输方内容的本地备份
+    static let iCloudConflictResolved = Notification.Name("XiangqiNotebook.iCloudConflictResolved")
+}
+
 /// iCloud 文件协调服务
 /// 负责处理 database.json 的多设备同步协调，使用 NSFilePresenter 和 NSFileCoordinator
 /// 确保多个设备同时访问时的数据一致性
@@ -109,7 +115,15 @@ class iCloudFileCoordinator: NSObject, ObservableObject, NSFilePresenter {
             let currentModDate = attrs?[.modificationDate] as? Date ?? .distantPast
             let versionModDate = version.modificationDate ?? .distantPast
 
-            if versionModDate > currentModDate {
+            // 输的一方不能直接抹掉：两台设备各自编辑的场景里，较旧一侧的修改仍是用户的劳动。
+            // 先原样存到本地 OverwriteBackups/，再解决冲突，并通知界面提示用户
+            let keptNewerRemote = versionModDate > currentModDate
+            let loserData = try? Data(contentsOf: keptNewerRemote ? url : version.url)
+            let backupURL = loserData.flatMap {
+                DatabaseStorage.saveOverwriteBackup($0, prefix: keptNewerRemote ? "conflict-local" : "conflict-remote")
+            }
+
+            if keptNewerRemote {
                 // 冲突版本较新：经写协调替换当前文件
                 let coordinator = NSFileCoordinator(filePresenter: self)
                 var coordError: NSError?
@@ -138,6 +152,11 @@ class iCloudFileCoordinator: NSObject, ObservableObject, NSFilePresenter {
 
             print("[iCloudFileCoordinator] 冲突已解决")
 
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: .iCloudConflictResolved, object: nil,
+                    userInfo: ["keptNewerRemote": keptNewerRemote, "backupURL": backupURL as Any])
+            }
             // 通知数据变更
             publishChange()
         } catch {
