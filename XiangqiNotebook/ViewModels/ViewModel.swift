@@ -269,7 +269,9 @@ class ViewModel: ObservableObject {
             object: nil, queue: .main
         ) { [weak self] _ in
             DatabaseStorage.clearRecoverySnapshot()
-            Task { @MainActor [weak self] in
+            // 必须同步执行：applicationWillTerminate 返回后 AppKit 直接 exit()，
+            // 主线程不会再转一圈，这里再开 Task 就永远跑不到
+            MainActor.assumeIsolated {
                 self?.evaluationQueue?.cancelAll()
                 self?.pikafishService?.stop()
             }
