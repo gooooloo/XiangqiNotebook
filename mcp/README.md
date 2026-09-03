@@ -31,7 +31,7 @@ app RemoteControlServer（/state /eval /eval_move /apply）
 前提：本机装有 Claude Code 且已完成订阅登录（终端跑一次 `claude` 即可确认）。
 
 ```bash
-cd /Users/qidu/dev/XiangqiNotebook   # 换成你的仓库路径
+cd <仓库路径>   # 例如 ~/dev/XiangqiNotebook
 
 # 1. 用本机路径填模板（node 路径用 which node 查；nvm 用户注意别用 shim 之外的版本路径失效）
 sed -e "s|__NODE_PATH__|$(which node)|" \
@@ -104,7 +104,7 @@ curl --noproxy '*' -N -H "X-ClaudeBridge-Token: $BTOKEN" -X POST http://127.0.0.
 
 ```bash
 # Claude Code
-claude mcp add xiangqi-notebook -- node /Users/qidu/dev/XiangqiNotebook/mcp/xiangqi-notebook-mcp.mjs
+claude mcp add xiangqi-notebook -- node <仓库路径>/mcp/xiangqi-notebook-mcp.mjs
 ```
 
 Claude Desktop 在 `~/Library/Application Support/Claude/claude_desktop_config.json` 的
