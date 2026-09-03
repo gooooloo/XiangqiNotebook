@@ -103,40 +103,19 @@ class SessionManager: ObservableObject {
             exitFocusedPractice()
         }
 
-        // 1. 从当前 mainSession 复制状态到新的 SessionData
-        let newSessionData = SessionData()
-        newSessionData.currentGame2 = mainSession.sessionData.currentGame2
-        newSessionData.currentGameStep = mainSession.sessionData.currentGameStep
-        newSessionData.lockedStep = mainSession.sessionData.lockedStep
+        // 1. 以当前 mainSession 为底整体拷贝，只覆盖随筛选变化的字段。
+        //    不再手工逐字段抄清单：新增的 UI 设置字段会自动跟过来，不会再在换局时被重置
+        let newSessionData = mainSession.sessionData.copy()
         newSessionData.filters = filters
-        newSessionData.isBlackOrientation = mainSession.sessionData.isBlackOrientation
-        newSessionData.isHorizontalFlipped = mainSession.sessionData.isHorizontalFlipped
-        newSessionData.gameStepLimitation = mainSession.sessionData.gameStepLimitation
-        newSessionData.canNavigateBeforeLockedStep = mainSession.sessionData.canNavigateBeforeLockedStep
-        newSessionData.currentMode = mainSession.sessionData.currentMode
-        // 复习/练习模式下保持当前设置，其他情况默认打开路径和下一步
-        if mainSession.sessionData.currentMode == .review || mainSession.sessionData.currentMode == .practice {
-            newSessionData.showPath = mainSession.sessionData.showPath
-            newSessionData.showAllNextMoves = mainSession.sessionData.showAllNextMoves
-        } else {
-            newSessionData.showPath = mainSession.sessionData.showPath
-            newSessionData.showAllNextMoves = true
-        }
-        newSessionData.showLastMove = mainSession.sessionData.showLastMove
-        newSessionData.showRealGameList = mainSession.sessionData.showRealGameList
-        newSessionData.showRedAttackPoints = mainSession.sessionData.showRedAttackPoints
-        newSessionData.showBlackAttackPoints = mainSession.sessionData.showBlackAttackPoints
-        newSessionData.attackPointsRedPalaceOnly = mainSession.sessionData.attackPointsRedPalaceOnly
-        newSessionData.attackPointsBlackPalaceOnly = mainSession.sessionData.attackPointsBlackPalaceOnly
-        newSessionData.autoExtendGameWhenPlayingBoardFen = mainSession.sessionData.autoExtendGameWhenPlayingBoardFen
-        newSessionData.isCommentEditing = mainSession.sessionData.isCommentEditing
         newSessionData.focusedPracticeGamePath = focusedPath
-        newSessionData.showGameBrowserSidebar = mainSession.sessionData.showGameBrowserSidebar
-        newSessionData.gameBrowserExpandedBookIds = mainSession.sessionData.gameBrowserExpandedBookIds
-        newSessionData.gameBrowserSelectedBookId = mainSession.sessionData.gameBrowserSelectedBookId
-        newSessionData.gameBrowserSelectedGameId = mainSession.sessionData.gameBrowserSelectedGameId
         newSessionData.specificGameId = resolvedGameId
         newSessionData.specificBookId = resolvedBookId
+        // 撤销历史属于旧视图，新视图从空开始（与整体拷贝前的行为一致）
+        newSessionData.gameHistory = nil
+        // 复习/练习模式下保持当前设置，其他情况默认打开下一步
+        if mainSession.sessionData.currentMode != .review && mainSession.sessionData.currentMode != .practice {
+            newSessionData.showAllNextMoves = true
+        }
 
         // 根据 filters 类型设置 allowAddingNewMoves
         if filters.isEmpty {
