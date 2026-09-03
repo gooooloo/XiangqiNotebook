@@ -271,6 +271,9 @@ final class DatabaseView {
         database.isDirty
     }
 
+    /// 启动时存档存在但加载失败（内存里是空库），见 Database.loadFailedAtStartup
+    var loadFailedAtStartup: Bool { database.loadFailedAtStartup }
+
     var isEngineScoreDirty: Bool {
         database.isEngineScoreDirty
     }

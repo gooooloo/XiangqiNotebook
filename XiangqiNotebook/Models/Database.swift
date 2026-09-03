@@ -91,6 +91,8 @@ internal class Database: ObservableObject {
     func markClean() {
         runOnMain {
             self.isDirty = false
+            // 用户确认过并成功写盘后，内存数据就是新的存档基线，不必再逢保存都要求确认
+            self.loadFailedAtStartup = false
             print("✅ Database: 数据已标记为干净")
         }
     }
@@ -171,19 +173,21 @@ internal class Database: ObservableObject {
         }
     }
 
-    /// 从默认位置重新加载数据库
+    /// 从默认位置重新加载数据库。
+    /// 主线程同步生效：调用方紧接着就会弹「数据已更新」、置干净标记，不能让替换落在下一个 runloop
     func reload() throws {
         guard let newData = DatabaseStorage.loadDatabaseFromDefault() else {
             throw DatabaseError.loadFailed
         }
 
-        DispatchQueue.main.async {
+        let apply = {
             self.databaseData = newData
             self.isDirty = false
             // 实战反查索引基于旧数据构建，必须随数据整体替换而失效
             self.invalidateRealGamesIndex()
             print("✅ Database: 数据已重新加载")
         }
+        if Thread.isMainThread { apply() } else { DispatchQueue.main.sync(execute: apply) }
     }
 
     // MARK: - Engine Score Operations
@@ -257,15 +261,25 @@ internal class Database: ObservableObject {
     }
 
     /// 保存所有脏的引擎分数文件
+    /// 保存所有脏的引擎分数文件。
+    /// 远端文件尚未从 iCloud 下载完成的 key 本次跳过并保持脏（否则整文件覆盖会抹掉另一台设备的分数），
+    /// 已开始下载，下次保存再合并写入；其他错误照常抛出
     func saveEngineScores() throws {
+        var skipped: Set<String> = []
         for key in dirtyEngineKeys {
             guard let data = engineScores[key] else { continue }
-            try EngineScoreStorage.saveEngineScore(data, engineKey: key)
+            do {
+                try EngineScoreStorage.saveEngineScore(data, engineKey: key)
+            } catch EngineScoreStorageError.remoteNotDownloaded {
+                print("⚠️ Database: 引擎分数文件 \(key) 尚未从 iCloud 下载完成，本次跳过保存")
+                skipped.insert(key)
+            }
         }
-        if !dirtyEngineKeys.isEmpty {
-            print("✅ Database: 保存了 \(dirtyEngineKeys.count) 个引擎分数文件")
+        let savedCount = dirtyEngineKeys.count - skipped.count
+        if savedCount > 0 {
+            print("✅ Database: 保存了 \(savedCount) 个引擎分数文件")
         }
-        dirtyEngineKeys.removeAll()
+        dirtyEngineKeys = skipped
     }
 
     /// 清除引擎分数脏标记
