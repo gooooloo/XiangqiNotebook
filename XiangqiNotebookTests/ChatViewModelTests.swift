@@ -42,6 +42,69 @@ struct ChatViewModelTests {
         }
     }
 
+    /// 每次 send 先卡在闸门上，测试决定何时放行；放行时若 Task 已被取消，
+    /// 像 URLSession 一样以 cancelled 收场
+    private final class GatedClient: LLMSending, @unchecked Sendable {
+        private var script: [Result<LLMResponse, LLMError>]
+        private(set) var sentMessageLog: [[LLMMessage]] = []
+        private var waiters: [() -> Void] = []
+        var waitingCount: Int { waiters.count }
+
+        init(_ script: [Result<LLMResponse, LLMError>]) {
+            self.script = script
+        }
+
+        func send(messages: [LLMMessage], tools: [[String: Any]],
+                  onReasoning: @escaping (String) -> Void) async throws -> LLMResponse {
+            sentMessageLog.append(messages)
+            await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+                waiters.append { c.resume() }
+            }
+            if Task.isCancelled { throw URLError(.cancelled) }
+            guard !script.isEmpty else { throw LLMError.serverError(599) }
+            return try script.removeFirst().get()
+        }
+
+        /// 放行最早等待的一次 send
+        func releaseOne() {
+            guard !waiters.isEmpty else { return }
+            waiters.removeFirst()()
+        }
+    }
+
+    /// 工具宿主：局面快照走真 ViewModel，引擎分析卡在闸门上等测试放行
+    @MainActor
+    private final class GatedHost: AnalysisToolHost {
+        private let viewModel: ViewModel
+        private var release: (() -> Void)?
+        var isWaiting: Bool { release != nil }
+
+        init(viewModel: ViewModel) { self.viewModel = viewModel }
+
+        func currentPositionSnapshot() -> PositionSnapshot { viewModel.currentPositionSnapshot() }
+
+        func analyzePosition(fen: String, multiPV: Int, movetime: Int) async throws -> EngineAnalysis {
+            await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+                release = { c.resume() }
+            }
+            return EngineAnalysis(lines: [], engine: "test", movetimeMs: movetime, fromCache: false)
+        }
+
+        func releaseAnalysis() {
+            let r = release
+            release = nil
+            r?()
+        }
+    }
+
+    /// 等到某个条件成立（最多约 2 秒），用于等后台 Task 走到闸门
+    private func waitUntil(_ condition: @autoclosure () -> Bool) async {
+        for _ in 0..<200 {
+            if condition() { return }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+    }
+
     private static let startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r - - 1 1"
 
     private func makeViewModel() -> ViewModel {
@@ -392,6 +455,86 @@ struct ChatViewModelTests {
         let retryRound = client.sentMessageLog[2]
         #expect(!retryRound.contains { !$0.toolCalls.isEmpty }, "重试请求里不该残留工具调用")
         #expect(!retryRound.contains { $0.role == .tool }, "重试请求里不该残留工具结果")
+    }
+
+    // MARK: - 取消
+
+    @Test func testCancel_duringRequestShowsNoErrorAndLeavesHistoryClean() async {
+        let viewModel = makeViewModel()
+        // 被取消的那次 send 以 cancelled 收场、不消耗脚本，脚本里只放追问的回答
+        let client = GatedClient([text("好。")])
+        let chat = ChatViewModel(viewModel: viewModel, config: configured, clientFactory: { _ in client })
+
+        chat.input = "第一问"
+        chat.send()
+        await waitUntil(client.waitingCount == 1)
+        chat.cancel()
+        #expect(!chat.isRunning)
+
+        // 请求此刻才以 cancelled 收场：不能弹「连不上服务」
+        client.releaseOne()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(chat.errorText == nil)
+        #expect(chat.messages.map(\.kind) == [.user])
+
+        // 追问时历史里只该有两条 user，没有半截 assistant / 孤儿 tool
+        chat.input = "第二问"
+        chat.send()
+        await waitUntil(client.waitingCount == 1)
+        client.releaseOne()
+        await waitUntilIdle(chat)
+        #expect(client.sentMessageLog.last?.map(\.role) == [.system, .user, .user])
+        #expect(chat.messages.last?.text == "好。")
+    }
+
+    @Test func testCancel_lingeringOldTaskDoesNotClobberNewRun() async {
+        let viewModel = makeViewModel()
+        let client = GatedClient([text("新轮回答")])
+        let chat = ChatViewModel(viewModel: viewModel, config: configured, clientFactory: { _ in client })
+
+        chat.input = "第一问"
+        chat.send()
+        await waitUntil(client.waitingCount == 1)
+        chat.cancel()
+
+        // 用户立刻发起新一轮；旧 Task 还卡在请求里没死透
+        chat.input = "第二问"
+        chat.send()
+        #expect(chat.isRunning)
+        await waitUntil(client.waitingCount == 2)
+
+        // 旧 Task 此刻才收尾：不得把新一轮的 isRunning 清掉
+        client.releaseOne()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(chat.isRunning, "旧 Task 的收尾覆盖了新一轮的运行状态")
+
+        client.releaseOne()
+        await waitUntilIdle(chat)
+        #expect(chat.messages.last?.text == "新轮回答")
+        #expect(chat.messages.map(\.kind) == [.user, .user, .assistant])
+    }
+
+    @Test func testCancel_duringToolExecutionDoesNotLeaveOrphanToolResult() async {
+        let viewModel = makeViewModel()
+        let host = GatedHost(viewModel: viewModel)
+        let client = ScriptedClient([toolCall("evaluate"), text("好。")])
+        let chat = ChatViewModel(viewModel: viewModel, config: configured,
+                                 clientFactory: { _ in client }, toolHost: host)
+
+        chat.input = "第一问"
+        chat.send()
+        await waitUntil(host.isWaiting)
+        chat.cancel()
+
+        // 引擎此刻才返回：结果不能再追加进已回滚的历史
+        host.releaseAnalysis()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        chat.input = "第二问"
+        chat.send()
+        await waitUntilIdle(chat)
+        let roles = client.sentMessageLog.last?.map(\.role)
+        #expect(roles == [.system, .user, .user], "追问请求里残留了取消前的工具往返：\(String(describing: roles))")
     }
 
     @Test func testSend_withoutConfigurationReportsAndDoesNotCallClient() async {

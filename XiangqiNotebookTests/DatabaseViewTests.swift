@@ -484,4 +484,19 @@ struct DatabaseViewTests {
         #expect(games.count == 1)
         #expect(games.first?.id == game.id)
     }
+
+    // MARK: - id 发号
+
+    @Test func testNextId_contiguousKeysUseCountPlusOne() {
+        #expect(DatabaseView.nextId(in: [1: "a", 2: "b", 3: "c"]) == 4)
+        #expect(DatabaseView.nextId(in: [Int: String]()) == 1)
+    }
+
+    @Test func testNextId_withHoleNeverReusesExistingKey() {
+        // 有空洞时 count + 1 == 4 已被占用，退回 max + 1，不能覆盖既有对象
+        let holey = [1: "a", 2: "b", 4: "d"]
+        let id = DatabaseView.nextId(in: holey)
+        #expect(holey[id] == nil)
+        #expect(id == 5)
+    }
 }

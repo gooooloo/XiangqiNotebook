@@ -335,31 +335,30 @@ internal class Database: ObservableObject {
 
     // MARK: - Backup/Restore
 
-    /// 从备份恢复数据库（用于用户手动恢复备份）
-    /// - Parameter database: 要恢复的数据库数据
-    func restoreFromBackup(_ database: DatabaseData) {
+    /// 从备份 / 崩溃恢复快照恢复数据库。
+    ///
+    /// 恢复后的 dataVersion 必须严格高于备份本身、当前内存数据与存档文件三者：
+    /// 否则恢复一份旧备份再保存，写出的版本号会低于其他设备手里的版本，
+    /// 它们的 reloadFromRemote 因「远程更旧」而忽略这次恢复，下次保存又把恢复结果覆盖回去。
+    /// - Parameters:
+    ///   - database: 要恢复的数据
+    ///   - remoteVersion: 当前存档文件的版本号（调用方读取；读不到传 nil）
+    func restoreFromBackup(_ database: DatabaseData, remoteVersion: Int? = nil) {
         // 必须在主线程同步执行，确保数据立即更新
         // 注意：fenToId/moveToId 索引已在 DatabaseData.init(from:) 中自动重建，
         // 但实战反查索引（realGamesByFenId）属于 Database 层，需在此显式失效
-        if Thread.isMainThread {
+        let apply = {
             let oldVersion = self.databaseData.dataVersion
+            let backupVersion = database.dataVersion
+            database.dataVersion = max(backupVersion, oldVersion, remoteVersion ?? 0) + 1
 
             self.objectWillChange.send()  // 手动触发通知
             self.databaseData = database
             self.isDirty = true  // 标记为脏，需要保存
             self.invalidateRealGamesIndex()
-            print("✅ Database: 数据已从备份恢复 (版本 \(oldVersion) → \(database.dataVersion))")
-        } else {
-            DispatchQueue.main.sync {
-                let oldVersion = self.databaseData.dataVersion
-
-                self.objectWillChange.send()  // 手动触发通知
-                self.databaseData = database
-                self.isDirty = true
-                self.invalidateRealGamesIndex()
-                print("✅ Database: 数据已从备份恢复 (版本 \(oldVersion) → \(database.dataVersion))")
-            }
+            print("✅ Database: 数据已从备份恢复 (版本 \(oldVersion) → \(database.dataVersion)，备份版本 \(backupVersion)，存档版本 \(remoteVersion.map(String.init) ?? "未知"))")
         }
+        if Thread.isMainThread { apply() } else { DispatchQueue.main.sync(execute: apply) }
     }
 
 }

@@ -13,6 +13,34 @@ class PikafishService: @unchecked Sendable {
     private var outputBuffer = ""
     private var isReady = false
 
+    // MARK: - Serialization
+
+    /// 引擎只有一条 UCI 管道，同一时刻只能跑一个搜索。评估队列、快速应招、远程 /eval
+    /// 三个入口并发调用时在这里排队：后到者等前一个结束再发命令。否则两个
+    /// waitForResponse 会在两条线程上抢读同一管道、无锁拼 outputBuffer，
+    /// 后到者开头的 stop 还会偷走前者的 bestmove。
+    /// `tail` 用锁保护——调用方目前都在主线程，但服务本身不应依赖这一点
+    private let serialLock = NSLock()
+    private var tail: Task<Void, Never>?
+
+    private func serialized<T>(_ operation: @escaping () async throws -> T) async throws -> T {
+        serialLock.lock()
+        let previous = tail
+        let task = Task<T, Error> {
+            await previous?.value
+            return try await operation()
+        }
+        tail = Task { _ = try? await task.value }
+        serialLock.unlock()
+        return try await task.value
+    }
+
+    /// 引擎进程若已退出（崩溃 / NNUE 校验失败自行 exit），再向管道写入会收到 SIGPIPE，
+    /// 默认动作是杀掉整个 app。进程级只需忽略一次；写入失败由 sendCommand 自行吞掉
+    private static let ignoreSIGPIPE: Void = {
+        signal(SIGPIPE, SIG_IGN)
+    }()
+
 
     /// 引擎版本
     static let engineVersion = "Pikafish_dev-20260213-391d491a"
@@ -75,6 +103,7 @@ class PikafishService: @unchecked Sendable {
     /// 进程引用存在但已死（引擎崩溃/上次启动失败残留）时清理后重新启动，
     /// 否则 evaluatePosition 的重启路径会拿着死管道反复超时，引擎永久失效
     func start() async throws {
+        _ = Self.ignoreSIGPIPE
         if let existing = process {
             if existing.isRunning { return }
             print("[Pikafish] 检测到引擎进程已退出，清理并重新启动")
@@ -228,6 +257,10 @@ class PikafishService: @unchecked Sendable {
     /// MultiPV 多变着分析：返回前 N 条候选线路及各自分数与主变。
     /// 只读分析，不涉及数据库；供远程操控 /eval 端点使用
     func analyzePosition(fen: String, multiPV: Int, movetime: Int) async throws -> [PVLine] {
+        try await serialized { try await self.analyzePositionUnserialized(fen: fen, multiPV: multiPV, movetime: movetime) }
+    }
+
+    private func analyzePositionUnserialized(fen: String, multiPV: Int, movetime: Int) async throws -> [PVLine] {
         if process == nil || !(process?.isRunning ?? false) {
             try await start()
         }
@@ -269,7 +302,10 @@ class PikafishService: @unchecked Sendable {
     }
 
     func evaluatePosition(fen: String, movetime: Int? = nil) async throws -> EvaluationResult? {
+        try await serialized { try await self.evaluatePositionUnserialized(fen: fen, movetime: movetime) }
+    }
 
+    private func evaluatePositionUnserialized(fen: String, movetime: Int?) async throws -> EvaluationResult? {
         // Start engine if needed
         if process == nil || !(process?.isRunning ?? false) {
             try await start()
@@ -349,9 +385,15 @@ class PikafishService: @unchecked Sendable {
     // MARK: - UCI Communication
 
     private func sendCommand(_ command: String) {
-        guard let inputPipe = inputPipe else { return }
+        // 进程已死时管道写端对面无人读，直接丢弃命令；write(contentsOf:) 出错（EPIPE）
+        // 以 throws 形式返回而不是抛 ObjC 异常，配合忽略 SIGPIPE 才不会带崩 app
+        guard let inputPipe = inputPipe, process?.isRunning == true else { return }
         let data = (command + "\n").data(using: .utf8)!
-        inputPipe.fileHandleForWriting.write(data)
+        do {
+            try inputPipe.fileHandleForWriting.write(contentsOf: data)
+        } catch {
+            print("[Pikafish] 写入引擎管道失败：\(error)")
+        }
     }
 
     private func waitForResponse(containing keyword: String, timeout: TimeInterval) async throws -> String {
