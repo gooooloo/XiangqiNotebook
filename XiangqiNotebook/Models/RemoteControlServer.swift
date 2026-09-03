@@ -52,6 +52,8 @@ class RemoteControlServer {
         guard let url = Self.tokenFileURL() else { return }
         do {
             try authToken.write(to: url, atomically: true, encoding: .utf8)
+            // 仅本用户可读（默认 0644）；与 claude-bridge 写 token 的权限一致
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             print("[RemoteControlServer] 鉴权 token 已写入 \(url.path)")
         } catch {
             print("[RemoteControlServer] token 文件写入失败：\(error)")
