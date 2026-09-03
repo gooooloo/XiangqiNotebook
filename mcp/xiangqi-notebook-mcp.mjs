@@ -24,7 +24,11 @@ for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "AL
   delete process.env[key];
 }
 
-const BASE_URL = "http://localhost:9214";
+// 必须写 [::1]：RemoteControlServer 只在 IPv6 可达，走 127.0.0.1 不仅自身挂起，
+// 还会把监听队列打进假死态（见 CLAUDE.md）。不用 localhost 碰解析顺序的运气
+const BASE_URL = "http://[::1]:9214";
+// 引擎分析最长 60 秒 + 余量；服务假死时让工具调用报错而不是永久挂住
+const REQUEST_TIMEOUT_MS = 90_000;
 // App Sandbox 容器内路径；token 每次 app 启动都会变，所以每个请求都重新读
 const TOKEN_PATH = join(
   homedir(),
@@ -55,10 +59,14 @@ async function api(path, { method = "GET", body, binary = false } = {}) {
       method,
       headers: { "X-RemoteControl-Token": token },
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-  } catch {
+  } catch (err) {
+    if (err?.name === "TimeoutError") {
+      throw new Error(`象棋笔记本（${BASE_URL}）${REQUEST_TIMEOUT_MS / 1000} 秒未响应。`);
+    }
     throw new Error(
-      "连不上象棋笔记本（localhost:9214）。请确认 app 正在运行。",
+      `连不上象棋笔记本（${BASE_URL}）。请确认 app 正在运行。`,
     );
   }
   if (binary) {
