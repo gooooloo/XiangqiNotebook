@@ -218,3 +218,26 @@
 4. **多窗口串台**（1.8）、路径编辑器 Binding（1.9）。
 5. 一行级别的 P2：快捷键唯一性断言、`ensureFenId` 用 `max + 1`、MCP 脚本改 `[::1]`、token 文件 0600、`getCurrentTurn` 下标守卫、`willTerminate` 清理改同步。
 6. 其余 P2 与卫生项视进度处理。
+
+---
+
+## 九、修复进度（2026-09-03）
+
+**PR #193（`code-review-fixes-3`）**：P0/P1 全部 9 项（§1.1–1.9）+ 一行级 P2（快捷键唯一性断言、发号防覆盖、MCP `[::1]` + 超时、token 0600、`getCurrentTurn` 守卫、`willTerminate` 同步清理）。
+
+**PR `code-review-fixes-4`**：
+- §3.1：iCloud 冲突输方备份 + 提示；分数文件 iCloud 占位跳过；课程导入起始局面一致性 + 时间戳 clamp；叫停分析不入缓存；`loadFailedAtStartup` 强制确认 + 备份；写盘前二次核对版本；`reload` 同步生效；备份/恢复失败弹窗。
+- §3.2：iOS NNUE 缺失报错、`releaseResources` 真正缩减内存；Hash 按内存取值；签名身份为空跳过；`willTerminate` 死代码已在 #193 修；可读性小项。
+- §3.3：RemoteControlServer 只绑 `::1`、请求体 1MB 上限、头部到齐即鉴权、DEBUG 接口异步、`escapeJSON` 删除、`/eval` 补 `mate`（均已在 Debug app 实测）；claude-bridge 飞行槽释放时机、`--tools ""` 白名单（实测 MCP 工具不受影响）。
+- §3.4：`SessionData.copy()` + setFilters 整体拷贝；View 层常量/UserDefaults 收口到 ViewModel；攻击点位缓存。
+- §3.5：三处工具脚本错误处理。
+- 五：CLAUDE.md 文件组织与 IPv6 说明更新；mcp 个人路径去除。
+
+**仍开放（需要取舍或改动面较大）**：
+- `/eval`、`/apply` 与 `AnalysisToolbox.execute` 合并（对外契约变更，需同步 MCP 脚本与文档）。
+- 两份 Pikafish 引擎并存；`EvaluationResult.depth` 类型统一；`elapsedSeconds` 走动显示。
+- `Session.currentFenObject` 的 `fatalError`；`ViewModel+AnalysisToolHost` 直接用 `Database.shared`。
+- 视图重复消除；`DesignTokens` 深色适配；pikafish 子进程 `--options runtime`（仅 Developer ID 公证需要）。
+- 测试缺口（`stepBackward`、`handleKeyDown` 分发、save→load round-trip、`BoardViewModel`）。
+- 仓库瘦身：`git for-each-ref refs/codex` 下两个 ref 独占约 98 MiB，删除后 `git gc --prune=now`（本地操作，请自行执行）。
+- `.githooks/pre-push` 未包 `arch -arm64`；`docs/` 旧评审文档归档；`claude.yml` 触发面。
