@@ -223,7 +223,7 @@ class EvaluationQueue: ObservableObject {
             parts.append("耗时\(String(format: "%.1f", Double(ms) / 1000.0))s")
         }
         if let h = result.hashfull {
-            parts.append("Hash\(h * 100 / 1000)%")
+            parts.append("Hash\(h / 10)%")  // hashfull 是千分比
         }
         if result.timedOut {
             parts.append("超时")

@@ -97,6 +97,13 @@ class PikafishService: @unchecked Sendable {
         return Int(parts[scoreIndex + 2])
     }
 
+    /// 置换表大小：物理内存的 1/8，钳在 256MB～4GB。
+    /// 固定 4GB 在 8GB 内存的 Mac 上深评一局就会把系统压进 swap
+    static func hashSizeMB(physicalMemoryBytes: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Int {
+        let eighth = Int(physicalMemoryBytes / (1024 * 1024)) / 8
+        return min(4096, max(256, eighth))
+    }
+
     // MARK: - Engine Lifecycle
 
     /// 启动引擎进程
@@ -151,7 +158,7 @@ class PikafishService: @unchecked Sendable {
             // 使用多线程加速搜索
             let threadCount = max(1, ProcessInfo.processInfo.activeProcessorCount / 2)
             sendCommand("setoption name Threads value \(threadCount)")
-            sendCommand("setoption name Hash value 4096")
+            sendCommand("setoption name Hash value \(Self.hashSizeMB())")
 
             sendCommand("isready")
             _ = try await waitForResponse(containing: "readyok", timeout: 5.0)
