@@ -21,6 +21,10 @@ struct XiangqiNotebookApp: App {
         }
         #if os(macOS)
         .commands {
+            // 主窗口只能有一个：每个 MacContentView 各建一套 ViewModel 与按键监控，
+            // 开第二个窗口会让键盘事件被先安装的监控抢走、两套 ViewModel 互相覆盖同一份 session 文件。
+            // 参考棋盘 / 搜索结果 / 问棋等辅助窗口由各自的 WindowController 管理，不受影响
+            CommandGroup(replacing: .newItem) {}
             MacMenuCommands()
 
             // 在帮助菜单中添加隐私政策链接
