@@ -95,11 +95,13 @@ final class ChatViewModel: ObservableObject {
     /// 重试用：记住上一次没成功的提问
     private var lastFailedInput: String?
 
+    /// - Parameter toolHost: 工具执行宿主，默认就是 viewModel；测试注入以控制工具耗时
     init(viewModel: ViewModel,
          config: AIConfig = .load(),
-         clientFactory: @escaping (AIConfig) -> LLMSending = { LLMClientFactory.make(config: $0) }) {
+         clientFactory: @escaping (AIConfig) -> LLMSending = { LLMClientFactory.make(config: $0) },
+         toolHost: AnalysisToolHost? = nil) {
         self.viewModel = viewModel
-        self.toolbox = AnalysisToolbox(host: viewModel)
+        self.toolbox = AnalysisToolbox(host: toolHost ?? viewModel)
         self.config = config
         self.clientFactory = clientFactory
     }
@@ -158,12 +160,15 @@ final class ChatViewModel: ObservableObject {
         isRunning = true
         runningTask = Task { [weak self] in
             await self?.runToolLoop(question: question)
-            self?.isRunning = false
-            self?.clearProgress()
-            self?.runningTask = nil
             // 本轮问棋算出的引擎分析统一在这里落盘。放在收尾处而不是每次分析后，
             // 理由见 flushAnalysisCache。取消也会走到这里——已经算出来的结果照样值得留下
             self?.viewModel?.flushAnalysisCache()
+            // 被 cancel() 取消的 Task 可能在等引擎时又活了几秒才走到这里，
+            // 此时用户或许已经发起新一轮：状态归 cancel() 与新 Task 管，旧 Task 不得再碰
+            if Task.isCancelled { return }
+            self?.isRunning = false
+            self?.clearProgress()
+            self?.runningTask = nil
         }
     }
 
@@ -214,6 +219,9 @@ final class ChatViewModel: ObservableObject {
                         Task { @MainActor in self?.handleRemoteToolEvent(event) }
                     })
             } catch {
+                // 用户点了停止：URLSession 以 cancelled 错误收场，cancel() 已经回滚过历史，
+                // 这里既不能再报「连不上服务」也不能重复回滚
+                if Task.isCancelled { return }
                 lastFailedInput = question
                 rollbackToLastUserMessage()
                 setError(error)
@@ -241,6 +249,9 @@ final class ChatViewModel: ObservableObject {
                 progressText = title
 
                 let result = await toolbox.execute(toolName: call.name, argumentsJSON: call.argumentsJSON)
+                // 等引擎的这几秒里用户可能点了停止：cancel() 已把 assistant 的工具请求回滚掉，
+                // 这条结果再追加进去就成了没有配对 tool_call 的孤儿，下一轮请求会被服务端拒绝
+                if Task.isCancelled { return }
                 wireMessages.append(.toolResult(callId: call.id, content: result))
                 traces.append(ToolTrace(
                     title: title,
