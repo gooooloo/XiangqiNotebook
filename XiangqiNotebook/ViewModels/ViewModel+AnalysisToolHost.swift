@@ -75,7 +75,8 @@ extension ViewModel: AnalysisToolHost {
         // 只缓存笔记本里有的局面：探索性变着（apply_moves 走出来的）不入库，
         // 本来也不会重复问。这样缓存规模天然被笔记本封顶，不必做淘汰。
         // 这里只置脏不落盘，由 flushAnalysisCache 在一轮问棋结束时统一存
-        if let fenId, !lines.isEmpty {
+        // 被用户中途叫停的分析只跑了零点几秒，入缓存会被下次问棋当作足额结论秒回
+        if let fenId, !lines.isEmpty, !remoteAnalyzeInterrupted {
             Database.shared.setEngineAnalysis(
                 fenId: fenId, engineKey: analysisCacheKey,
                 analysis: CachedAnalysis(multiPV: multiPV, movetimeMs: movetime,
