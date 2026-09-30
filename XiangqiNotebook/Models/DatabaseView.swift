@@ -49,12 +49,19 @@ final class DatabaseView {
         return fenIdFilter(fenId)
     }
 
+    /// 新对象的 id。目前从不物理删除局面/着法，id 连续，`count + 1` 即可且 O(1)；
+    /// 一旦出现空洞（历史数据、外部写入），`count + 1` 会静默覆盖既有对象，此时退回 `max + 1`
+    static func nextId<V>(in objects: [Int: V]) -> Int {
+        let candidate = objects.count + 1
+        return objects[candidate] == nil ? candidate : (objects.keys.max() ?? 0) + 1
+    }
+
     /// 获取或创建 fenId（如果 fen 不存在则创建新的 FenObject）
     func ensureFenId(for fen: String) -> Int {
         if let fenId = getIdForFen(fen) {
             return fenId
         }
-        let newId = database.databaseData.fenObjects2.count + 1
+        let newId = Self.nextId(in: database.databaseData.fenObjects2)
         let fenObject = FenObject(fen: fen, fenId: newId)
         database.databaseData.fenObjects2[newId] = fenObject
         database.databaseData.fenToId[fen] = newId
@@ -120,7 +127,7 @@ final class DatabaseView {
 
         // Create new move
         let newMove = Move(sourceFenId: source, targetFenId: target)
-        let newMoveId = database.databaseData.moveObjects.count + 1
+        let newMoveId = Self.nextId(in: database.databaseData.moveObjects)
         database.databaseData.moveObjects[newMoveId] = newMove
         database.databaseData.moveToId[[source, target]] = newMoveId
         markDirty()
@@ -309,8 +316,9 @@ final class DatabaseView {
     /// 从备份恢复数据库
     /// - Parameter databaseData: 要恢复的数据库数据
     /// - Note: 这是对底层 Database 的委托调用，会影响所有 DatabaseView 实例
-    func restoreFromBackup(_ databaseData: DatabaseData) {
-        database.restoreFromBackup(databaseData)
+    /// 见 Database.restoreFromBackup；remoteVersion 为当前存档文件版本号，用于抬高恢复后的版本
+    func restoreFromBackup(_ databaseData: DatabaseData, remoteVersion: Int? = nil) {
+        database.restoreFromBackup(databaseData, remoteVersion: remoteVersion)
     }
 
     /// 获取数据库数据用于备份操作

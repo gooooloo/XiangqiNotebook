@@ -73,9 +73,11 @@ struct PathGroupView: View {
                 HStack {
                     Text("路径 \(pathIndex + 1):")
                     PathConfigView(
+                        // 按下标绑定：删除末尾路径后 SwiftUI 可能对旧行再求一次值，下标须防越界
                         pathConfig: Binding(
-                            get: { pathGroup.paths[pathIndex] },
+                            get: { pathIndex < pathGroup.paths.count ? pathGroup.paths[pathIndex] : PathConfig(points: []) },
                             set: { newValue in
+                                guard pathIndex < pathGroup.paths.count else { return }
                                 var newPaths = pathGroup.paths
                                 newPaths[pathIndex] = newValue
                                 pathGroup = PathGroup(
@@ -197,9 +199,11 @@ struct MarkPathView: View {
                     VStack(spacing: 8) {
                         ForEach(pathGroups.indices, id: \.self) { index in
                             PathGroupView(
+                                // 按下标绑定：删除末尾组后 SwiftUI 可能对旧行再求一次值，下标须防越界
                                 pathGroup: Binding(
-                                    get: { pathGroups[index] },
+                                    get: { index < pathGroups.count ? pathGroups[index] : PathGroup(paths: []) },
                                     set: { newValue in
+                                        guard index < pathGroups.count else { return }
                                         pathGroups[index] = newValue
                                     }
                                 ),

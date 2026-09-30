@@ -269,7 +269,9 @@ class ViewModel: ObservableObject {
             object: nil, queue: .main
         ) { [weak self] _ in
             DatabaseStorage.clearRecoverySnapshot()
-            Task { @MainActor [weak self] in
+            // 必须同步执行：applicationWillTerminate 返回后 AppKit 直接 exit()，
+            // 主线程不会再转一圈，这里再开 Task 就永远跑不到
+            MainActor.assumeIsolated {
                 self?.evaluationQueue?.cancelAll()
                 self?.pikafishService?.stop()
             }
@@ -369,24 +371,33 @@ class ViewModel: ObservableObject {
         lastSnapshotMutationCount = -1
     }
 
-    /// 启动时检查崩溃恢复快照：若上次会话因崩溃/被杀留下了未保存的更新，提示恢复
+    /// 启动时检查崩溃恢复快照：若上次会话因崩溃/被杀留下了未保存的更新，提示恢复。
+    ///
+    /// 只要快照存在就提示，不按版本号自动丢弃：快照版本 ≤ 存档版本并不代表它过时——
+    /// 另一台设备在本机崩溃后保存过一次，存档版本就会追平甚至超过快照，
+    /// 此时本机崩溃前的修改只剩这一份快照，静默清掉就是无提示的数据丢失。
+    /// 由用户结合写入时间与两个版本号自行判断。
     private func checkForCrashRecovery() {
         guard let snapshotVersion = DatabaseStorage.loadRecoverySnapshotVersion() else { return }
         let canonicalVersion = session.databaseView.dataVersion
-        // 快照版本不高于已保存数据 → 旧快照，静默清理
-        guard snapshotVersion > canonicalVersion else {
-            DatabaseStorage.clearRecoverySnapshot()
-            return
+        let writtenAt = DatabaseStorage.loadRecoverySnapshotDate()
+            .map { Self.recoveryDateFormatter.string(from: $0) } ?? "未知时间"
+        var message = "上次可能因崩溃或被系统关闭，有一份未保存的修改未能写入存档"
+            + "（快照写于 \(writtenAt)，快照版本 \(snapshotVersion)，当前存档版本 \(canonicalVersion)）。是否恢复？"
+        if snapshotVersion <= canonicalVersion {
+            message += "\n\n注意：存档在快照之后又被保存过（可能来自其他设备）。恢复会以快照内容替换当前数据，那次保存的改动需要之后再合并。"
         }
+        message += "\n\n恢复后请记得手动保存（按 w 或保存按钮）。"
         platformService.showConfirmAlert(
             title: "检测到未保存的修改",
-            message: "上次可能因崩溃或被系统关闭，有一份未保存的修改未能写入存档（恢复版本 \(snapshotVersion)，当前存档版本 \(canonicalVersion)）。是否恢复？\n\n恢复后请记得手动保存（按 w 或保存按钮）。",
+            message: message,
             confirmTitle: "恢复",
             cancelTitle: "丢弃",
             completion: { [weak self] restore in
                 guard let self = self else { return }
                 if restore, let snapshot = DatabaseStorage.loadRecoverySnapshot() {
-                    self.session.databaseView.restoreFromBackup(snapshot)
+                    self.session.databaseView.restoreFromBackup(
+                        snapshot, remoteVersion: DatabaseStorage.loadDataVersionFromDefault())
                     self.session.resetGameStateForDatabaseRestore()
                     self.session.objectWillChange.send()
                     // 恢复的数据尚未写入存档，保持 dirty，待用户手动保存
@@ -395,6 +406,12 @@ class ViewModel: ObservableObject {
             }
         )
     }
+
+    private static let recoveryDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
 
     deinit {
         recoveryTimer?.invalidate()
@@ -1586,7 +1603,8 @@ class ViewModel: ObservableObject {
                         print("✅ 成功加载备份文件")
 
                         // 2. 恢复数据库到全局 Database（影响所有窗口，通过 DatabaseView）
-                        self.session.databaseView.restoreFromBackup(database)
+                        self.session.databaseView.restoreFromBackup(
+                            database, remoteVersion: DatabaseStorage.loadDataVersionFromDefault())
                         print("✅ 数据库已恢复")
 
                         continuation.resume(returning: true)
@@ -1867,10 +1885,13 @@ class ViewModel: ObservableObject {
         guard let service = ensurePikafishService() else { throw RemoteAnalyzeError.engineUnavailable }
         return try await service.analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
         #elseif os(iOS)
-        // iOS 侧与「AI 应招」共用同一个内嵌引擎实例，正在应招时不能插队
-        if isEvaluatingIOS { throw RemoteAnalyzeError.engineBusy }
-        return await ensurePikafishServiceIOS()
-            .analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
+        // iOS 侧与「AI 应招」共用同一个内嵌引擎实例；互斥由 service 自己保证
+        do {
+            return try await ensurePikafishServiceIOS()
+                .analyzePosition(fen: fen, multiPV: multiPV, movetime: movetime)
+        } catch PikafishServiceIOS.EngineError.busy {
+            throw RemoteAnalyzeError.engineBusy
+        }
         #else
         throw RemoteAnalyzeError.engineUnavailable
         #endif
@@ -1966,7 +1987,18 @@ class ViewModel: ObservableObject {
         defer { isEvaluatingIOS = false }
 
         let service = ensurePikafishServiceIOS()
-        guard let result = await service.evaluatePosition(fen: fen) else { return }
+        let result: PikafishServiceIOS.EvaluationResult?
+        do {
+            result = try await service.evaluatePosition(fen: fen)
+        } catch {
+            // 只可能是 busy：问棋分析正占着引擎
+            platformService.showWarningAlert(
+                title: "引擎忙碌中",
+                message: "AI 问棋正在分析，请稍后再试。"
+            )
+            return
+        }
+        guard let result else { return }
 
         // 用户思考期间点了取消：结果整个丢弃，不存分也不落子，就当没点过
         guard !aiRespondCancelled else { return }

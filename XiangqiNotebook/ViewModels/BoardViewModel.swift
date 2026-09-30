@@ -119,8 +119,9 @@ class BoardViewModel: Equatable {
     }
     
     public func getCurrentTurn() -> String {
+        // 外部来源（/apply 等）的 FEN 可能没有走子方字段，缺省按红方，不能下标越界
         let components = fen.split(separator: " ")
-        return String(components[1])
+        return components.count > 1 ? String(components[1]) : "r"
     }
 
     public func isPieceBelongToCurrentPlayer(_ piece: String) -> Bool {

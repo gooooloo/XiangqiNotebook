@@ -10,7 +10,18 @@ import Foundation
 /// - Threads/Hash 远低于 Mac 版
 /// - 固定 3 秒 movetime，不做深度 34 的完整搜索
 /// 因此评分单独存一个 engineKey，不与 Mac 的 `_d34` 共享，避免不同质量的数据互相覆盖。
+///
+/// 并发：底层只有一个 `Stockfish::Engine`，搜索中再次 `go` 会先阻塞主线程等上一轮结束，
+/// 且 bestmove 回调被覆盖后会让上一轮的 continuation 永不恢复、下一轮的被 resume 两次而 trap。
+/// 因此互斥必须在这里做（`isBusy`），忙碌时直接抛 `busy`，不依赖各调用方互相记得对方的状态。
+/// 所有入口都在主线程调用（`@MainActor`），`isBusy` 的读写因此天然串行。
+@MainActor
 final class PikafishServiceIOS {
+
+    enum EngineError: Error {
+        /// 引擎正被另一个调用方占用（AI 应招 / 问棋分析互斥）
+        case busy
+    }
 
     /// 引擎版本，须与 Mac 版 PikafishService.engineVersion 保持一致
     static let engineVersion = "Pikafish_dev-20260213-391d491a"
@@ -32,6 +43,8 @@ final class PikafishServiceIOS {
 
     private let bridge = PikafishEngineBridge()
     private var isConfigured = false
+    /// 是否有一次搜索在飞。见类型注释
+    private(set) var isBusy = false
 
     private func configureIfNeeded() {
         guard !isConfigured else { return }
@@ -46,8 +59,11 @@ final class PikafishServiceIOS {
         bridge.setHashMB(64)
     }
 
-    /// 评估局面，movetime 固定 3 秒（与 Self.movetimeMs 一致）
-    func evaluatePosition(fen: String) async -> EvaluationResult? {
+    /// 评估局面，movetime 固定 3 秒（与 Self.movetimeMs 一致）。引擎忙碌时抛 `EngineError.busy`
+    func evaluatePosition(fen: String) async throws -> EvaluationResult? {
+        guard !isBusy else { throw EngineError.busy }
+        isBusy = true
+        defer { isBusy = false }
         configureIfNeeded()
 
         let uciFen = PikafishFenConversion.convertFenToUCI(fen)
@@ -73,9 +89,11 @@ final class PikafishServiceIOS {
     /// MultiPV 多变着分析：返回前 N 条候选线路及各自分数与主变。
     /// 只读分析，不涉及数据库；供 app 内 AI 问棋的 evaluate 工具使用。
     ///
-    /// 与 `evaluatePosition` 共用同一个引擎实例，调用方须自行保证不并发
-    /// （ViewModel.remoteEngineAnalyze 用 isRemoteAnalyzing / isEvaluatingIOS 互斥）。
-    func analyzePosition(fen: String, multiPV: Int, movetime: Int) async -> [EnginePVLine] {
+    /// 与 `evaluatePosition` 共用同一个引擎实例，忙碌时抛 `EngineError.busy`。
+    func analyzePosition(fen: String, multiPV: Int, movetime: Int) async throws -> [EnginePVLine] {
+        guard !isBusy else { throw EngineError.busy }
+        isBusy = true
+        defer { isBusy = false }
         configureIfNeeded()
 
         let uciFen = PikafishFenConversion.convertFenToUCI(fen)

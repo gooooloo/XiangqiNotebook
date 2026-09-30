@@ -1081,4 +1081,14 @@ struct ViewModelTests {
         // filter 不应因随机而改变
         #expect(vm.currentFilters == filtersBefore)
     }
+
+    // MARK: - 快捷键唯一性
+
+    @Test func testShortcuts_noDuplicateRegistrations() {
+        // 近百处快捷键注册全靠人工保证唯一，历史上已两次出现同键重复（如 `,l`）。
+        // registerShortcuts 会记录被不同操作重复注册的键，这里要求为空
+        let (vm, _) = createViewModel()
+        #expect(vm.actionDefinitions.duplicateShortcutRegistrations.isEmpty,
+                "快捷键重复注册：\(vm.actionDefinitions.duplicateShortcutRegistrations)")
+    }
 }

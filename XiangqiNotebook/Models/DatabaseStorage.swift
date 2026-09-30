@@ -321,6 +321,11 @@ class DatabaseStorage {
         return (try? JSONDecoder().decode(VersionOnly.self, from: data))?.dataVersion
     }
 
+    /// 快照文件的写入时间（提示恢复时给用户看）
+    static func recoverySnapshotDate(at url: URL) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+    }
+
     // 默认路径的便捷封装（生产代码使用）
 
     static func writeRecoverySnapshot(_ database: DatabaseData) {
@@ -340,6 +345,11 @@ class DatabaseStorage {
     static func loadRecoverySnapshotVersion() -> Int? {
         guard let url = recoveryFileURL() else { return nil }
         return recoverySnapshotVersion(at: url)
+    }
+
+    static func loadRecoverySnapshotDate() -> Date? {
+        guard let url = recoveryFileURL() else { return nil }
+        return recoverySnapshotDate(at: url)
     }
 
     static func clearRecoverySnapshot() {

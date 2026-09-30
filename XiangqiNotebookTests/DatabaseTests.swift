@@ -175,8 +175,23 @@ struct DatabaseTests {
 
         db.restoreFromBackup(newData)
 
-        #expect(db.databaseData.dataVersion == 99)
+        // 恢复后的版本必须高于备份自身版本，否则保存后会被其他设备当作旧数据忽略
+        #expect(db.databaseData.dataVersion == 100)
         #expect(db.databaseData.fenObjects2[42]?.fen == "backup_fen")
+    }
+
+    @Test @MainActor func testRestoreFromBackup_VersionExceedsRemoteAndCurrent() {
+        let db = createTestDatabase()
+        db.databaseData.dataVersion = 300
+
+        let oldBackup = DatabaseData()
+        oldBackup.dataVersion = 100
+
+        db.restoreFromBackup(oldBackup, remoteVersion: 500)
+
+        // 取备份、内存、存档三者最大值再 +1
+        #expect(db.databaseData.dataVersion == 501)
+        #expect(db.isDirty == true)
     }
 
     @Test @MainActor func testRestoreFromBackup_MarksDirty() {
