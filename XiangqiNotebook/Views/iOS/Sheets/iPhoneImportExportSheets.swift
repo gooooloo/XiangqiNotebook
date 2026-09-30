@@ -36,8 +36,7 @@ struct iPhoneImportSheet: View {
             resultMessage = "剪贴板为空"
             return
         }
-        let username = UserDefaults.standard.string(forKey: "pgnImportUsername") ?? ""
-        let result = viewModel.importPGNFile(content: content, username: username)
+        let result = viewModel.importPGNFile(content: content, username: viewModel.pgnImportUsername)
         resultMessage = "已导入 \(result.imported) / \(result.totalParsed) 局"
     }
 

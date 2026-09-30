@@ -86,6 +86,23 @@ struct CourseImportServiceTests {
         #expect(databaseView.getGamesInBookUnfiltered(bookId).count == 2)
     }
 
+    @Test func testMismatchedStartFenRejected() {
+        // 棋局只有一个起点，起始局面不同的线路会成为从起点不可达的孤边，必须整体拒绝
+        let (_, databaseView, bookId) = makeCourseDatabase()
+        var lines = sharedPrefixLines
+        lines[1].startFen = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR b - - 0 1"
+        do {
+            _ = try CourseImportService.importCourseGame(
+                bookId: bookId, name: "混合起点", lines: lines, databaseView: databaseView)
+            Issue.record("应当抛出 invalidLine")
+        } catch CourseImportService.ImportError.invalidLine(let index, _) {
+            #expect(index == 2)
+        } catch {
+            Issue.record("错误类型不对：\(error)")
+        }
+        #expect(databaseView.getGamesInBookUnfiltered(bookId).isEmpty, "校验失败时不能落库")
+    }
+
     @Test func testEmptyLinesRejected() {
         let (_, databaseView, bookId) = makeCourseDatabase()
         #expect(throws: CourseImportService.ImportError.emptyLines) {

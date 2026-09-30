@@ -73,6 +73,14 @@ struct EngineScoreDataTests {
 
 #if os(macOS)
 struct PikafishEngineKeyTests {
+    @Test func testHashSizeScalesWithMemory() {
+        let gb: UInt64 = 1 << 30
+        #expect(PikafishService.hashSizeMB(physicalMemoryBytes: 8 * gb) == 1024)
+        #expect(PikafishService.hashSizeMB(physicalMemoryBytes: 16 * gb) == 2048)
+        #expect(PikafishService.hashSizeMB(physicalMemoryBytes: 64 * gb) == 4096, "上限 4GB")
+        #expect(PikafishService.hashSizeMB(physicalMemoryBytes: 1 * gb) == 256, "下限 256MB")
+    }
+
     @Test func testEngineKeyConstants() {
         #expect(PikafishService.engineVersion == "Pikafish_dev-20260213-391d491a")
         #expect(PikafishService.searchDepth == 34)
@@ -140,5 +148,25 @@ struct EngineScoreStorageTests {
 
         #expect(local.scores == [1: 100])
         #expect(local.dataVersion == 3)
+    }
+}
+
+struct EngineScoreStoragePlaceholderTests {
+    /// 实体文件缺席、同目录有 ".<name>.icloud" 占位 → 视为未下载；实体文件在 → 不是
+    @Test func testHasUndownloadedPlaceholder() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("engine-score-placeholder-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let real = dir.appendingPathComponent("scores.json")
+        #expect(!EngineScoreStorage.hasUndownloadedPlaceholder(for: real))
+
+        let placeholder = dir.appendingPathComponent(".scores.json.icloud")
+        try Data().write(to: placeholder)
+        #expect(EngineScoreStorage.hasUndownloadedPlaceholder(for: real))
+
+        try Data("{}".utf8).write(to: real)
+        #expect(!EngineScoreStorage.hasUndownloadedPlaceholder(for: real))
     }
 }

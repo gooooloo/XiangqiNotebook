@@ -6,7 +6,7 @@ struct PGNImportView: View {
     @ObservedObject var viewModel: ViewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var username: String = UserDefaults.standard.string(forKey: "pgnImportUsername") ?? ""
+    @State private var username: String = ""
     @State private var importResult: PGNImportResult?
     @State private var isImporting = false
     @State private var isListening = false
@@ -68,6 +68,8 @@ struct PGNImportView: View {
         .padding()
         .frame(width: 420, height: 350)
         .onAppear {
+            // 先把记忆的棋手名填进输入框，startHTTPServer 会把当前输入框内容回写
+            username = viewModel.pgnImportUsername
             startHTTPServer()
         }
         .onDisappear {
@@ -116,8 +118,8 @@ struct PGNImportView: View {
 
     private func startHTTPServer() {
         let server = PGNHttpServer()
-        let trimmedUsername = username.trimmingCharacters(in: .whitespaces)
-        UserDefaults.standard.set(trimmedUsername, forKey: "pgnImportUsername")
+        viewModel.pgnImportUsername = username
+        let trimmedUsername = viewModel.pgnImportUsername
 
         server.onPGNReceived = { pgnContent in
             // 回调运行在 PGNHttpServer 的私有队列上；导入会修改 Database 并
@@ -158,8 +160,8 @@ struct PGNImportView: View {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        let trimmedUsername = username.trimmingCharacters(in: .whitespaces)
-        UserDefaults.standard.set(trimmedUsername, forKey: "pgnImportUsername")
+        viewModel.pgnImportUsername = username
+        let trimmedUsername = viewModel.pgnImportUsername
 
         isImporting = true
         DispatchQueue.global(qos: .userInitiated).async {
