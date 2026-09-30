@@ -76,15 +76,23 @@ extension ViewModel: AnalysisToolHost {
         // 本来也不会重复问。这样缓存规模天然被笔记本封顶，不必做淘汰。
         // 这里只置脏不落盘，由 flushAnalysisCache 在一轮问棋结束时统一存
         // 被用户中途叫停的分析只跑了零点几秒，入缓存会被下次问棋当作足额结论秒回
-        if let fenId, !lines.isEmpty, !remoteAnalyzeInterrupted {
-            Database.shared.setEngineAnalysis(
-                fenId: fenId, engineKey: analysisCacheKey,
-                analysis: CachedAnalysis(multiPV: multiPV, movetimeMs: movetime,
-                                         engine: engine, lines: lines))
+        if let fenId, !remoteAnalyzeInterrupted {
+            cacheEngineAnalysis(fenId: fenId, lines: lines, multiPV: multiPV, movetime: movetime)
         }
 
         return EngineAnalysis(lines: lines, engine: engine,
                               movetimeMs: movetime, fromCache: false)
+    }
+
+    /// 把一次 MultiPV 结果写进分析缓存（只置脏不落盘）。
+    /// 问棋之外，引擎应招算出的候选也走这里，之后在该局面问棋可直接命中
+    @MainActor
+    func cacheEngineAnalysis(fenId: Int, lines: [EnginePVLine], multiPV: Int, movetime: Int) {
+        guard !lines.isEmpty else { return }
+        Database.shared.setEngineAnalysis(
+            fenId: fenId, engineKey: analysisCacheKey,
+            analysis: CachedAnalysis(multiPV: multiPV, movetimeMs: movetime,
+                                     engine: engineVersionDescription, lines: lines))
     }
 
     /// 把本轮攒下的分析缓存落盘，一轮问棋结束时调一次。

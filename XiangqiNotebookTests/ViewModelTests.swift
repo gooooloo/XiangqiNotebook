@@ -160,6 +160,50 @@ struct ViewModelTests {
         #expect(variants[index].targetFenId == 2)
     }
 
+    // MARK: - 引擎应招避开重复局面
+
+    private static let fenAfterH2E2 = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR b - - 1 1"
+    /// 测试库里的 fenId 2
+    private static let testDbFen2 = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C2C1/9/RNBAKABNR b - - 1 1"
+
+    private static func pvLine(_ rank: Int, _ move: String, _ score: Int) -> EnginePVLine {
+        EnginePVLine(multipv: rank, scoreCp: score, mate: nil, depth: 10, moves: [move])
+    }
+
+    @Test func testPickNonRepeatingResponse_BestNotVisited_PicksBest() throws {
+        let lines = [Self.pvLine(2, "c3c4", 20), Self.pvLine(1, "h2e2", 30)]
+        let picked = try #require(ViewModel.pickNonRepeatingResponse(lines: lines, fen: Self.startFen) { _ in false })
+        #expect(picked.line.multipv == 1)
+        #expect(normalizeFen(picked.newFen) == Self.fenAfterH2E2)
+    }
+
+    @Test func testPickNonRepeatingResponse_BestVisited_FallsBackToSecond() throws {
+        let lines = [Self.pvLine(1, "h2e2", 30), Self.pvLine(2, "c3c4", 20)]
+        let picked = try #require(ViewModel.pickNonRepeatingResponse(lines: lines, fen: Self.startFen) {
+            normalizeFen($0) == Self.fenAfterH2E2
+        })
+        #expect(picked.line.multipv == 2)
+        #expect(picked.line.moves == ["c3c4"])
+    }
+
+    @Test func testPickNonRepeatingResponse_AllVisited_ReturnsNil() {
+        let lines = [Self.pvLine(1, "h2e2", 30), Self.pvLine(2, "c3c4", 20)]
+        #expect(ViewModel.pickNonRepeatingResponse(lines: lines, fen: Self.startFen) { _ in true } == nil)
+    }
+
+    @Test func testIsFenInCurrentPath_OnlyCountsUpToCurrentStep() {
+        let sm = createSessionManager(database: createTestDatabase(), gamePath: [1, 2, 3])
+        let vm = ViewModel(sessionManager: sm, platformService: MockPlatformService())
+        let session = vm.sessionManager.currentSession
+        #expect(session.isFenInCurrentPath(Self.startFen))
+        // 步 0 时 fen2 还在后面，不算出现过
+        #expect(!session.isFenInCurrentPath(Self.testDbFen2))
+        vm.stepForward()
+        #expect(session.isFenInCurrentPath(Self.testDbFen2))
+        // 数据库里没有的局面
+        #expect(!session.isFenInCurrentPath("4k4/9/9/9/9/9/9/9/9/4K4 r - - 1 1"))
+    }
+
     // MARK: - windowTitle
 
     @Test func testWindowTitle_DefaultMode_ReturnsDefault() {

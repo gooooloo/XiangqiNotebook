@@ -851,7 +851,13 @@ class Session: ObservableObject {
         }
         return sessionData.currentGame2[0...sessionData.currentGameStep].contains(bookmarkFenId)
     }
-    
+
+    /// 该局面是否已在本局（开局到当前步）出现过。引擎应招据此避开走回头路
+    func isFenInCurrentPath(_ fen: String) -> Bool {
+        guard let fenId = databaseView.getIdForFen(normalizeFen(fen)) else { return false }
+        return sessionData.currentGame2[0...sessionData.currentGameStep].contains(fenId)
+    }
+
     func getIdForFen(_ fen: String) -> Int? {
         return databaseView.getIdForFen(fen)
     }
