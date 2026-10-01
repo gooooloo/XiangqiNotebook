@@ -4,9 +4,9 @@ import Foundation
 
 /// 引擎分析缓存测试。
 ///
-/// 缓存的价值全在「能不能命中」上：规则定窄了等于白做（每次参数微调就重算），
-/// 定宽了会拿一份信息量不足的结果去回答，模型据此下的结论是错的。
-/// 所以复用规则这一条要钉死。
+/// 复用规则是「配置完全一致才命中」：同样时间里线路越多、每条搜得越浅，
+/// 不同配置的结果没有谁能顶替谁。问棋配置固定，一致即命中。
+/// 这一条要钉死，放宽了就会拿浅的结果冒充。
 struct EngineAnalysisCacheTests {
 
     private func line(_ rank: Int, cp: Int) -> EnginePVLine {
@@ -21,37 +21,15 @@ struct EngineAnalysisCacheTests {
 
     // MARK: - 复用规则
 
-    @Test func testSatisfies_widerAndLongerCanServeNarrowerAndShorter() {
-        // 这是缓存能真正命中的关键：top-5 里切得出 top-3，
-        // 算了 5 秒的结论拿去答 3 秒的请求只会更准
-        let cached = analysis(multiPV: 5, movetimeMs: 5000)
-        #expect(cached.satisfies(multiPV: 3, movetimeMs: 3000))
-        #expect(cached.satisfies(multiPV: 5, movetimeMs: 5000))
-    }
-
-    @Test func testSatisfies_rejectsNarrowerOrShorterCache() {
+    @Test func testSatisfies_requiresExactConfig() {
         let cached = analysis(multiPV: 3, movetimeMs: 3000)
-        // 只存了 3 条，答不了要 5 条的请求——硬答会少给两条候选，
-        // 「这步排第几」就可能算成 null，看起来像「连前几名都没进」
+        #expect(cached.satisfies(multiPV: 3, movetimeMs: 3000))
+        // 线路多的不能顶替：同样 3 秒，5 条里截出的前 3 条比一次 3 条的搜索浅
+        #expect(!analysis(multiPV: 5, movetimeMs: 3000).satisfies(multiPV: 3, movetimeMs: 3000))
+        // 时间不同也不行：配置就是配置，不混用
+        #expect(!analysis(multiPV: 3, movetimeMs: 8000).satisfies(multiPV: 3, movetimeMs: 3000))
         #expect(!cached.satisfies(multiPV: 5, movetimeMs: 3000))
-        // 只算了 3 秒，答不了要 5 秒的请求
         #expect(!cached.satisfies(multiPV: 3, movetimeMs: 5000))
-    }
-
-    @Test func testLinesLimitedTo_slicesTopN() {
-        let cached = analysis(multiPV: 5, movetimeMs: 5000)
-        let sliced = cached.lines(limitedTo: 3)
-        #expect(sliced.count == 3)
-        #expect(sliced.map(\.multipv) == [1, 2, 3])
-        // 要多于存量时不能凭空造，给多少算多少
-        #expect(cached.lines(limitedTo: 99).count == 5)
-    }
-
-    @Test func testSupersedes_prefersTheMoreInformativeOne() {
-        let wide = analysis(multiPV: 5, movetimeMs: 5000)
-        let narrow = analysis(multiPV: 3, movetimeMs: 3000)
-        #expect(wide.supersedes(narrow))
-        #expect(!narrow.supersedes(wide))
     }
 
     // MARK: - 序列化（要跟着引擎分数文件一起落盘）
@@ -106,26 +84,16 @@ struct EngineAnalysisCacheTests {
         #expect(Set(local.analyses.keys) == Set([1, 2]))
     }
 
-    @Test func testMerge_keepsTheMoreInformativeAnalysisOnConflict() {
-        let local = EngineScoreData()
-        local.analyses[1] = analysis(multiPV: 5, movetimeMs: 8000)
-        let remote = EngineScoreData()
-        remote.analyses[1] = analysis(multiPV: 3, movetimeMs: 3000)
-
-        EngineScoreStorage.merge(remote: remote, into: local)
-        // 本地那条更宽更久，留它；换成远端的等于白丢一次已经算过的账
-        #expect(local.analyses[1]?.multiPV == 5)
-        #expect(local.analyses[1]?.movetimeMs == 8000)
-    }
-
-    @Test func testMerge_takesRemoteWhenItIsBetter() {
+    @Test func testMerge_keepsLocalAnalysisOnConflict() {
+        // 与分数同一语义：冲突时本地优先。配置不同的两条没有谁更好，本地是本机最新算的
         let local = EngineScoreData()
         local.analyses[1] = analysis(multiPV: 3, movetimeMs: 3000)
         let remote = EngineScoreData()
         remote.analyses[1] = analysis(multiPV: 5, movetimeMs: 8000)
 
         EngineScoreStorage.merge(remote: remote, into: local)
-        #expect(local.analyses[1]?.multiPV == 5)
+        #expect(local.analyses[1]?.multiPV == 3)
+        #expect(local.analyses[1]?.movetimeMs == 3000)
     }
 
     // MARK: - 跨设备查找（iPhone 吃 Mac 算好的结果）
@@ -136,10 +104,10 @@ struct EngineAnalysisCacheTests {
     @Test func testFindUsable_prefersOwnEngineKey() {
         let database = TestDatabaseBuilder().addFen(1).build()
         database.setEngineAnalysis(fenId: 1, engineKey: macKey,
-                                   analysis: analysis(multiPV: 5, movetimeMs: 5000,
+                                   analysis: analysis(multiPV: 3, movetimeMs: 3000,
                                                       engine: "mac"))
         database.setEngineAnalysis(fenId: 1, engineKey: iosKey,
-                                   analysis: analysis(multiPV: 5, movetimeMs: 5000,
+                                   analysis: analysis(multiPV: 3, movetimeMs: 3000,
                                                       engine: "ios"))
 
         let found = database.findUsableEngineAnalysis(
@@ -152,7 +120,7 @@ struct EngineAnalysisCacheTests {
         // 而不是现场烧一遍电
         let database = TestDatabaseBuilder().addFen(1).build()
         database.setEngineAnalysis(fenId: 1, engineKey: macKey,
-                                   analysis: analysis(multiPV: 5, movetimeMs: 5000,
+                                   analysis: analysis(multiPV: 3, movetimeMs: 3000,
                                                       engine: "mac"))
 
         let found = database.findUsableEngineAnalysis(
@@ -160,44 +128,42 @@ struct EngineAnalysisCacheTests {
         #expect(found?.engine == "mac")
     }
 
-    @Test func testFindUsable_rejectsCacheThatIsNotGoodEnough() {
-        // 宁可重算也不能拿信息量不足的结果充数
+    @Test func testFindUsable_rejectsDifferentConfig() {
+        // 宁可重算也不能拿别的配置充数，哪怕它线路更多、算得更久
         let database = TestDatabaseBuilder().addFen(1).build()
         database.setEngineAnalysis(fenId: 1, engineKey: macKey,
-                                   analysis: analysis(multiPV: 3, movetimeMs: 3000))
+                                   analysis: analysis(multiPV: 5, movetimeMs: 8000))
 
         #expect(database.findUsableEngineAnalysis(
-            fenId: 1, preferredKey: iosKey, multiPV: 5, movetimeMs: 3000) == nil)
+            fenId: 1, preferredKey: iosKey, multiPV: 3, movetimeMs: 3000) == nil)
         #expect(database.findUsableEngineAnalysis(
-            fenId: 1, preferredKey: iosKey, multiPV: 3, movetimeMs: 5000) == nil)
+            fenId: 1, preferredKey: macKey, multiPV: 3, movetimeMs: 3000) == nil)
     }
 
-    @Test func testFindUsable_picksTheBestAmongOtherKeys() {
-        // 字典遍历顺序不保证，不挑最好的会导致同样的请求时好时坏
+    @Test func testFindUsable_isDeterministicAmongOtherKeys() {
+        // 字典遍历顺序不保证，同样的请求必须每次拿到同一条
         let database = TestDatabaseBuilder().addFen(1).build()
-        database.setEngineAnalysis(fenId: 1, engineKey: "a",
-                                   analysis: analysis(multiPV: 5, movetimeMs: 3000,
-                                                      engine: "short"))
         database.setEngineAnalysis(fenId: 1, engineKey: "b",
-                                   analysis: analysis(multiPV: 5, movetimeMs: 9000,
-                                                      engine: "long"))
+                                   analysis: analysis(multiPV: 3, movetimeMs: 3000, engine: "b"))
+        database.setEngineAnalysis(fenId: 1, engineKey: "a",
+                                   analysis: analysis(multiPV: 3, movetimeMs: 3000, engine: "a"))
 
         let found = database.findUsableEngineAnalysis(
             fenId: 1, preferredKey: iosKey, multiPV: 3, movetimeMs: 3000)
-        #expect(found?.engine == "long")
+        #expect(found?.engine == "a")
     }
 
-    @Test func testSetAnalysis_doesNotDowngradeAnExistingEntry() {
-        // 先深评过、后来又快问了一次，不能把好结果换成差的
+    @Test func testSetAnalysis_replacesEntryOfDifferentConfig() {
+        // 旧配置（如以前模型自选的 5 条 8 秒）已不会被命中，新算的直接换掉它
         let database = TestDatabaseBuilder().addFen(1).build()
         database.setEngineAnalysis(fenId: 1, engineKey: macKey,
-                                   analysis: analysis(multiPV: 5, movetimeMs: 9000))
+                                   analysis: analysis(multiPV: 5, movetimeMs: 8000))
         database.setEngineAnalysis(fenId: 1, engineKey: macKey,
-                                   analysis: analysis(multiPV: 3, movetimeMs: 1000))
+                                   analysis: analysis(multiPV: 3, movetimeMs: 3000))
 
         let found = database.findUsableEngineAnalysis(
-            fenId: 1, preferredKey: macKey, multiPV: 5, movetimeMs: 9000)
-        #expect(found?.movetimeMs == 9000)
+            fenId: 1, preferredKey: macKey, multiPV: 3, movetimeMs: 3000)
+        #expect(found?.multiPV == 3)
     }
 
     @Test func testSetAnalysis_marksDirtyInsteadOfWritingImmediately() {
@@ -212,15 +178,15 @@ struct EngineAnalysisCacheTests {
     }
 
     @Test func testSetAnalysis_staysCleanWhenTheWriteIsRejected() {
-        // 已有更好的结果时 setEngineAnalysis 直接返回，不该无谓置脏——
+        // 已有同配置的结果时 setEngineAnalysis 直接返回，不该无谓置脏——
         // 否则每轮问棋都会因为「脏了」而白写一次盘，即使一个字节都没变
         let database = TestDatabaseBuilder().addFen(1).build()
         database.setEngineAnalysis(fenId: 1, engineKey: macKey,
-                                   analysis: analysis(multiPV: 5, movetimeMs: 9000))
+                                   analysis: analysis(multiPV: 3, movetimeMs: 3000))
         database.markEngineScoreClean()
 
         database.setEngineAnalysis(fenId: 1, engineKey: macKey,
-                                   analysis: analysis(multiPV: 3, movetimeMs: 1000))
+                                   analysis: analysis(multiPV: 3, movetimeMs: 3000))
         #expect(!database.isEngineScoreDirty)
     }
 

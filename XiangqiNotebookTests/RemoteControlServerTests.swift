@@ -64,7 +64,7 @@ struct RemoteControlServerTests {
         let params = RemoteControlServer.parseEvalParams(json: nil)
         #expect(params.fen == nil)
         #expect(params.multiPV == 3)
-        #expect(params.movetime == 5000)
+        #expect(params.movetime == AnalysisToolbox.movetime)
     }
 
     @Test func testParseEvalParams_explicitValues() {

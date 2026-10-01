@@ -4,7 +4,7 @@ import Foundation
 
 /// 走到当前局面的那一步棋
 struct LastMove: Equatable {
-    /// 中文着法名。按未翻转的棋盘生成，与工具层其他地方口径一致
+    /// 中文着法名。按用户界面的翻转状态生成，与工具层其他地方口径一致
     let chinese: String
     /// 走这步之前的局面。评估这一步必须以它为准，而不是当前 fen
     let fenBefore: String
@@ -38,9 +38,9 @@ struct PositionSnapshot {
     /// 走完之后的局面了——没有这个字段，模型既不知道走的是哪步，也拿不到走之前的
     /// 局面，根本无从评估。
     let lastMove: LastMove?
-    /// 云库分（字符串，可能为空或非数字占位）
+    /// 云库分（字符串，可能为空或非数字占位；界面显示值）。只进 `/state`，不给 AI
     let score: String
-    /// 皮卡鱼引擎分
+    /// 皮卡鱼引擎分（界面显示值：按棋盘朝向调整过视角）。只进 `/state`，不给 AI
     let engineScore: String
     let showPath: Bool
     let showAllNextMoves: Bool
@@ -94,6 +94,8 @@ struct PositionSnapshot {
         [
             "fen": fen,
             "sideToMove": sideToMove,
+            // 为真时所有中文着法名与路数都按镜像写（见提示词「路数」一节）
+            "horizontalFlipped": isHorizontalFlipped,
             "step": step,
             "maxStep": maxStep,
             "comment": comment as Any? ?? NSNull(),
@@ -104,8 +106,8 @@ struct PositionSnapshot {
             } as Any? ?? NSNull(),
             "nextMoves": nextMoves,
             "variants": variants,
-            "score": score,
-            "engineScore": engineScore,
+            // 不给云库分和库里的引擎分：两者都是按棋盘朝向调过视角的显示值，引擎分的配置
+            // 也与问棋的 evaluate 不同。模型不会因它们少调一次引擎，给了只会被读反或与工具结果打架
         ]
     }
 }
@@ -155,23 +157,17 @@ final class AnalysisToolbox {
         self.host = host
     }
 
-    // MARK: 参数取值范围
+    // MARK: 问棋的引擎配置（固定，不给模型选）
 
-    /// 候选线路数上下限
-    static let multiPVRange = 1...10
-    /// 默认候选线路数
-    static let defaultMultiPV = 3
+    /// 候选线路数。同样时间里线路越多、每条搜得越浅，首选质量随之下降；
+    /// 让模型自选（它常要 5 条）也会把分析缓存切成多种档位
+    static let multiPV = 3
 
-    /// 引擎思考时长上限。
-    /// 远程 `/eval` 允许到 60 秒（人手动发一次请求），这里收紧：AI 会在一轮问答里
-    /// 连着调好几次，且 iOS 端跑在电池上。
-    #if os(iOS)
-    static let movetimeRange = 500...8000
-    static let defaultMovetime = 3000
-    #else
-    static let movetimeRange = 500...15000
-    static let defaultMovetime = 5000
-    #endif
+    /// 问棋的引擎思考时长，固定不给模型选：问棋首要的是快。
+    /// 模型自选时常要 8 秒，一次 evaluate_move 跑两遍就是 16 秒；还会把分析缓存切成
+    /// 多种档位。这是问棋自己的配置，结果只进问棋自己的分析缓存，
+    /// 不写库里的局面分，也不与快估、应招互相复用（那边是单线路搜索，同样时间更深）
+    static let movetime = 3000
 
     // MARK: - 工具定义（OpenAI function calling 格式）
 
@@ -193,7 +189,7 @@ final class AnalysisToolbox {
             function(
                 name: "evaluate",
                 description: """
-                用皮卡鱼引擎分析一个局面，返回前 N 条候选线路，每条含分数、搜索深度、主变（UCI 与中文两种记法）。\
+                用皮卡鱼引擎分析一个局面，固定返回前 \(multiPV) 条候选线路，每条含分数、搜索深度、主变（UCI 与中文两种记法）。\
                 分数是走子方视角的厘兵值，100 约等于一个兵，杀棋折算到 ±30000 附近。\
                 省略 fen 则分析当前局面。这是判断着法好坏的唯一可靠依据，不要凭印象下结论。
                 """,
@@ -202,13 +198,11 @@ final class AnalysisToolbox {
                         "type": "string",
                         "description": "要分析的局面，格式「棋盘 r|b」。省略则用当前局面。",
                     ],
-                    "multipv": [
-                        "type": "integer",
-                        "description": "返回的候选线路数，\(multiPVRange.lowerBound)-\(multiPVRange.upperBound)，默认 \(defaultMultiPV)。",
-                    ],
-                    "movetime_ms": [
-                        "type": "integer",
-                        "description": "引擎思考时长（毫秒），\(movetimeRange.lowerBound)-\(movetimeRange.upperBound)，默认 \(defaultMovetime)。要更硬的结论就调大。",
+                    "moves": [
+                        "type": "array",
+                        "items": ["type": "string"],
+                        "description": "可选。先从 fen（省略则当前局面）出发依次走这些着法（中文或 UCI，红黑交替），"
+                            + "再分析走完后的局面。要看某个变化之后的局面就用它，**不要自己推演或手写 FEN**。",
                     ],
                 ],
                 required: []
@@ -228,19 +222,17 @@ final class AnalysisToolbox {
                         "type": "string",
                         "description": "要评估的局面，格式「棋盘 r|b」。省略则用当前局面。",
                     ],
+                    "moves": [
+                        "type": "array",
+                        "items": ["type": "string"],
+                        "description": "可选。先从 fen（省略则当前局面）出发依次走这些着法（中文或 UCI，红黑交替），"
+                            + "再在走完后的局面上评估 move。要评估某个变化里的一步就用它，**不要自己推演或手写 FEN**。",
+                    ],
                     "move": [
                         "type": "string",
                         "description": "要评估的着法。UCI（h2e2）或中文着法（炮二平五、车9平6）都行——"
                             + "**推荐直接传中文**，省得自己换算坐标算错。"
                             + "必须是当前走子方的着法；若传了对方的子会报错。",
-                    ],
-                    "multipv": [
-                        "type": "integer",
-                        "description": "对比用的候选线路数，\(multiPVRange.lowerBound)-\(multiPVRange.upperBound)，默认 \(defaultMultiPV)。",
-                    ],
-                    "movetime_ms": [
-                        "type": "integer",
-                        "description": "单次引擎思考时长（毫秒），\(movetimeRange.lowerBound)-\(movetimeRange.upperBound)，默认 \(defaultMovetime)。本工具会跑两次，总耗时约两倍。",
                     ],
                 ],
                 required: ["move"]
@@ -288,17 +280,17 @@ final class AnalysisToolbox {
 
     struct EvalArgs: Equatable {
         var fen: String?
-        var multiPV: Int
-        var movetime: Int
+        /// 分析前先走的着法（中文或 UCI）
+        var moves: [String] = []
     }
 
-    /// 越界一律钳到合法区间而非报错——模型填错参数是常态，为此中断一轮问答不值得
+    /// 候选数与思考时长都是固定配置，模型传了也不认（见 multiPV、movetime）
     static func parseEvalArgs(_ json: [String: Any]?) -> EvalArgs {
-        let fen = (json?["fen"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-        let multiPV = clamp(intValue(json?["multipv"]) ?? defaultMultiPV, to: multiPVRange)
-        // 兼容模型偶尔写成 movetime 而非 movetime_ms
-        let rawMovetime = intValue(json?["movetime_ms"]) ?? intValue(json?["movetime"]) ?? defaultMovetime
-        return EvalArgs(fen: fen, multiPV: multiPV, movetime: clamp(rawMovetime, to: movetimeRange))
+        EvalArgs(
+            fen: (json?["fen"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            moves: ((json?["moves"] as? [String]) ?? [])
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty })
     }
 
     struct ApplyArgs: Equatable {
@@ -310,18 +302,6 @@ final class AnalysisToolbox {
         guard let fen = json?["fen"] as? String, !fen.isEmpty else { return nil }
         guard let moves = json?["moves"] as? [String] else { return nil }
         return ApplyArgs(fen: fen, moves: moves)
-    }
-
-    /// 模型可能把数字写成字符串或浮点，都接住
-    private static func intValue(_ any: Any?) -> Int? {
-        if let i = any as? Int { return i }
-        if let d = any as? Double { return Int(d) }
-        if let s = any as? String { return Int(s) }
-        return nil
-    }
-
-    private static func clamp(_ value: Int, to range: ClosedRange<Int>) -> Int {
-        min(range.upperBound, max(range.lowerBound, value))
     }
 
     // MARK: - 局面校验
@@ -352,14 +332,15 @@ final class AnalysisToolbox {
     /// 把一串 UCI 着法依次应用到局面上。
     /// 只做机械移动（起点须有子），不校验象棋规则合法性。
     /// 返回成功应用的着法列表；failedIndex 指向首个无法应用的着法（全部成功则为 nil）
-    static func applyUCIMoves(fen: String, uciMoves: [String]) -> (applied: [AppliedMove], failedIndex: Int?) {
+    static func applyUCIMoves(fen: String, uciMoves: [String],
+                              flipped: Bool = false) -> (applied: [AppliedMove], failedIndex: Int?) {
         var currentFen = fen
         var applied: [AppliedMove] = []
         for (index, uci) in uciMoves.enumerated() {
             guard let nextFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uci, fen: currentFen) else {
                 return (applied, index)
             }
-            let chinese = Move.stringifyMove(fen1: currentFen, fen2: nextFen, backup: uci, isHorizontalFlipped: false)
+            let chinese = Move.stringifyMove(fen1: currentFen, fen2: nextFen, backup: uci, isHorizontalFlipped: flipped)
             applied.append(AppliedMove(uci: uci, chinese: chinese, fen: nextFen))
             currentFen = nextFen
         }
@@ -373,7 +354,7 @@ final class AnalysisToolbox {
     /// `applyUCIMoves` 只做机械搬子、不问规则也不问归属，`getNewFenAfterUCIMove` 还会
     /// 按**被移动棋子的颜色**决定下一手轮谁走——两者叠加的后果是：在黑走的局面传一个
     /// 红方着法能「成功」执行，且走完之后仍然是黑走。评估着法时必须先过这一关。
-    static func legalMoves(fen: String) -> [AppliedMove] {
+    static func legalMoves(fen: String, flipped: Bool = false) -> [AppliedMove] {
         let pieces = XiangqiBoardUtils.fenToPiecesBySquare(fen)
         let redToMove = sideToMove(fen: fen) == "red"
         var result: [AppliedMove] = []
@@ -385,7 +366,7 @@ final class AnalysisToolbox {
                     continue
                 }
                 let chinese = Move.stringifyMove(fen1: fen, fen2: nextFen, backup: uci,
-                                                 isHorizontalFlipped: false)
+                                                 isHorizontalFlipped: flipped)
                 result.append(AppliedMove(uci: uci, chinese: chinese, fen: nextFen))
             }
         }
@@ -424,8 +405,8 @@ final class AnalysisToolbox {
     /// 支持中文是因为：用户问的是「炮八进五」，模型得自己换算成 UCI 才能调工具，
     /// 而这个换算（列的方向、红黑各自的路数、进退的正负）极易出错，
     /// 错了就变成在评估另一步棋，且表面上看不出来。
-    static func resolveMove(_ input: String, fen: String) -> MoveResolution {
-        let legal = legalMoves(fen: fen)
+    static func resolveMove(_ input: String, fen: String, flipped: Bool = false) -> MoveResolution {
+        let legal = legalMoves(fen: fen, flipped: flipped)
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if let match = legal.first(where: { $0.uci.caseInsensitiveCompare(trimmed) == .orderedSame }) {
@@ -449,13 +430,27 @@ final class AnalysisToolbox {
         return .notLegal
     }
 
+    /// 着法非法时附上可选着法，让模型照着挑一步重试，而不是再花一轮自己推算路数。
+    /// 输入里认得出棋子就只列这类子（红黑异名视作同类），否则列出全部合法着法
+    static func legalMovesHint(for input: String, fen: String, flipped: Bool = false) -> String {
+        let legal = legalMoves(fen: fen, flipped: flipped)
+        let kinds: [Set<Character>] = [["车", "車"], ["马", "馬"], ["炮", "砲"],
+                                       ["相", "象"], ["仕", "士"], ["帅", "将"], ["兵", "卒"]]
+        let kind = kinds.first { k in input.contains { k.contains($0) } }
+        let sameKind = kind.map { k in legal.filter { $0.chinese.contains { k.contains($0) } } } ?? []
+        let (label, moves) = sameKind.isEmpty ? ("本方全部合法着法", legal) : ("本方同类子的合法着法", sameKind)
+        guard !moves.isEmpty else { return "当前走子方没有合法着法。" }
+        return "\(label)：" + moves.map { "\($0.chinese)(\($0.uci))" }.joined(separator: "、")
+            + "。请从中选一步，move 可直接传其中的 UCI。"
+    }
+
     /// 把 UCI 主变序列转成中文着法序列（逐步应用到局面上；遇到非法着法截断）
-    static func chinesePV(fen: String, uciMoves: [String]) -> [String] {
+    static func chinesePV(fen: String, uciMoves: [String], flipped: Bool = false) -> [String] {
         var currentFen = fen
         var result: [String] = []
         for uci in uciMoves {
             guard let nextFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uci, fen: currentFen) else { break }
-            result.append(Move.stringifyMove(fen1: currentFen, fen2: nextFen, backup: uci, isHorizontalFlipped: false))
+            result.append(Move.stringifyMove(fen1: currentFen, fen2: nextFen, backup: uci, isHorizontalFlipped: flipped))
             currentFen = nextFen
         }
         return result
@@ -546,19 +541,27 @@ final class AnalysisToolbox {
         guard let host else {
             return Self.toolErrorJSON(.hostUnavailable, "界面已关闭，无法读取局面")
         }
+        // 中文着法名（输入与输出）一律跟用户界面的左右翻转走：用户照着界面上的名字问，
+        // 讲解也要能在界面上对上号。UCI 是绝对坐标，不受影响
+        let flipped = host.currentPositionSnapshot().isHorizontalFlipped
 
         switch toolName {
         case "get_position":
             return Self.toolSuccessJSON(host.currentPositionSnapshot().toolDictionary())
 
         case "evaluate":
-            let args = Self.parseEvalArgs(arguments)
-            let fen = args.fen ?? host.currentPositionSnapshot().fen
-            guard Self.isValidPositionFen(fen) else { return Self.invalidFenError() }
+            let fen: String
+            let applied: [AppliedMove]
+            switch Self.startPosition(Self.parseEvalArgs(arguments),
+                                      currentFen: { host.currentPositionSnapshot().fen }, flipped: flipped) {
+            case .failed(let errorJSON): return errorJSON
+            case .played(let played, let steps): (fen, applied) = (played, steps)
+            }
             do {
                 let result = try await host.analyzePosition(
-                    fen: fen, multiPV: args.multiPV, movetime: args.movetime)
+                    fen: fen, multiPV: Self.multiPV, movetime: Self.movetime)
                 return Self.toolSuccessJSON([
+                    "appliedMoves": applied.map(\.chinese),
                     "fen": fen,
                     "sideToMove": Self.sideToMove(fen: fen),
                     "scorePerspective": "sideToMove",
@@ -567,14 +570,14 @@ final class AnalysisToolbox {
                     // 命中缓存时结果是秒回的，且可能来自另一台设备的引擎——
                     // 说清楚，免得模型把「这次没花时间」当成分析不够扎实
                     "cached": result.fromCache,
-                    "lines": result.lines.map { Self.lineDictionary($0, fen: fen) },
+                    "lines": result.lines.map { Self.lineDictionary($0, fen: fen, flipped: flipped) },
                 ])
             } catch {
                 return Self.toolErrorJSON(forEngineError: error)
             }
 
         case "evaluate_move":
-            return await executeEvaluateMove(arguments: arguments, host: host)
+            return await executeEvaluateMove(arguments: arguments, host: host, flipped: flipped)
 
         case "apply_moves":
             guard let args = Self.parseApplyArgs(arguments) else {
@@ -582,7 +585,7 @@ final class AnalysisToolbox {
                     .badArguments, "参数不全，需要 fen（字符串）与 moves（UCI 着法字符串数组）")
             }
             guard Self.isValidPositionFen(args.fen) else { return Self.invalidFenError() }
-            let result = Self.applyUCIMoves(fen: args.fen, uciMoves: args.moves)
+            let result = Self.applyUCIMoves(fen: args.fen, uciMoves: args.moves, flipped: flipped)
             if let failedIndex = result.failedIndex {
                 return Self.toolErrorJSON(
                     .illegalMove,
@@ -604,14 +607,14 @@ final class AnalysisToolbox {
     }
 
     /// 一条候选线路的返回形状，`evaluate` 与 `evaluate_move` 共用
-    private static func lineDictionary(_ line: EnginePVLine, fen: String) -> [String: Any] {
+    private static func lineDictionary(_ line: EnginePVLine, fen: String, flipped: Bool) -> [String: Any] {
         [
             "rank": line.multipv,
             "scoreCp": line.scoreCp,
             "mate": line.mate as Any? ?? NSNull(),
             "depth": line.depth as Any? ?? NSNull(),
             "pvUci": line.moves,
-            "pvChinese": chinesePV(fen: fen, uciMoves: line.moves),
+            "pvChinese": chinesePV(fen: fen, uciMoves: line.moves, flipped: flipped),
         ]
     }
 
@@ -629,47 +632,88 @@ final class AnalysisToolbox {
         ["cp": cp, "mate": mate as Any? ?? NSNull()]
     }
 
+    enum StartPosition {
+        /// 走完 moves 后的局面，以及实际走的每一步
+        case played(fen: String, applied: [AppliedMove])
+        /// 可直接交给模型的错误 JSON
+        case failed(String)
+    }
+
+    /// evaluate / evaluate_move 的起点：fen（省略则当前局面）再依次走 moves。
+    ///
+    /// 有了它，模型要看「某个变化之后」的局面不必自己推演、手写 FEN——那既慢（实测一轮
+    /// 思考四十多秒在心算摆子）又不可靠（错一个字符引擎就在分析另一个局面，结果上看不出来）。
+    /// 每一步都按合法着法校验，轮错方、走不了都会指明是第几步
+    static func startPosition(_ args: EvalArgs, currentFen: () -> String, flipped: Bool) -> StartPosition {
+        var fen = args.fen ?? currentFen()
+        guard isValidPositionFen(fen) else { return .failed(invalidFenError()) }
+        var applied: [AppliedMove] = []
+        for (index, move) in args.moves.enumerated() {
+            let resolution = resolveMove(move, fen: fen, flipped: flipped)
+            guard case .resolved(let step) = resolution else {
+                return .failed(moveErrorJSON(move, resolution, fen: fen, flipped: flipped,
+                                             context: "moves 第 \(index + 1) 步："))
+            }
+            applied.append(step)
+            fen = step.fen
+        }
+        return .played(fen: fen, applied: applied)
+    }
+
+    /// 着法解析失败时给模型的错误，写明怎么改
+    static func moveErrorJSON(_ move: String, _ resolution: MoveResolution, fen: String,
+                              flipped: Bool, context: String = "") -> String {
+        switch resolution {
+        case .resolved:
+            return toolErrorJSON(.badArguments, "\(context)内部错误：着法已解析")
+        case .notSideToMove(let pieceSide):
+            // 最隐蔽的一类错：着法能在棋盘上搬动，但走的是对方的子。
+            // 不拦住的话分数会全部锚错方，结论正好反过来
+            let side = pieceSide == "red" ? "红方" : "黑方"
+            let current = sideToMove(fen: fen) == "red" ? "红方" : "黑方"
+            return toolErrorJSON(
+                .illegalMove,
+                "\(context)\(move) 走的是\(side)的子，但这个局面轮\(current)走。"
+                    + "若要走\(side)的着法，请先在 moves 里把\(current)的应手写上。")
+        case .ambiguous(let candidates):
+            return toolErrorJSON(
+                .badArguments,
+                "\(context)\(move) 有歧义，可能是：" + candidates.map(\.uci).joined(separator: "、")
+                    + "。请改用 UCI 着法指明。")
+        case .notLegal:
+            return toolErrorJSON(
+                .illegalMove,
+                "\(context)\(move) 在这个局面下不是合法着法。" + legalMovesHint(for: move, fen: fen, flipped: flipped))
+        }
+    }
+
     @MainActor
-    private func executeEvaluateMove(arguments: [String: Any]?, host: AnalysisToolHost) async -> String {
+    private func executeEvaluateMove(arguments: [String: Any]?, host: AnalysisToolHost, flipped: Bool) async -> String {
         let evalArgs = Self.parseEvalArgs(arguments)
         guard let move = (arguments?["move"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !move.isEmpty else {
             return Self.toolErrorJSON(.badArguments, "缺少 move 参数（UCI 着法，如 h2e2）")
         }
 
-        let fen = evalArgs.fen ?? host.currentPositionSnapshot().fen
-        guard Self.isValidPositionFen(fen) else { return Self.invalidFenError() }
+        let fen: String
+        let applied: [AppliedMove]
+        switch Self.startPosition(evalArgs, currentFen: { host.currentPositionSnapshot().fen }, flipped: flipped) {
+        case .failed(let errorJSON): return errorJSON
+        case .played(let played, let steps): (fen, applied) = (played, steps)
+        }
 
         let mover = Self.sideToMove(fen: fen)
-        let step: AppliedMove
-        switch Self.resolveMove(move, fen: fen) {
-        case .resolved(let resolved):
-            step = resolved
-        case .notSideToMove(let pieceSide):
-            // 最隐蔽的一类错：着法能在棋盘上搬动，但走的是对方的子。
-            // 不拦住的话分数会全部锚错方，结论正好反过来
-            let side = pieceSide == "red" ? "红方" : "黑方"
-            let current = mover == "red" ? "红方" : "黑方"
-            return Self.toolErrorJSON(
-                .illegalMove,
-                "\(move) 走的是\(side)的子，但当前局面轮\(current)走。"
-                    + "若要评估\(side)的着法，请先把\(current)的应手走出来（apply_moves），再对新局面评估。")
-        case .ambiguous(let candidates):
-            return Self.toolErrorJSON(
-                .badArguments,
-                "\(move) 有歧义，可能是：" + candidates.map(\.uci).joined(separator: "、")
-                    + "。请改用 UCI 着法指明。")
-        case .notLegal:
-            return Self.toolErrorJSON(
-                .illegalMove, "\(move) 在这个局面下不是合法着法（可用 UCI 或中文着法，如 h2e2 或 炮二平五）")
+        let resolution = Self.resolveMove(move, fen: fen, flipped: flipped)
+        guard case .resolved(let step) = resolution else {
+            return Self.moveErrorJSON(move, resolution, fen: fen, flipped: flipped)
         }
         do {
             // 走之前：mover 走最好棋能得到什么
             let before = try await host.analyzePosition(
-                fen: fen, multiPV: evalArgs.multiPV, movetime: evalArgs.movetime)
+                fen: fen, multiPV: Self.multiPV, movetime: Self.movetime)
             // 走之后：轮对手，分数天然是对手视角
             let after = try await host.analyzePosition(
-                fen: step.fen, multiPV: min(evalArgs.multiPV, 3), movetime: evalArgs.movetime)
+                fen: step.fen, multiPV: Self.multiPV, movetime: Self.movetime)
 
             guard let best = before.lines.first, let reply = after.lines.first else {
                 return Self.toolErrorJSON(.engineUnavailable, "引擎没有给出候选线路")
@@ -690,7 +734,7 @@ final class AnalysisToolbox {
                     "mate": negated.mate as Any? ?? NSNull(),
                     "depth": line.depth as Any? ?? NSNull(),
                     "pvUci": line.moves,
-                    "pvChinese": Self.chinesePV(fen: step.fen, uciMoves: line.moves),
+                    "pvChinese": Self.chinesePV(fen: step.fen, uciMoves: line.moves, flipped: flipped),
                 ]
             }
 
@@ -702,6 +746,7 @@ final class AnalysisToolbox {
                 "movetimeMs": before.movetimeMs,
                 // 两轮里只要有一轮是取的缓存就算命中——用来解释这次为什么快
                 "cached": before.fromCache || after.fromCache,
+                "appliedMoves": applied.map(\.chinese),
                 "fen": fen,
                 "fenAfter": step.fen,
             ]
@@ -712,7 +757,7 @@ final class AnalysisToolbox {
             payload["lossCp"] = best.scoreCp - scoreAfter.cp
             // null 表示这步连引擎候选前 N 名都没进——本身就是它不好的强信号
             payload["rankAmongCandidates"] = rank as Any? ?? NSNull()
-            payload["bestInstead"] = Self.lineDictionary(best, fen: fen)
+            payload["bestInstead"] = Self.lineDictionary(best, fen: fen, flipped: flipped)
             payload["opponentBestReplies"] = replies
             return Self.toolSuccessJSON(payload)
         } catch {

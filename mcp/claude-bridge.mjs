@@ -236,6 +236,90 @@ function textOfContent(content) {
 }
 
 // ---------------------------------------------------------------------------
+// 计时日志：一次问答的时间花在哪（进程启动 / 模型各轮 / 各工具）
+// ---------------------------------------------------------------------------
+
+let runSeq = 0;
+
+/// 观察 claude 的每一行 stream-json，打出相对 spawn 的时间线，结束时给一行汇总。
+/// 只读、只打日志（launchd 下落在 /tmp/xiangqi-claude-bridge.log），不影响转译
+function createRunTimer() {
+  const id = ++runSeq;
+  const t0 = Date.now();
+  const log = (msg) => console.log(`[timing #${id}] +${Date.now() - t0}ms ${msg}`);
+  let firstLineAt = null;
+  let turn = 0;
+  let turnStart = 0;
+  let firstTokenSeen = false;
+  let outputTokens = 0;
+  let modelMs = 0;
+  const pendingTools = new Map(); // tool_use id → { name, start }
+  const toolMs = {};              // name → [次数, 合计毫秒]
+
+  return {
+    observe(obj) {
+      const now = Date.now();
+      if (firstLineAt === null) {
+        firstLineAt = now;
+        log("claude 首行输出");
+      }
+      if (obj?.type === "system" && obj.subtype === "init") log("init 完成（MCP 已连接）");
+
+      if (obj?.type === "stream_event") {
+        const ev = obj.event;
+        if (ev?.type === "message_start") {
+          turn += 1;
+          turnStart = now;
+          firstTokenSeen = false;
+          const u = ev.message?.usage ?? {};
+          log(`第${turn}轮模型请求 输入 ${u.input_tokens ?? 0}+缓存读 ${u.cache_read_input_tokens ?? 0}`
+            + `+缓存写 ${u.cache_creation_input_tokens ?? 0} tokens`);
+        } else if (ev?.type === "content_block_start" && !firstTokenSeen) {
+          firstTokenSeen = true;
+          log(`第${turn}轮首个内容块（首字延迟 ${now - turnStart}ms）`);
+        } else if (ev?.type === "message_delta") {
+          outputTokens = ev.usage?.output_tokens ?? outputTokens;
+        } else if (ev?.type === "message_stop") {
+          modelMs += now - turnStart;
+          log(`第${turn}轮结束（${now - turnStart}ms，输出 ${outputTokens} tokens）`);
+        }
+      }
+
+      if (obj?.type === "assistant") {
+        for (const b of obj.message?.content ?? []) {
+          if (b?.type !== "tool_use" || pendingTools.has(b.id)) continue;
+          pendingTools.set(b.id, { name: b.name, start: now });
+          log(`调用 ${b.name} ${JSON.stringify(b.input ?? {})}`);
+        }
+      }
+
+      if (obj?.type === "user") {
+        for (const b of obj.message?.content ?? []) {
+          if (b?.type !== "tool_result") continue;
+          const p = pendingTools.get(b.tool_use_id);
+          if (!p) continue;
+          pendingTools.delete(b.tool_use_id);
+          const ms = now - p.start;
+          const stat = (toolMs[p.name] ??= [0, 0]);
+          stat[0] += 1;
+          stat[1] += ms;
+          const cached = /"cached"\s*:\s*true/.test(textOfContent(b.content) ?? "") ? "，命中缓存" : "";
+          log(`${p.name} 返回（${ms}ms${cached}${b.is_error ? "，出错" : ""}）`);
+        }
+      }
+
+      if (obj?.type === "result") {
+        const total = now - t0;
+        const tools = Object.entries(toolMs)
+          .map(([name, [n, ms]]) => `${name.replace("mcp__xiangqi-notebook__", "")}×${n}=${ms}ms`)
+          .join(" ");
+        log(`汇总：总 ${total}ms｜启动到首行 ${firstLineAt - t0}ms｜模型 ${turn} 轮 ${modelMs}ms`
+          + `｜工具 ${tools || "无"}｜CLI 自报 duration ${obj.duration_ms}ms、API ${obj.duration_api_ms}ms`);
+      }
+    },
+  };
+}
+
 // /chat：spawn claude 并流式转译
 // ---------------------------------------------------------------------------
 
@@ -269,6 +353,7 @@ function handleChat(payload, res) {
     return;
   }
   activeChild = child;
+  const timer = createRunTimer();
 
   res.writeHead(200, {
     "Content-Type": "application/x-ndjson",
@@ -315,6 +400,7 @@ function handleChat(payload, res) {
     } catch {
       return; // 非 JSON 行（横幅之类）忽略
     }
+    timer.observe(obj);
     for (const event of translateClaudeLine(obj)) emit(event);
   });
 

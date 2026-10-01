@@ -93,21 +93,23 @@ const TOOLS = [
     name: "get_position",
     description:
       "获取象棋笔记本 app 当前打开的局面。返回 JSON：fen（局面，格式为「棋盘 r|b」，r=红方走）、" +
-      "step/maxStep（步数）、comment/moveComment（用户笔记）、score（云库分）、engineScore（引擎分）、" +
+      "sideToMove、lastMove（走到当前局面的那一步及走前局面）、comment/moveComment/badReason（用户笔记）、" +
+      "horizontalFlipped（界面是否左右翻转）、" +
       "nextMoves（笔记本中记录的后续着法，中文）、variants（本步其他变着）等。" +
+      "与 app 内问棋的 get_position 工具同一实现。" +
       "用户问「当前局面 / 这一步」时先调用它。",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "evaluate",
     description:
-      "用本地皮卡鱼（Pikafish）引擎对局面做 MultiPV 分析，返回前 N 条候选着法线路，" +
+      "用本地皮卡鱼（Pikafish）引擎对局面做 MultiPV 分析，固定返回前 3 条候选着法线路，" +
       "每条含 scoreCp（厘兵分，【走子方视角】，正=走子方优；杀棋折算为 ±30000 附近）、depth、" +
       "pvUci（UCI 着法序列）、pvChinese（中文着法序列）。" +
-      "省略 fen 则分析 app 当前局面。分析耗时约 movetime_ms 毫秒。" +
-      "对比两个着法优劣的方法：本工具的候选列表若同时包含两者可直接对比；" +
-      "否则先用 apply_moves 走出目标着法得到新 fen，再对新 fen 调用本工具" +
-      "（注意新局面轮对方走，分数视角随之翻转）。",
+      "省略 fen 则分析 app 当前局面；给了 moves 则先依次走完这些着法，再分析走完后的局面。" +
+      "每次分析约 3 秒（与 app 内问棋同一工具实现，共用问棋的分析缓存）。" +
+      "要看某个变化之后的局面一律用 moves，不要自己推演或手写 FEN。" +
+      "失败以 {ok:false,error:{code,message}} 返回。",
     inputSchema: {
       type: "object",
       properties: {
@@ -116,13 +118,10 @@ const TOOLS = [
           description:
             "要分析的局面，格式「棋盘 r|b」（如 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r'）。省略则用 app 当前局面",
         },
-        multipv: {
-          type: "integer",
-          description: "返回的候选线路数，1-10，默认 3",
-        },
-        movetime_ms: {
-          type: "integer",
-          description: "引擎思考时间（毫秒），500-60000，默认 5000。要更深的结论用 10000+",
+        moves: {
+          type: "array",
+          items: { type: "string" },
+          description: "可选。先从 fen（省略则当前局面）依次走这些着法（中文或 UCI，红黑交替），再分析走完后的局面",
         },
       },
       additionalProperties: false,
@@ -151,13 +150,10 @@ const TOOLS = [
             "要评估的着法。UCI（h2e2）或中文着法（炮二平五、车9平6）都行——" +
             "推荐直接传中文，省得自己换算坐标算错。必须是当前走子方的着法；传对方的子会报错。",
         },
-        multipv: {
-          type: "integer",
-          description: "对比用的候选线路数，1-10，默认 3",
-        },
-        movetime_ms: {
-          type: "integer",
-          description: "单次引擎思考时长（毫秒），默认 5000。本工具跑两次引擎，总耗时约两倍",
+        moves: {
+          type: "array",
+          items: { type: "string" },
+          description: "可选。先从 fen（省略则当前局面）依次走这些着法（中文或 UCI，红黑交替），再在走完后的局面上评估 move",
         },
       },
       required: ["move"],
@@ -195,14 +191,14 @@ const TOOLS = [
 async function callTool(name, args = {}) {
   switch (name) {
     case "get_position":
-      return textContent(await api("/state"));
+      return textContent(await api("/position"));
 
     case "evaluate": {
+      // 与 evaluate_move 一样走 app 内同一份工具实现（/evaluate），moves 解析、问棋缓存都在 Swift 侧
       const body = {};
       if (args.fen !== undefined) body.fen = args.fen;
-      if (args.multipv !== undefined) body.multipv = args.multipv;
-      if (args.movetime_ms !== undefined) body.movetime = args.movetime_ms;
-      return textContent(await api("/eval", { method: "POST", body }));
+      if (args.moves !== undefined) body.moves = args.moves;
+      return textContent(await api("/evaluate", { method: "POST", body }));
     }
 
     case "evaluate_move": {
@@ -211,8 +207,7 @@ async function callTool(name, args = {}) {
       // 该端点恒回 200，业务失败在 body 的 ok:false 里，模型自行分支
       const body = { move: args.move };
       if (args.fen !== undefined) body.fen = args.fen;
-      if (args.multipv !== undefined) body.multipv = args.multipv;
-      if (args.movetime_ms !== undefined) body.movetime_ms = args.movetime_ms;
+      if (args.moves !== undefined) body.moves = args.moves;
       return textContent(await api("/eval_move", { method: "POST", body }));
     }
 

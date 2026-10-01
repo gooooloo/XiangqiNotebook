@@ -1794,8 +1794,8 @@ class ViewModel: ObservableObject {
     
     // MARK: - 引擎应招（跨平台）
 
-    /// 应招时向引擎要的候选数：首选走回本局已出现的局面时，依次退到次选
-    static let engineResponseCandidateCount = 3
+    /// 首选会走回本局已出现的局面时，补一次搜索要的候选数（首选之外再看一条）
+    static let engineResponseFallbackMultiPV = 2
 
     /// 按引擎排名挑第一个不会走回已出现局面的候选。候选全部重复时返回 nil
     static func pickNonRepeatingResponse(
@@ -1811,31 +1811,47 @@ class ViewModel: ObservableObject {
         return nil
     }
 
-    /// 存分并落子引擎应招：原局面存首选分，应招后局面存所选候选分的相反数。
-    /// 候选线路一并写进问棋的分析缓存，之后在该局面问棋不必重算
+    /// 引擎应招的共用流程。
+    ///
+    /// `quickEval` 必须是与快估同档的单线路搜索（MultiPV 1）：它的分数要写进库里，
+    /// 多线路搜索同样时间搜得更浅，分数不能与快估混存。
+    /// 首选会走回本局已出现的局面时才跑 `fallback`（MultiPV 2），它只用来挑着法，
+    /// 不写任何分数、也不进问棋缓存。
+    /// 新局面不写分数：取负号只是近似、不是同档分数；单独补一次快估又多半白算——
+    /// 接着对新局面应招时本来就要算它
     @MainActor
-    private func playEngineResponse(lines: [EnginePVLine], fen: String, fenId: Int, engineKey: String, movetime: Int) {
-        guard let best = lines.min(by: { $0.multipv < $1.multipv }) else { return }
-        cacheEngineAnalysis(fenId: fenId, lines: lines,
-                            multiPV: Self.engineResponseCandidateCount, movetime: movetime)
-        session.updateEngineScore(fenId, score: best.scoreCp, engineKey: engineKey)
+    private func respondWithEngine(
+        fen: String, fenId: Int, engineKey: String,
+        quickEval: (String) async throws -> (score: Int, move: String?)?,
+        fallback: () async throws -> [EnginePVLine],
+        isCancelled: () -> Bool = { false }
+    ) async throws {
+        guard let result = try await quickEval(fen), !isCancelled() else { return }
+        session.updateEngineScore(fenId, score: result.score, engineKey: engineKey)
 
         // 评估这 3 秒期间用户可能已经切到别的局面：分数按 fenId 存，切到哪都不受影响，
         // 但应招落子必须只在用户仍停留在被评估的这个局面时才执行，
         // 否则会把用户从当前正在看的局面强行拽走到一个跟当前上下文无关的新局面
-        guard session.currentFenId == fenId else { return }
+        guard session.currentFenId == fenId,
+              let uciMove = result.move,
+              let bestFen = XiangqiBoardUtils.getNewFenAfterUCIMove(uciMove: uciMove, fen: fen) else { return }
 
-        guard let (line, newFen) = Self.pickNonRepeatingResponse(
-            lines: lines, fen: fen, isVisited: { session.isFenInCurrentPath($0) }
-        ) else {
-            platformService.showWarningAlert(
-                title: "没有可走的应招",
-                message: "引擎前 \(Self.engineResponseCandidateCount) 个候选都会走回本局已出现过的局面。"
-            )
-            return
+        var responseFen = bestFen
+        if session.isFenInCurrentPath(bestFen) {
+            let lines = try await fallback()
+            guard !isCancelled(), session.currentFenId == fenId else { return }
+            guard let (_, fallbackFen) = Self.pickNonRepeatingResponse(
+                lines: lines, fen: fen, isVisited: { session.isFenInCurrentPath($0) }
+            ) else {
+                platformService.showWarningAlert(
+                    title: "没有可走的应招",
+                    message: "引擎前 \(Self.engineResponseFallbackMultiPV) 个候选都会走回本局已出现过的局面。"
+                )
+                return
+            }
+            responseFen = fallbackFen
         }
-        _ = session.playNewBoardFen(newFen)
-        session.updateEngineScore(session.currentFenId, score: -line.scoreCp, engineKey: engineKey)
+        _ = session.playNewBoardFen(responseFen)
     }
 
     // MARK: - 引擎评估（macOS）
@@ -1883,7 +1899,7 @@ class ViewModel: ObservableObject {
         let fenId = session.currentFenId
         guard let fen = session.getFenForId(fenId) else { return }
         guard let queue = ensureEvaluationQueue() else { return }
-        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: 3000))
+        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: PikafishService.quickMovetimeMs))
     }
 
     /// @MainActor：从快捷键闭包经无结构 Task 调用时会落在全局执行器上，
@@ -1911,15 +1927,20 @@ class ViewModel: ObservableObject {
         guard let fen = session.getFenForId(fenId) else { return }
         guard let service = ensurePikafishService() else { return }
 
+        let movetime = PikafishService.quickMovetimeMs
         do {
-            // 用 MultiPV 而非单一 bestmove：首选走回本局已出现的局面时要退到次选
-            let movetime = 3000
-            let lines = try await service.analyzePosition(
-                fen: fen, multiPV: Self.engineResponseCandidateCount, movetime: movetime
-            )
             // 函数为 @MainActor，await 恢复后数据修改自动回到主线程
-            playEngineResponse(lines: lines, fen: fen, fenId: fenId,
-                               engineKey: PikafishService.quickEngineKey, movetime: movetime)
+            try await respondWithEngine(
+                fen: fen, fenId: fenId, engineKey: PikafishService.quickEngineKey,
+                quickEval: { fen in
+                    // 与快估是同一个调用、同一组参数
+                    try await service.evaluatePosition(fen: fen, movetime: movetime)
+                        .map { ($0.score, $0.bestMove) }
+                },
+                fallback: {
+                    try await service.analyzePosition(
+                        fen: fen, multiPV: Self.engineResponseFallbackMultiPV, movetime: movetime)
+                })
         } catch {
             platformService.showWarningAlert(
                 title: "皮卡鱼应招失败",
@@ -2026,7 +2047,7 @@ class ViewModel: ObservableObject {
             // 即使已有深评分，也仍补算快估分（按用户需求，不再因深评存在而跳过）
             if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey) != nil { continue }
             guard let fen = session.getFenForId(fenId) else { continue }
-            requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: 3000))
+            requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: PikafishService.quickMovetimeMs))
         }
         queue.enqueueAll(requests)
     }
@@ -2080,26 +2101,26 @@ class ViewModel: ObservableObject {
         defer { isEvaluatingIOS = false }
 
         let service = ensurePikafishServiceIOS()
-        let lines: [EnginePVLine]
         do {
-            // 用 MultiPV 而非单一 bestmove：首选走回本局已出现的局面时要退到次选
-            lines = try await service.analyzePosition(
-                fen: fen, multiPV: Self.engineResponseCandidateCount, movetime: PikafishServiceIOS.movetimeMs
-            )
+            try await respondWithEngine(
+                fen: fen, fenId: fenId, engineKey: PikafishServiceIOS.engineKey,
+                quickEval: { fen in
+                    try await service.evaluatePosition(fen: fen).map { ($0.score, $0.bestMove) }
+                },
+                fallback: {
+                    try await service.analyzePosition(
+                        fen: fen, multiPV: Self.engineResponseFallbackMultiPV,
+                        movetime: PikafishServiceIOS.movetimeMs)
+                },
+                // 用户思考期间点了取消：结果整个丢弃，不存分也不落子，就当没点过
+                isCancelled: { self.aiRespondCancelled })
         } catch {
             // busy（问棋分析正占着引擎）或 NNUE 缺失，文案由 EngineError 提供
             platformService.showWarningAlert(
                 title: "无法评估",
                 message: error.localizedDescription
             )
-            return
         }
-
-        // 用户思考期间点了取消：结果整个丢弃，不存分也不落子，就当没点过
-        guard !aiRespondCancelled else { return }
-
-        playEngineResponse(lines: lines, fen: fen, fenId: fenId,
-                           engineKey: PikafishServiceIOS.engineKey, movetime: PikafishServiceIOS.movetimeMs)
     }
 
     /// 取消正在进行的 AI 应招：通知引擎提前结束搜索，结果到达后会被丢弃

@@ -53,6 +53,8 @@ class PikafishService: @unchecked Sendable {
 
     /// 快速估分 key，用于 3 秒限时评分的独立存储
     static let quickEngineKey = "Pikafish_dev-20260213-391d491a_t3s"
+    /// 快估用时（毫秒），须与 quickEngineKey 里的 t3s 一致
+    static let quickMovetimeMs = 3000
 
     // MARK: - FEN Conversion
 

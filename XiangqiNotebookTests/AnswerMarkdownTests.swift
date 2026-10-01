@@ -82,6 +82,20 @@ struct AnswerMarkdownTests {
         #expect(String(AnswerMarkdown.inline("`h2e2`").characters) == "h2e2")
     }
 
+    @Test func testInline_boldEndingWithChinesePunctuation() {
+        // CommonMark 不认「。**走」这种收尾，实测界面漏出星号
+        let rendered = AnswerMarkdown.inline("**结论：亏了 152 分。**走之前已落后")
+        #expect(String(rendered.characters) == "结论：亏了 152 分。走之前已落后")
+        let bold = rendered.runs.filter {
+            $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true
+        }
+        #expect(bold.map { String(rendered[$0.range].characters) } == ["结论：亏了 152 分。"])
+    }
+
+    @Test func testInline_unpairedBoldMarkerFallsBack() {
+        #expect(!String(AnswerMarkdown.inline("只有一个 ** 星号").characters).isEmpty)
+    }
+
     @Test func testInline_survivesBrokenMarkup() {
         // 标记残缺时宁可原样显示，也不能让整段回答消失
         let text = "未闭合的 **加粗"

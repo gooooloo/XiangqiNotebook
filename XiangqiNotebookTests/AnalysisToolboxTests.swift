@@ -55,43 +55,66 @@ struct AnalysisToolboxTests {
 
     // MARK: - evaluate 参数解析
 
-    @Test func testParseEvalArgs_defaults() {
-        let args = AnalysisToolbox.parseEvalArgs(nil)
-        #expect(args.fen == nil)
-        #expect(args.multiPV == AnalysisToolbox.defaultMultiPV)
-        #expect(args.movetime == AnalysisToolbox.defaultMovetime)
+    @Test func testParseEvalArgs_readsFenAndIgnoresEngineConfig() {
+        #expect(AnalysisToolbox.parseEvalArgs(nil).fen == nil)
+        // 候选数与思考时长是问棋的固定配置，模型传了也不认
+        let args = AnalysisToolbox.parseEvalArgs(["fen": startFen, "multipv": 5, "movetime_ms": 8000])
+        #expect(args == AnalysisToolbox.EvalArgs(fen: startFen))
     }
 
-    @Test func testParseEvalArgs_readsProvidedValues() {
-        let args = AnalysisToolbox.parseEvalArgs([
-            "fen": startFen, "multipv": 5, "movetime_ms": 2000,
-        ])
-        #expect(args.fen == startFen)
-        #expect(args.multiPV == 5)
-        #expect(args.movetime == 2000)
+    @Test func testParseEvalArgs_readsMoves() {
+        let args = AnalysisToolbox.parseEvalArgs(["moves": ["炮二平五", " ", "h9g7"]])
+        #expect(args.moves == ["炮二平五", "h9g7"])
     }
 
-    @Test func testParseEvalArgs_clampsOutOfRange() {
-        let low = AnalysisToolbox.parseEvalArgs(["multipv": 0, "movetime_ms": 1])
-        #expect(low.multiPV == AnalysisToolbox.multiPVRange.lowerBound)
-        #expect(low.movetime == AnalysisToolbox.movetimeRange.lowerBound)
-
-        let high = AnalysisToolbox.parseEvalArgs(["multipv": 99, "movetime_ms": 999_999])
-        #expect(high.multiPV == AnalysisToolbox.multiPVRange.upperBound)
-        #expect(high.movetime == AnalysisToolbox.movetimeRange.upperBound)
+    @Test func testStartPosition_playsMovesFromCurrentFen() throws {
+        // 模型要看某个变化之后的局面，交给 moves 去走，不自己写 FEN
+        let args = AnalysisToolbox.EvalArgs(fen: nil, moves: ["炮二平五", "h9g7"])
+        guard case .played(let fen, let applied) = AnalysisToolbox.startPosition(
+            args, currentFen: { startFen }, flipped: false) else {
+            Issue.record("合法着法序列应能走完")
+            return
+        }
+        #expect(applied.map(\.uci) == ["h2e2", "h9g7"])
+        #expect(fen == applied.last?.fen)
+        #expect(AnalysisToolbox.sideToMove(fen: fen) == "red")
     }
 
-    @Test func testParseEvalArgs_coercesStringAndDoubleNumbers() {
-        // 模型把数字写成字符串或浮点是常态，不该因此退回默认值
-        let args = AnalysisToolbox.parseEvalArgs(["multipv": "5", "movetime_ms": 2000.0])
-        #expect(args.multiPV == 5)
-        #expect(args.movetime == 2000)
+    @Test func testStartPosition_reportsWhichStepFailed() {
+        // 第 2 步又走红马（h0g2）：轮黑走，必须拦下并指明第几步
+        let args = AnalysisToolbox.EvalArgs(fen: startFen, moves: ["炮二平五", "h0g2"])
+        guard case .failed(let errorJSON) = AnalysisToolbox.startPosition(
+            args, currentFen: { "" }, flipped: false) else {
+            Issue.record("轮错方必须报错")
+            return
+        }
+        #expect(errorJSON.contains("moves 第 2 步"))
+        #expect(errorJSON.contains("ILLEGAL_MOVE"))
     }
 
-    @Test func testParseEvalArgs_acceptsMovetimeAlias() {
-        // 工具 schema 写的是 movetime_ms，但模型常按远程接口的习惯写成 movetime
-        let args = AnalysisToolbox.parseEvalArgs(["movetime": 2000])
-        #expect(args.movetime == 2000)
+    @Test func testToolSpecs_evaluateToolsAcceptMoves() throws {
+        for name in ["evaluate", "evaluate_move"] {
+            let spec = try #require(AnalysisToolbox.toolSpecs.first {
+                ($0["function"] as? [String: Any])?["name"] as? String == name
+            })
+            let function = try #require(spec["function"] as? [String: Any])
+            let parameters = try #require(function["parameters"] as? [String: Any])
+            let properties = try #require(parameters["properties"] as? [String: Any])
+            #expect(properties["moves"] != nil, "\(name) 应接受 moves")
+        }
+    }
+
+    @Test func testToolSpecs_doNotExposeEngineConfig() throws {
+        for name in ["evaluate", "evaluate_move"] {
+            let spec = try #require(AnalysisToolbox.toolSpecs.first {
+                ($0["function"] as? [String: Any])?["name"] as? String == name
+            })
+            let function = try #require(spec["function"] as? [String: Any])
+            let parameters = try #require(function["parameters"] as? [String: Any])
+            let properties = try #require(parameters["properties"] as? [String: Any])
+            #expect(properties["multipv"] == nil, "\(name) 不该暴露 multipv")
+            #expect(properties["movetime_ms"] == nil, "\(name) 不该暴露 movetime_ms")
+        }
     }
 
     @Test func testParseEvalArgs_treatsEmptyFenAsAbsent() {
@@ -186,6 +209,16 @@ struct AnalysisToolboxTests {
         for uiKey in ["showPath", "isLocked", "windowTitle", "orientation", "filters"] {
             #expect(dict[uiKey] == nil, "\(uiKey) 不该出现在工具返回值里")
         }
+    }
+
+    @Test func testSnapshot_toolDictionaryOmitsLibraryScores() {
+        // 云库分与库里的引擎分不给模型（视角按棋盘朝向调过、引擎分配置也与 evaluate 不同），/state 照旧给
+        let tool = snapshot(fen: startFen).toolDictionary()
+        #expect(tool["score"] == nil)
+        #expect(tool["engineScore"] == nil)
+        let state = snapshot(fen: startFen).remoteStateDictionary()
+        #expect(state["score"] as? String == "12")
+        #expect(state["engineScore"] as? String == "34")
     }
 
     @Test func testSnapshot_remoteStateDictionaryKeepsExistingContract() {
@@ -316,6 +349,38 @@ struct AnalysisToolboxTests {
             Issue.record("不合规则的着法必须被拒")
             return
         }
+    }
+
+    @Test func testLegalMovesHint_listsSameKindWithUCI() {
+        // 实测：模型把黑方八路炮平九路（h0i0）算成了「炮2平1」。提示里要能直接找到正解
+        let fen = "2bakabr1/2R6/2n1c1n2/p1p1p3p/6p2/2P6/P1r1P1P1P/1C2C1N2/4N4/1RBAKABc1 b"
+        let hint = AnalysisToolbox.legalMovesHint(for: "炮2平1", fen: fen)
+        #expect(hint.hasPrefix("本方同类子的合法着法"))
+        #expect(hint.contains("(h0i0)"))
+        #expect(!hint.contains("车"))
+        #expect(!hint.contains("马"))
+    }
+
+    @Test func testFlipped_resolvesAndNamesMovesAsDisplayed() throws {
+        // 界面左右翻转时，用户看到的这步就叫「炮2平1」，工具必须照这个名字认
+        let fen = "2bakabr1/2R6/2n1c1n2/p1p1p3p/6p2/2P6/P1r1P1P1P/1C2C1N2/4N4/1RBAKABc1 b"
+        guard case .resolved(let move) = AnalysisToolbox.resolveMove("炮2平1", fen: fen, flipped: true) else {
+            Issue.record("翻转时应按界面名解析")
+            return
+        }
+        #expect(move.uci == "h0i0")
+        // 输出同一口径：炮二平五翻转后在界面上是炮八平五
+        #expect(AnalysisToolbox.chinesePV(fen: startFen, uciMoves: ["h2e2"], flipped: true) == ["炮八平五"])
+        #expect(AnalysisToolbox.applyUCIMoves(fen: startFen, uciMoves: ["h2e2"], flipped: true)
+            .applied.first?.chinese == "炮八平五")
+        #expect(AnalysisToolbox.legalMovesHint(for: "炮9平8", fen: fen, flipped: true).contains("(h0i0)"))
+    }
+
+    @Test func testLegalMovesHint_unknownPieceListsAll() {
+        let hint = AnalysisToolbox.legalMovesHint(for: "e5e4", fen: startFen)
+        #expect(hint.hasPrefix("本方全部合法着法"))
+        #expect(hint.contains("(h2e2)"))
+        #expect(hint.contains("(b0c2)"))
     }
 
     @Test func testResolveMove_rejectsEmptySource() {

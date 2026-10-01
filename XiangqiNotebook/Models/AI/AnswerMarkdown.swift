@@ -94,7 +94,28 @@ enum AnswerMarkdown {
     /// `**加粗**`、`*斜体*`、`` `代码` `` → 带样式的 AttributedString。
     /// 用 Foundation 自带的解析器，只开行内模式——块级语法已经在 `blocks` 里拆过了。
     /// 解析失败（残缺标记等）就原样返回，绝不能因为一处语法问题让整段回答显示不出来
+    ///
+    /// 加粗按成对的 `**` 自己切，不交给解析器：CommonMark 的定界符规则不认中文标点，
+    /// 「……亏了 152 分。**走之前」里的 `**` 前面是标点、后面是汉字，判定为收不了尾，
+    /// 界面就漏出星号。段内的斜体、代码仍由解析器处理。`**` 不成对时整段交给解析器
     static func inline(_ text: String) -> AttributedString {
+        let parts = text.components(separatedBy: "**")
+        guard parts.count >= 3, parts.count % 2 == 1 else { return parsedInline(text) }
+        var result = AttributedString()
+        for (index, part) in parts.enumerated() {
+            var segment = parsedInline(part)
+            if index % 2 == 1 {
+                for range in segment.runs.map(\.range) {
+                    let intent = segment[range].inlinePresentationIntent ?? []
+                    segment[range].inlinePresentationIntent = intent.union(.stronglyEmphasized)
+                }
+            }
+            result.append(segment)
+        }
+        return result
+    }
+
+    private static func parsedInline(_ text: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace)
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)

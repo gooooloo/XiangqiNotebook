@@ -238,21 +238,22 @@ internal class Database: ObservableObject {
            own.satisfies(multiPV: multiPV, movetimeMs: movetimeMs) {
             return own
         }
-        // 别人的结果里挑信息量最大的一条，结果才稳定（字典遍历顺序不保证）
+        // 按 key 排序取第一条，结果才稳定（字典遍历顺序不保证）
         return engineScores
             .filter { $0.key != preferredKey }
+            .sorted { $0.key < $1.key }
             .compactMap { $0.value.analyses[fenId] }
-            .filter { $0.satisfies(multiPV: multiPV, movetimeMs: movetimeMs) }
-            .max { ($0.movetimeMs, $0.multiPV) < ($1.movetimeMs, $1.multiPV) }
+            .first { $0.satisfies(multiPV: multiPV, movetimeMs: movetimeMs) }
     }
 
-    /// 写入分析缓存并标记脏。已有更宽更久的结果时不覆盖
+    /// 写入分析缓存并标记脏。已有同配置的结果时不覆盖（免得白白置脏重写文件）；
+    /// 配置不同的旧结果直接换掉——它已经不会被命中了
     func setEngineAnalysis(fenId: Int, engineKey: String, analysis: CachedAnalysis) {
         if engineScores[engineKey] == nil {
             engineScores[engineKey] = EngineScoreData()
         }
         if let existing = engineScores[engineKey]?.analyses[fenId],
-           existing.supersedes(analysis) {
+           existing.satisfies(multiPV: analysis.multiPV, movetimeMs: analysis.movetimeMs) {
             return
         }
         engineScores[engineKey]?.analyses[fenId] = analysis

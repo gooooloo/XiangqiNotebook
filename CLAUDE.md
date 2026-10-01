@@ -173,7 +173,7 @@ xcodebuild test -project XiangqiNotebook.xcodeproj -scheme XiangqiNotebook -dest
 app 启动后会自动在 `localhost:9214` 启动 HTTP 服务器（`RemoteControlServer`，macOS 专属）。
 接口按能力分两层，编译门禁不同：
 
-- **只读分析接口（Release 也启用）**：`/state`、`/eval`、`/eval_move`、`/apply`、`/screenshot`——
+- **只读分析接口（Release 也启用）**：`/state`、`/position`、`/eval`、`/evaluate`、`/eval_move`、`/apply`、`/screenshot`——
   查局面、皮卡鱼引擎分析、着法评估、走子计算、截图，均只读，不改数据；供 MCP server 桥接给 Claude。
 - **驱动接口（仅 DEBUG）**：`/action`、`/actions`、`/import_course`——能触发 app 内任意操作/
   写入数据，属开发/自动化测试专用，不随正式版发行，以缩小攻击面。
@@ -196,8 +196,11 @@ TOKEN=$(cat ~/Library/Containers/com.gooooloo.XiangqiNotebook/Data/Library/Appli
 # 截图当前窗口（返回 PNG）
 curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/screenshot -o /tmp/screenshot.png
 
-# 获取当前应用状态（返回 JSON）
+# 获取当前应用状态（返回 JSON，含 UI 开关；给人和脚本看）
 curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/state
+
+# 获取给 AI 看的局面（与 app 内问棋 get_position 工具同一实现，MCP 的 get_position 走这里）
+curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/position
 
 # 执行操作（action 名称对应 ActionDefinitions.ActionKey）
 curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/action -d '{"action":"stepForward"}'
@@ -208,9 +211,11 @@ curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/action -d 
 # 列出所有可用操作
 curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/actions
 
-# 皮卡鱼 MultiPV 分析（仅 macOS + Apple Silicon；耗时约 movetime 毫秒，默认 5 秒）
-# 省略 fen 则分析 app 当前局面；multipv 默认 3（1-10），movetime 默认 5000ms（500-60000）
-curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval -d '{"multipv":3,"movetime":5000}'
+# 皮卡鱼 MultiPV 分析（仅 macOS + Apple Silicon；耗时约 movetime 毫秒，默认 3 秒）
+# 省略 fen 则分析 app 当前局面；multipv 默认 3（1-10），movetime 默认 3000ms（500-60000，与 app 内问棋同一配置）
+# 结果与 app 内问棋共用问棋的分析缓存（笔记本里有的局面才缓存），命中时秒回，响应带 cached 字段；
+# 问棋缓存与快估/应招的局面分互不读写
+curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval -d '{"multipv":3,"movetime":3000}'
 curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval -d '{"fen":"rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r","multipv":5}'
 # 返回：每条候选线路的 rank、scoreCp（走子方视角厘兵值，杀棋折算 ±30000 附近）、depth、
 # pvUci（UCI 着法序列）、pvChinese（中文着法序列）。引擎忙碌时返回 409
@@ -218,7 +223,11 @@ curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval -d '{
 # 把 UCI 着法序列应用到局面上（机械移动，不校验规则），返回每步中文着法名与新 fen
 curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/apply -d '{"fen":"rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r","moves":["h2e2","h9g7"]}'
 
-# 评估某一具体着法（跑两次引擎，分数统一为走子方视角）。move 收 UCI 或中文着法；
+# 引擎分析（与 app 内 AI 的 evaluate 工具同一实现，MCP 的 evaluate 走这里）：固定 3 条 3 秒，
+# 可选 moves（中文或 UCI）先走完再分析；响应恒为 200，失败为 {"ok":false,"error":{code,message}}
+curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/evaluate -d '{"moves":["炮二平五","马8进7"]}'
+
+# 评估某一具体着法（跑两次引擎，分数统一为走子方视角）。move 收 UCI 或中文着法，可选 moves 同上；
 # 语义与 app 内 AI 的 evaluate_move 工具完全一致（内部就是同一份代码）。
 # 响应恒为 200：成功 {"ok":true,...}，业务失败 {"ok":false,"error":{code,message}}
 curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval_move -d '{"move":"炮二平五","multipv":5}'
@@ -262,7 +271,7 @@ app 挂起在暂停态）,必须只跑单元测试：`-only-testing:XiangqiNoteb
 ### MCP Server（连接 Claude 与本 App）
 
 `mcp/xiangqi-notebook-mcp.mjs` 是零依赖 Node（≥18）stdio MCP server,把 MCP 工具调用桥接到上述
-远程操控 HTTP 接口。提供工具：`get_position`（当前局面与笔记）、`evaluate`（皮卡鱼 MultiPV 分析）、
+远程操控 HTTP 接口。提供工具：`get_position`（当前局面与笔记，经 `/position`）、`evaluate`（皮卡鱼 MultiPV 分析，经 `/evaluate`）、
 `evaluate_move`（评估某一具体着法，经 `/eval_move`）、`apply_moves`（沿变着走子）、
 `screenshot`（窗口截图）。
 

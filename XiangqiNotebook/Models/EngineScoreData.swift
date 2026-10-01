@@ -14,23 +14,13 @@ struct CachedAnalysis: Codable, Equatable {
     let engine: String
     let lines: [EnginePVLine]
 
-    /// 能否用来回答一个 (multiPV, movetimeMs) 的请求。
+    /// 能否用来回答一个 (multiPV, movetimeMs) 的请求：配置必须完全一致。
     ///
-    /// 「存的比要的宽、比要的久」就能用：top-5 里切得出 top-3，
-    /// 算了 5 秒的结论拿去答 3 秒的请求只会更准。
-    /// 这条规则是缓存能真正命中的关键——否则参数稍有出入就得重算
+    /// 不能「宽的答窄的」：同样时间里线路越多、每条搜得越浅，5 条里截出的前 3 条
+    /// 并不等于一次 3 条的搜索，首选质量更差。问棋的配置是固定的，
+    /// 一致即可命中；不一致的旧结果作废，下次算出来就被覆盖
     func satisfies(multiPV: Int, movetimeMs: Int) -> Bool {
-        self.multiPV >= multiPV && self.movetimeMs >= movetimeMs
-    }
-
-    /// 信息量是否不低于另一条。合并冲突时留信息量大的
-    func supersedes(_ other: CachedAnalysis) -> Bool {
-        satisfies(multiPV: other.multiPV, movetimeMs: other.movetimeMs)
-    }
-
-    /// 截取前 n 条，用来服务比缓存更窄的请求
-    func lines(limitedTo multiPV: Int) -> [EnginePVLine] {
-        Array(lines.prefix(multiPV))
+        self.multiPV == multiPV && self.movetimeMs == movetimeMs
     }
 }
 
