@@ -135,6 +135,7 @@ struct AIChatView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 9) {
                     MarkdownText(markdown: message.text)
+                        .equatable()
                         .font(.system(size: 13))
                         .foregroundColor(AIChatPalette.textPrimary)
                         .textSelection(.enabled)
@@ -390,7 +391,10 @@ struct AIChatView: View {
 
 /// `AnswerMarkdown` 拆出的块的排版。
 /// 字号与颜色由外部通过环境注入（`.font` / `.foregroundColor`），这里只管结构。
-private struct MarkdownText: View {
+///
+/// Equatable + `.equatable()`：进度行与思考预览刷新时整个对话界面都会重算，
+/// 历史回答原文没变就不该重新拆块、解析行内标记——回答越长越贵，追问时会拖死主线程
+private struct MarkdownText: View, Equatable {
 
     let markdown: String
 

@@ -175,7 +175,12 @@ final class ChatViewModel: ObservableObject {
     /// 进度行与思考预览必须一起收——只清前者会把思考文本残留在界面上
     private func clearProgress() {
         progressText = nil
+        clearReasoning()
+    }
+
+    private func clearReasoning() {
         reasoningPreview = nil
+        reasoningTail = nil
     }
 
     func cancel() {
@@ -205,7 +210,7 @@ final class ChatViewModel: ObservableObject {
             // 界面若空着，用户只能干等到超时才知道发生过什么
             progressStep = step
             progressText = traces.isEmpty ? "正在等模型回复…" : "模型正在读取分析结果…"
-            reasoningPreview = nil
+            clearReasoning()
 
             let response: LLMResponse
             do {
@@ -322,15 +327,35 @@ final class ChatViewModel: ObservableObject {
     }
 
     /// 思考只留尾巴一小段。推理模型能吐好几千字，全量显示会把界面撑爆，
-    /// 而用户真正需要的信息只有「它还在动、在想什么方向」
+    /// 而用户真正需要的信息只有「它还在动、在想什么方向」。
+    ///
+    /// 增量是逐 token 来的（一秒几十上百次），每次都发布会让整个对话界面跟着重建——
+    /// 历史回答越长越卡，第二问起主线程就被拖死、待执行的 Task 越积越多。
+    /// 所以先攒在 `reasoningTail`，按 `reasoningPublishInterval` 节流发布
     private func appendReasoning(_ chunk: String) {
         guard isRunning else { return }
-        let merged = (reasoningPreview ?? "") + chunk
+        let merged = (reasoningTail ?? "") + chunk
         let flattened = merged.replacingOccurrences(of: "\n", with: " ")
-        reasoningPreview = String(flattened.suffix(Self.reasoningPreviewLimit))
+        reasoningTail = String(flattened.suffix(Self.reasoningPreviewLimit))
+
+        guard !reasoningPublishScheduled else { return }
+        reasoningPublishScheduled = true
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.reasoningPublishInterval)
+            guard let self else { return }
+            self.reasoningPublishScheduled = false
+            // 期间已收尾或换了一步：tail 已被清空，不能把旧思考写回界面
+            guard self.isRunning, let tail = self.reasoningTail else { return }
+            self.reasoningPreview = tail
+        }
     }
 
     private static let reasoningPreviewLimit = 160
+    private static let reasoningPublishInterval: UInt64 = 200_000_000
+
+    /// 尚未发布的思考尾巴；与节流标志一起，保证每个间隔最多刷一次界面
+    private var reasoningTail: String?
+    private var reasoningPublishScheduled = false
 
     /// 达到步数上限时，模型最近一次说过的正文
     private func lastAssistantText() -> String? {
