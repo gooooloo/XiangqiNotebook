@@ -92,6 +92,23 @@ struct AnalysisToolboxTests {
         #expect(errorJSON.contains("ILLEGAL_MOVE"))
     }
 
+    @Test func testPvText_labelsSidesAndRounds() {
+        // 实测模型把「炮三退一、炮2平1、炮八退六」讲成红方连走两步；每手标出是谁走的
+        #expect(AnalysisToolbox.pvText(fen: startFen, chineseMoves: ["炮三退一", "炮2平1", "炮八退六"])
+            == "1. 红炮三退一 黑炮2平1　2. 红炮八退六")
+        // 黑方先走：第一回合只有黑方一手
+        let blackToMove = startFen.replacingOccurrences(of: "RNBAKABNR r", with: "RNBAKABNR b")
+        #expect(AnalysisToolbox.pvText(fen: blackToMove, chineseMoves: ["炮2平1", "炮八退六", "车5平9"])
+            == "1. 黑炮2平1　2. 红炮八退六 黑车5平9")
+        #expect(AnalysisToolbox.pvText(fen: startFen, chineseMoves: []) == "")
+        // 只给前 4 个回合
+        let long = (1...12).map { "着\($0)" }
+        #expect(AnalysisToolbox.pvText(fen: startFen, chineseMoves: long)
+            == "1. 红着1 黑着2　2. 红着3 黑着4　3. 红着5 黑着6　4. 红着7 黑着8")
+        #expect(AnalysisToolbox.pvText(fen: blackToMove, chineseMoves: long)
+            == "1. 黑着1　2. 红着2 黑着3　3. 红着4 黑着5　4. 红着6 黑着7")
+    }
+
     @Test func testToolSpecs_evaluateToolsAcceptMoves() throws {
         for name in ["evaluate", "evaluate_move"] {
             let spec = try #require(AnalysisToolbox.toolSpecs.first {

@@ -105,7 +105,7 @@ const TOOLS = [
     description:
       "用本地皮卡鱼（Pikafish）引擎对局面做 MultiPV 分析，固定返回前 3 条候选着法线路，" +
       "每条含 scoreCp（厘兵分，【走子方视角】，正=走子方优；杀棋折算为 ±30000 附近）、depth、" +
-      "pvUci（UCI 着法序列）、pvChinese（中文着法序列）。" +
+      "pvUci（UCI 着法序列）、pvChinese（中文着法序列）、pvText（标明红黑与回合号的主变，引用变化时用它）。" +
       "省略 fen 则分析 app 当前局面；给了 moves 则先依次走完这些着法，再分析走完后的局面。" +
       "每次分析约 3 秒（与 app 内问棋同一工具实现，共用问棋的分析缓存）。" +
       "要看某个变化之后的局面一律用 moves，不要自己推演或手写 FEN。" +

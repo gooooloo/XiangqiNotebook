@@ -189,7 +189,8 @@ final class AnalysisToolbox {
             function(
                 name: "evaluate",
                 description: """
-                用皮卡鱼引擎分析一个局面，固定返回前 \(multiPV) 条候选线路，每条含分数、搜索深度、主变（UCI 与中文两种记法）。\
+                用皮卡鱼引擎分析一个局面，固定返回前 \(multiPV) 条候选线路，每条含分数、搜索深度、主变（UCI 与中文两种记法，\
+                以及标明红黑与回合号的 pvText——引用变化时照它完整引用，别漏掉任何一方的着法）。\
                 分数是走子方视角的厘兵值，100 约等于一个兵，杀棋折算到 ±30000 附近。\
                 省略 fen 则分析当前局面。这是判断着法好坏的唯一可靠依据，不要凭印象下结论。
                 """,
@@ -456,6 +457,33 @@ final class AnalysisToolbox {
         return result
     }
 
+    /// 把主变写成标明红黑、带回合号的一行：「1. 红炮三退一 黑炮2平1　2. 红炮八退六 黑车5平9」。
+    ///
+    /// 光给一串着法，模型转述时容易吞掉对方的一手（实测把「炮三退一、炮2平1、炮八退六」
+    /// 讲成红方连走两步，而当前局面里那门红炮根本退不了）。每手标出是谁走的，就很难再连错。
+    /// 只给前 `pvTextRounds` 个回合：3 秒搜索的主变越往后越不可靠，给全了模型就整条照抄，
+    /// 实测一引九个回合、最后一轮输出拖到近五十秒。完整着法仍在 pvChinese / pvUci 里
+    static let pvTextRounds = 4
+
+    static func pvText(fen: String, chineseMoves: [String]) -> String {
+        var side = sideToMove(fen: fen)
+        var rounds: [String] = []
+        var current: [String] = []
+        for move in chineseMoves where rounds.count < pvTextRounds {
+            current.append((side == "red" ? "红" : "黑") + move)
+            side = side == "red" ? "black" : "red"
+            // 一回合到黑方走完为止；黑方先走时第一回合只有黑方一手
+            if side == "red" {
+                rounds.append("\(rounds.count + 1). " + current.joined(separator: " "))
+                current = []
+            }
+        }
+        if !current.isEmpty, rounds.count < pvTextRounds {
+            rounds.append("\(rounds.count + 1). " + current.joined(separator: " "))
+        }
+        return rounds.joined(separator: "　")
+    }
+
     // MARK: - 执行分发
 
     /// 描述某次工具调用正在做什么，供界面显示进度
@@ -608,13 +636,15 @@ final class AnalysisToolbox {
 
     /// 一条候选线路的返回形状，`evaluate` 与 `evaluate_move` 共用
     private static func lineDictionary(_ line: EnginePVLine, fen: String, flipped: Bool) -> [String: Any] {
-        [
+        let chinese = chinesePV(fen: fen, uciMoves: line.moves, flipped: flipped)
+        return [
             "rank": line.multipv,
             "scoreCp": line.scoreCp,
             "mate": line.mate as Any? ?? NSNull(),
             "depth": line.depth as Any? ?? NSNull(),
             "pvUci": line.moves,
-            "pvChinese": chinesePV(fen: fen, uciMoves: line.moves, flipped: flipped),
+            "pvChinese": chinese,
+            "pvText": pvText(fen: fen, chineseMoves: chinese),
         ]
     }
 
@@ -728,13 +758,15 @@ final class AnalysisToolbox {
             // 对手线路的分数同样翻到 mover 视角，全表一个口径
             let replies: [[String: Any]] = after.lines.map { line in
                 let negated = Self.negatedScore(cp: line.scoreCp, mate: line.mate)
+                let chinese = Self.chinesePV(fen: step.fen, uciMoves: line.moves, flipped: flipped)
                 return [
                     "rank": line.multipv,
                     "scoreCp": negated.cp,
                     "mate": negated.mate as Any? ?? NSNull(),
                     "depth": line.depth as Any? ?? NSNull(),
                     "pvUci": line.moves,
-                    "pvChinese": Self.chinesePV(fen: step.fen, uciMoves: line.moves, flipped: flipped),
+                    "pvChinese": chinese,
+                    "pvText": Self.pvText(fen: step.fen, chineseMoves: chinese),
                 ]
             }
 
