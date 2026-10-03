@@ -1890,7 +1890,7 @@ class ViewModel: ObservableObject {
         let fenId = session.currentFenId
         guard let fen = session.getFenForId(fenId) else { return }
         guard let queue = ensureEvaluationQueue() else { return }
-        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.scoreEngineKey, movetime: PikafishService.scoreMovetimeMs))
+        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: EngineScoreData.pikafishScoreKey, movetime: PikafishService.scoreMovetimeMs))
     }
 
     /// @MainActor：从快捷键闭包经无结构 Task 调用时会落在全局执行器上，
@@ -1922,7 +1922,7 @@ class ViewModel: ObservableObject {
         do {
             // 函数为 @MainActor，await 恢复后数据修改自动回到主线程
             try await respondWithEngine(
-                fen: fen, fenId: fenId, engineKey: PikafishService.scoreEngineKey,
+                fen: fen, fenId: fenId, engineKey: EngineScoreData.pikafishScoreKey,
                 scoreEval: { fen in
                     // 与皮卡鱼评分是同一个调用、同一组参数
                     try await service.evaluatePosition(fen: fen, movetime: movetime)
@@ -2022,9 +2022,9 @@ class ViewModel: ObservableObject {
         let game = session.sessionData.currentGame2
         var requests: [EvaluationRequest] = []
         for fenId in game {
-            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.scoreEngineKey) != nil { continue }
+            if Database.shared.getEngineScore(fenId: fenId, engineKey: EngineScoreData.pikafishScoreKey) != nil { continue }
             guard let fen = session.getFenForId(fenId) else { continue }
-            requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.scoreEngineKey, movetime: PikafishService.scoreMovetimeMs))
+            requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: EngineScoreData.pikafishScoreKey, movetime: PikafishService.scoreMovetimeMs))
         }
         queue.enqueueAll(requests)
     }
@@ -2111,7 +2111,7 @@ class ViewModel: ObservableObject {
 
     var currentFenPikafishScoreStatus: FenEvalStatus {
         #if os(macOS)
-        return evaluationQueue?.statusForFen(fenId: session.currentFenId, engineKey: PikafishService.scoreEngineKey) ?? .idle
+        return evaluationQueue?.statusForFen(fenId: session.currentFenId, engineKey: EngineScoreData.pikafishScoreKey) ?? .idle
         #else
         return .idle
         #endif

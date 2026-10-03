@@ -49,9 +49,7 @@ class PikafishService: @unchecked Sendable {
     /// 名字里的 d34 来自已移除的深度评分功能，改名会让既有缓存文件失联，故保留
     static let engineKey = "Pikafish_dev-20260213-391d491a_d34"
 
-    /// 皮卡鱼评分 key，用于 3 秒限时评分的独立存储
-    static let scoreEngineKey = "Pikafish_dev-20260213-391d491a_t3s"
-    /// 皮卡鱼评分用时（毫秒），须与 scoreEngineKey 里的 t3s 一致
+    /// 皮卡鱼评分用时（毫秒），须与 EngineScoreData.pikafishScoreKey 里的 t3s 一致
     static let scoreMovetimeMs = 3000
 
     // MARK: - FEN Conversion

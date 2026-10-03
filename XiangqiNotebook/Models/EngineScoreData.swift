@@ -24,6 +24,12 @@ struct CachedAnalysis: Codable, Equatable {
     }
 }
 
+extension EngineScoreData {
+    /// Mac 端皮卡鱼评分（3 秒限时）的 engineKey。放在共享层而非 macOS 专属的
+    /// PikafishService：分数文件经 iCloud 同步，iOS 也要读出来显示
+    static let pikafishScoreKey = "Pikafish_dev-20260213-391d491a_t3s"
+}
+
 /// 引擎分数数据，独立于 DatabaseData 存储
 /// 每个 engineKey 对应一个文件，支持多版本/配置并存
 class EngineScoreData: Codable {

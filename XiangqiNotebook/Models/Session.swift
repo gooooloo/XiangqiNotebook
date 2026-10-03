@@ -404,7 +404,7 @@ class Session: ObservableObject {
 
     func getEngineScoreByFenId(_ fenId: Int) -> Int? {
         #if os(macOS)
-        return databaseView.getEngineScore(fenId: fenId, engineKey: PikafishService.scoreEngineKey)
+        return databaseView.getEngineScore(fenId: fenId, engineKey: EngineScoreData.pikafishScoreKey)
         #else
         return databaseView.getEngineScoreByFenId(fenId)
         #endif
@@ -412,7 +412,7 @@ class Session: ObservableObject {
 
     var currentEngineScore: Int? {
         #if os(macOS)
-        return databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.scoreEngineKey)
+        return databaseView.getEngineScore(fenId: currentFenId, engineKey: EngineScoreData.pikafishScoreKey)
         #else
         return databaseView.getEngineScoreByFenId(currentFenId)
         #endif
@@ -590,14 +590,10 @@ class Session: ObservableObject {
     #endif
 
     /// 皮卡鱼评分显示文本，空字符串表示无评分
+    /// iOS 上读的是 Mac 算好、经 iCloud 同步过来的分数
     var displayPikafishScore: String {
-        #if os(macOS)
-        guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.scoreEngineKey) else { return "" }
-        let nextIsRed = Session.fenNextIsRed(currentFen)
-        return "\(adjustScore(score, nextIsRed: nextIsRed))"
-        #else
-        return ""
-        #endif
+        guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: EngineScoreData.pikafishScoreKey) else { return "" }
+        return "\(adjustScore(score, nextIsRed: Session.fenNextIsRed(currentFen)))"
     }
 
     func getDisplayScoreForMove(_ move: Move) -> String {
