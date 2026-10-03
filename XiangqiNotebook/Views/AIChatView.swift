@@ -115,7 +115,10 @@ struct AIChatView: View {
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                // 不用 LazyVStack：行高差异大（长回答、变着按钮行）又要滚到底时，懒加载按估计高度
+                // 排版、量出实际高度后修正滚动位置、修正又触发重排，会陷进布局死循环，
+                // 主线程 100% 转菊花（回答超出一屏后必现）。对话不过几十条，用不着懒加载
+                VStack(alignment: .leading, spacing: 14) {
                     if chat.messages.isEmpty && !chat.isRunning {
                         emptyState
                     }

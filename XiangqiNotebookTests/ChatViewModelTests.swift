@@ -646,6 +646,18 @@ struct ChatViewModelTests {
         #expect(chat.input.isEmpty)
     }
 
+    @Test func testAsk_startsNewConversation() async {
+        // 走到另一步再点「此招为何不好」：不能接在旧对话后面，否则模型带着上个局面的前情答
+        let (chat, client, _) = makeChat(script: [text("旧回答。"), text("新回答。")])
+        await ask(chat, "旧问题")
+        chat.ask("这一步（炮二平五）为什么不好？")
+        await waitUntilIdle(chat)
+
+        #expect(chat.messages.map(\.text) == ["这一步（炮二平五）为什么不好？", "新回答。"])
+        let sent = try! #require(client.sentMessageLog.last)
+        #expect(!sent.contains { $0.content == "旧问题" }, "新对话的请求里不该带旧问题")
+    }
+
     @Test func testAsk_whileRunningParksTheQuestionInsteadOfDroppingIt() async {
         // 跑着的时候再点「问 AI」不能把问题吞掉——用户看不到任何反应会以为按钮坏了
         let (chat, _, _) = makeChat(script: [toolCall("get_position"), text("好。")])

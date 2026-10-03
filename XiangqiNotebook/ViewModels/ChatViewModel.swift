@@ -164,15 +164,30 @@ final class ChatViewModel: ObservableObject {
         start(question: text)
     }
 
-    /// 快捷入口用：直接问一个现成的问题。
+    /// 快捷入口用：开一段新对话，直接问一个现成的问题。
+    ///
+    /// 快捷提问都是开场白（「此招为何不好」「分析一下这个局面」），通常是走到别的局面后才点的。
+    /// Mac 上问棋窗口一直开着，接在旧对话后面问，模型会带着上一个局面的前情答偏，
+    /// 所以清空重来；要追问就在输入框里接着问。
     /// 正在跑的时候不打断，把问题放进输入框——问题不能被悄悄吞掉
     func ask(_ question: String) {
         guard !isRunning else {
             input = question
             return
         }
+        resetConversation()
         input = question
         send()
+    }
+
+    /// 回到刚打开窗口时的样子
+    private func resetConversation() {
+        messages = []
+        traces = []
+        wireMessages = [.system(AIChatPrompt.system)]
+        boardSelection = nil
+        lastFailedInput = nil
+        clearError()
     }
 
     /// 重试上一次失败的提问
