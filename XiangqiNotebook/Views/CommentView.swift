@@ -112,7 +112,7 @@ struct CommentView: View {
                 if showsBadReason {
                     VStack(alignment: .leading, spacing: 5) {
                         header("不好的原因", color: Theme.bad,
-                               ask: ViewModel.AIQuickQuestion.whyLastMoveIsBad)
+                               ask: viewModel.whyLastMoveIsBadQuestion)
                         commentBox(
                             text: viewModel.currentMoveBadReason ?? "",
                             isEditing: viewModel.isCommentEditing,

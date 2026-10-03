@@ -19,6 +19,26 @@ struct ActionDefinitionsTests {
     }
 
     @Test
+    func disabledActionIgnoresShortcut() {
+        var executed = 0
+        var enabled = false
+        let ad = ActionDefinitions()
+        ad.registerAction(.askWhyMoveIsBad, text: "t", shortcuts: [.sequence(",wb")], isEnabled: { enabled }) {
+            executed += 1
+        }
+        _ = ad.handleKeyDown(character: ",")
+        _ = ad.handleKeyDown(character: "w")
+        _ = ad.handleKeyDown(character: "b")
+        #expect(executed == 0)
+
+        enabled = true
+        _ = ad.handleKeyDown(character: ",")
+        _ = ad.handleKeyDown(character: "w")
+        _ = ad.handleKeyDown(character: "b")
+        #expect(executed == 1)
+    }
+
+    @Test
     func ambiguousShortMatchYieldsToLongerInput() {
         var executed = ""
         let ad = ActionDefinitions()

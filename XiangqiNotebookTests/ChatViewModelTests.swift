@@ -664,6 +664,13 @@ struct ChatViewModelTests {
         #expect(makeViewModel().currentPositionSnapshot().lastMove == nil)
     }
 
+    @Test func testWhyLastMoveIsBadQuestion_namesTheMoveLikeLastMove() {
+        // 问题里的招法名必须与 get_position 的 lastMove 同一写法，模型才能照抄给工具
+        let viewModel = makeViewModelAfterOneMove()
+        #expect(viewModel.whyLastMoveIsBadQuestion == "这一步（炮二平五）为什么不好？")
+        #expect(makeViewModel().whyLastMoveIsBadQuestion == "这一步为什么不好？")
+    }
+
     // MARK: - 分析缓存的定位
 
     @Test func testNotebookFenId_matchesRegardlessOfMoveCounters() throws {

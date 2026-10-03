@@ -61,6 +61,7 @@ class ActionDefinitions {
         case pikafishScoreGame  // 皮卡鱼评分本局所有局面
         case pikafishRespond  // 皮卡鱼应招
         case openAIChat            // AI 问棋窗口
+        case askWhyMoveIsBad       // 打开问棋并直接问「这一步为什么不好」
 
         // toggles
         case setFilterNone
@@ -202,13 +203,16 @@ class ActionDefinitions {
         let textIPhone: String?
         let shortcuts: [ShortcutType]
         let supportedModes: Set<AppMode>
+        /// 当前能否执行：返回 false 时按钮/菜单置灰、快捷键不触发
+        let isEnabled: () -> Bool
         let action: () -> Void
 
-        init(text: String, textIPhone: String? = nil, shortcuts: [ShortcutType] = [], supportedModes: Set<AppMode> = ActionDefinitions.allModes, action: @escaping () -> Void) {
+        init(text: String, textIPhone: String? = nil, shortcuts: [ShortcutType] = [], supportedModes: Set<AppMode> = ActionDefinitions.allModes, isEnabled: @escaping () -> Bool = { true }, action: @escaping () -> Void) {
             self.text = text
             self.textIPhone = textIPhone
             self.shortcuts = shortcuts
             self.supportedModes = supportedModes
+            self.isEnabled = isEnabled
             self.action = action
         }
 
@@ -328,8 +332,8 @@ class ActionDefinitions {
     }
     
     /// 注册操作 - 统一方法支持所有快捷键类型
-    func registerAction(_ key: ActionKey, text: String, textIPhone: String? = nil, shortcuts: [ShortcutType] = [], supportedModes: Set<AppMode> = ActionDefinitions.allModes, action: @escaping () -> Void) {
-        let actionInfo = ActionInfo(text: text, textIPhone: textIPhone, shortcuts: shortcuts, supportedModes: supportedModes, action: action)
+    func registerAction(_ key: ActionKey, text: String, textIPhone: String? = nil, shortcuts: [ShortcutType] = [], supportedModes: Set<AppMode> = ActionDefinitions.allModes, isEnabled: @escaping () -> Bool = { true }, action: @escaping () -> Void) {
+        let actionInfo = ActionInfo(text: text, textIPhone: textIPhone, shortcuts: shortcuts, supportedModes: supportedModes, isEnabled: isEnabled, action: action)
         actionMap[key] = actionInfo
 
         // 将每个快捷键都注册到查找表
@@ -562,6 +566,7 @@ class ActionDefinitions {
             if let currentMode = currentMode?() {
                 guard actionInfo.supportedModes.contains(currentMode) else { return false }
             }
+            guard actionInfo.isEnabled() else { return false }
             actionInfo.action()
             usageRecorder?(actionKey)
             return true

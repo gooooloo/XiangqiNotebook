@@ -24,7 +24,7 @@ struct MacActionButtonsView: View {
                     .addToReview, .copyBoardImage,
                 ],
                 [
-                    .queryScore, .openYunku, .pikafishRespond, .pikafishScore, .pikafishScoreGame,
+                    .queryScore, .openYunku, .pikafishRespond, .pikafishScore, .pikafishScoreGame, .askWhyMoveIsBad,
                     .markPath, .referenceBoard, .browseGames, .importPGN,
                     .save,
                 ],
@@ -124,6 +124,7 @@ private struct MacToolbarButton: View {
         let info: ActionDefinitions.ActionInfo? = viewModel.isActionVisible(actionKey)
             ? viewModel.actionDefinitions.getActionInfo(actionKey)
             : nil
+        let enabled = info?.isEnabled() ?? false
 
         Button(action: {
             ShortcutUsageStats.shared.recordFromButton(actionKey)
@@ -138,13 +139,13 @@ private struct MacToolbarButton: View {
                     Keycap(text: shortcut)
                 }
             }
-            .foregroundColor(Theme.textPrimary)
+            .foregroundColor(enabled ? Theme.textPrimary : Theme.textSecondary)
             .frame(maxWidth: .infinity)
             .frame(height: 30)
             .padding(.horizontal, 6)
         }
         .buttonStyle(MacToolbarButtonStyle())
-        .disabled(info == nil)
+        .disabled(!enabled)
     }
 }
 

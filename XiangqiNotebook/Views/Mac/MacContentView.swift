@@ -399,6 +399,7 @@ struct MacMenuCommands: Commands {
             menuButton(.pikafishScoreGame)
             Divider()
             menuButton(.openAIChat)
+            menuButton(.askWhyMoveIsBad)
             Divider()
             menuButton(.referenceBoard)
             menuButton(.searchCurrentMove)
@@ -445,7 +446,7 @@ struct MacMenuCommands: Commands {
                 ShortcutUsageStats.shared.recordFromButton(key)
                 info.action()
             }
-                .disabled(!vm.isActionVisible(key))
+                .disabled(!vm.isActionVisible(key) || !info.isEnabled())
         }
     }
 

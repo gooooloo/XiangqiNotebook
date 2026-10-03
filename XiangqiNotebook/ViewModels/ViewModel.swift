@@ -574,6 +574,7 @@ class ViewModel: ObservableObject {
         #endif
         // 三端都注册：Mac 开独立窗口，iOS/iPad 弹全屏 sheet，分支在 showAIChat 里
         actionDefinitions.registerAction(.openAIChat, text: "AI 问棋", shortcuts: [.sequence(",ai")], supportedModes: [.normal]) { self.showAIChat() }
+        actionDefinitions.registerAction(.askWhyMoveIsBad, text: "此招为何不好", shortcuts: [.sequence(",wb")], supportedModes: [.normal], isEnabled: { self.hasCurrentMove }) { self.askAI(self.whyLastMoveIsBadQuestion) }
         actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal]) { self.updateFenScore(self.currentFenId, score: nil) }
         actionDefinitions.registerAction(.openYunku, text: "打开云库", shortcuts: [.single("y")], supportedModes: [.normal]) { self.openYunku() }
         actionDefinitions.registerAction(.deleteMove, text: "删招", shortcuts: [.sequence(",d")], supportedModes: [.normal]) { self.removeCurrentStep() }
@@ -2297,11 +2298,21 @@ class ViewModel: ObservableObject {
         #endif
     }
 
-    /// 常用的两种问法。做成常量而不是散在视图里：三端要一致，
+    /// 常用的两种问法。集中在这里而不是散在视图里：三端要一致，
     /// 措辞也直接决定模型往哪个方向答
     enum AIQuickQuestion {
         static let analyzePosition = "分析一下这个局面。"
-        static let whyLastMoveIsBad = "为什么这一步不好？"
+        /// 带上具体招法：只说「这一步」的话，走到别的局面再追问，历史里就指代不清了
+        static func whyLastMoveIsBad(move: String?) -> String {
+            guard let move else { return "这一步为什么不好？" }
+            return "这一步（\(move)）为什么不好？"
+        }
+    }
+
+    /// 招法名取自 get_position 的 lastMove，与界面同一写法（含左右翻转），
+    /// 模型照抄给工具即可
+    var whyLastMoveIsBadQuestion: String {
+        AIQuickQuestion.whyLastMoveIsBad(move: lastMoveForTools()?.chinese)
     }
 
     func showSearchResultsWindow() {

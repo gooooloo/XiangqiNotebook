@@ -41,7 +41,7 @@ extension ViewModel: AnalysisToolHost {
     /// 走到当前局面的那一步。着法名跟着界面的左右翻转走，与 nextMoves/variants
     /// 及工具层其他地方同一口径——用户是照着界面上的名字提问的
     @MainActor
-    private func lastMoveForTools() -> LastMove? {
+    func lastMoveForTools() -> LastMove? {
         guard hasCurrentMove, let fenBefore = previousFen else { return nil }
         let chinese = Move.stringifyMove(fen1: fenBefore, fen2: currentFen,
                                          backup: "", isHorizontalFlipped: isCurrentHorizontalFlipped)
