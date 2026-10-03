@@ -16,7 +16,7 @@ final class AIChatWindowController: NSWindowController {
         self.chat = chat
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 720),
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 720),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false

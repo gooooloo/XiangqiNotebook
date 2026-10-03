@@ -2385,6 +2385,8 @@ class ViewModel: ObservableObject {
     var hasCurrentMove: Bool { session.currentMove != nil }
     /// 走当前这一步之前的局面。问「这步为什么不好」时要以它为准评估
     var previousFen: String? { session.previousFenObject?.fen }
+    /// 当前棋局路径上前后几步的局面，问棋识别变着起点用
+    func nearbyGameFens(radius: Int) -> [String] { session.nearbyGameFens(radius: radius) }
     /// 按 fen 找笔记本里的 fenId；不在库里返回 nil（不新建）。
     /// 必须先 normalizeFen：库里存的是归一化形式，直接查会因为着数计数不同而全部落空
     func notebookFenId(for fen: String) -> Int? {

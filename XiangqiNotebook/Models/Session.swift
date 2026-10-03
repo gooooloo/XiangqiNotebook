@@ -92,6 +92,19 @@ class Session: ObservableObject {
         return databaseView.getFenObject(prevFenId)
     }
     
+    /// 当前棋局路径上离当前局面最近的几个局面（不含当前局面），由近及远、先后后前。
+    /// 问棋识别回答里的变着时拿它们当候选起点：讲「此招为何不好」的正解从上一步之前走起，
+    /// 讲后续时又可能从后面一两步走起
+    func nearbyGameFens(radius: Int) -> [String] {
+        let game = sessionData.currentGame2
+        let step = sessionData.currentGameStep
+        guard radius > 0 else { return [] }
+        let fenIds = (1...radius).flatMap { distance in
+            [game[safe: step - distance], game[safe: step + distance]].compactMap { $0 }
+        }
+        return fenIds.compactMap { databaseView.getFenObject($0)?.fen }
+    }
+
     var currentFenId: Int {
         guard sessionData.currentGameStep < sessionData.currentGame2.count else {
             return sessionData.currentGame2[0] // 返回初始局面作为后备

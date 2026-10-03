@@ -1,5 +1,10 @@
 import Foundation
 import Combine
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 /// AI 问棋的对话状态机。
 ///
@@ -34,6 +39,26 @@ final class ChatViewModel: ObservableObject {
         var costFootnote: String?
         /// 已存进局面注释，按钮就地变灰
         var savedToComment: Bool = false
+        /// 回答里能在棋盘上走通的变着，供示意棋盘逐步摆出。收尾时算一次存下：
+        /// 解析要逐步枚举合法着法，放到渲染时算会拖慢每次重绘
+        var variations: AnswerVariations.Result = .empty
+    }
+
+    /// 示意棋盘正摆着哪条回答里哪组变着的第几步
+    struct BoardSelection: Equatable {
+        let messageID: UUID
+        let line: Int
+        /// -1 表示这组变着的起点（一步都没走）
+        let ply: Int
+    }
+
+    /// 示意棋盘要画的东西，视图据此构建 BoardViewModel
+    struct BoardDisplay {
+        let fen: String
+        let lastMove: (from: String, to: String)?
+        let caption: String
+        let canStepBack: Bool
+        let canStepForward: Bool
     }
 
     /// 一次已完成的工具调用，在进度区留痕
@@ -61,6 +86,10 @@ final class ChatViewModel: ObservableObject {
     /// 达到步数上限时提示用户「以上是目前的结论」
     @Published private(set) var hitIterationLimit = false
     @Published var input = ""
+    /// nil 时示意棋盘显示正在讨论的局面
+    @Published private(set) var boardSelection: BoardSelection?
+    /// 主窗口的当前局面。跟着主窗口走子刷新，示意棋盘与顶栏提要都靠它重绘
+    @Published private(set) var discussedFen = ""
 
     /// 工具循环上限，防止模型来回打转烧钱。
     /// 一轮完整的评点（读局面 → 看候选 → 评实战着 → 走几手验证 → 再评）实测要六七步，
@@ -74,7 +103,7 @@ final class ChatViewModel: ObservableObject {
     /// 而这是每次重绘都会调的
     var positionSummary: String {
         guard let viewModel else { return "" }
-        let side = AnalysisToolbox.sideToMove(fen: viewModel.currentFen) == "black" ? "黑方" : "红方"
+        let side = AnalysisToolbox.sideToMove(fen: discussedFen) == "black" ? "黑方" : "红方"
         return "第 \(viewModel.currentGameStepDisplay) 步 · 轮\(side)走"
     }
 
@@ -94,6 +123,9 @@ final class ChatViewModel: ObservableObject {
     private var runningTask: Task<Void, Never>?
     /// 重试用：记住上一次没成功的提问
     private var lastFailedInput: String?
+    /// 本轮识别变着的候选起点：提问时的局面及其棋局路径前后几步，再加工具走到过的局面
+    private var roundCandidateFens: [String] = []
+    private var mainViewModelObserver: AnyCancellable?
 
     /// - Parameter toolHost: 工具执行宿主，默认就是 viewModel；测试注入以控制工具耗时
     init(viewModel: ViewModel,
@@ -104,6 +136,14 @@ final class ChatViewModel: ObservableObject {
         self.toolbox = AnalysisToolbox(host: toolHost ?? viewModel)
         self.config = config
         self.clientFactory = clientFactory
+        self.discussedFen = viewModel.currentFen
+        // objectWillChange 在改值之前发出，挪到下一轮 RunLoop 再读才是新值
+        mainViewModelObserver = viewModel.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let fen = self.viewModel?.currentFen, fen != self.discussedFen else { return }
+                self.discussedFen = fen
+            }
     }
 
     /// 设置页改完配置后调用，让下一次提问用新配置
@@ -156,6 +196,10 @@ final class ChatViewModel: ObservableObject {
         clearProgress()
         messages.append(DisplayMessage(kind: .user, text: question))
         wireMessages.append(.user(question))
+        if let viewModel {
+            roundCandidateFens = [viewModel.currentFen]
+                + viewModel.nearbyGameFens(radius: Self.variationSearchRadius)
+        }
 
         isRunning = true
         runningTask = Task { [weak self] in
@@ -257,6 +301,7 @@ final class ChatViewModel: ObservableObject {
                 // 等引擎的这几秒里用户可能点了停止：cancel() 已把 assistant 的工具请求回滚掉，
                 // 这条结果再追加进去就成了没有配对 tool_call 的孤儿，下一轮请求会被服务端拒绝
                 if Task.isCancelled { return }
+                recordToolFens(argumentsJSON: call.argumentsJSON, resultJSON: result)
                 wireMessages.append(.toolResult(callId: call.id, content: result))
                 traces.append(ToolTrace(
                     title: title,
@@ -282,6 +327,7 @@ final class ChatViewModel: ObservableObject {
             let arguments = AnalysisToolbox.parseArgumentsJSON(argumentsJSON)
             progressText = AnalysisToolbox.progressDescription(toolName: name, arguments: arguments)
         case .finished(let name, let argumentsJSON, let resultJSON):
+            recordToolFens(argumentsJSON: argumentsJSON, resultJSON: resultJSON)
             let arguments = AnalysisToolbox.parseArgumentsJSON(argumentsJSON)
             traces.append(ToolTrace(
                 title: AnalysisToolbox.progressDescription(toolName: name, arguments: arguments),
@@ -321,7 +367,10 @@ final class ChatViewModel: ObservableObject {
                                                   cachedTokens: $0.cachedTokens,
                                                   completionTokens: $0.completionTokens)
             } ?? [],
-            costFootnote: config.wireFormat == .claudeCode ? "订阅计费，无额外费用" : nil))
+            costFootnote: config.wireFormat == .claudeCode ? "订阅计费，无额外费用" : nil,
+            variations: AnswerVariations.resolve(
+                markdown: body, candidateFens: roundCandidateFens,
+                flipped: viewModel?.isCurrentHorizontalFlipped ?? false)))
         traces = []
         lastFailedInput = nil
     }
@@ -367,6 +416,79 @@ final class ChatViewModel: ObservableObject {
     private func rollbackToLastUserMessage() {
         guard let index = wireMessages.lastIndex(where: { $0.role == .user }) else { return }
         wireMessages.removeSubrange((index + 1)...)
+    }
+
+    // MARK: - 示意棋盘
+
+    /// 识别变着时在棋局路径上往前后各看几步。
+    /// 再远的局面模型几乎不会拿来当起点，多看只会增加认错起点的机会
+    static let variationSearchRadius = 4
+
+    private func recordToolFens(argumentsJSON: String, resultJSON: String) {
+        roundCandidateFens += AnswerVariations.fens(inToolJSON: argumentsJSON)
+            + AnswerVariations.fens(inToolJSON: resultJSON)
+    }
+
+    func selectPly(messageID: UUID, line: Int, ply: Int) {
+        boardSelection = BoardSelection(messageID: messageID, line: line, ply: ply)
+    }
+
+    /// 在当前这组变着里前后走一步；起点之前、末步之后都停住
+    func stepBoard(by delta: Int) {
+        guard let selection = boardSelection, let line = selectedLine else { return }
+        let ply = min(max(selection.ply + delta, -1), line.plies.count - 1)
+        boardSelection = BoardSelection(messageID: selection.messageID, line: selection.line, ply: ply)
+    }
+
+    func showDiscussedPosition() {
+        boardSelection = nil
+    }
+
+    private var selectedLine: AnswerVariations.Line? {
+        guard let selection = boardSelection,
+              let message = messages.first(where: { $0.id == selection.messageID }) else { return nil }
+        return message.variations.lines[safe: selection.line]
+    }
+
+    var boardDisplay: BoardDisplay {
+        guard let selection = boardSelection, let line = selectedLine else {
+            return BoardDisplay(fen: discussedFen, lastMove: nil, caption: "正在讨论的局面",
+                                canStepBack: false, canStepForward: false)
+        }
+        let canStepForward = selection.ply < line.plies.count - 1
+        guard let ply = line.plies[safe: selection.ply] else {
+            return BoardDisplay(fen: line.startFen, lastMove: nil, caption: "变着起点",
+                                canStepBack: false, canStepForward: canStepForward)
+        }
+        return BoardDisplay(
+            fen: ply.fen,
+            lastMove: (String(ply.uci.prefix(2)), String(ply.uci.suffix(2))),
+            caption: "第 \(selection.ply + 1) 步　\(ply.chinese)",
+            canStepBack: true,
+            canStepForward: canStepForward)
+    }
+
+    /// 示意棋盘的朝向与左右翻转跟主棋盘一致，对照着看才不费劲
+    var boardOrientation: String {
+        viewModel?.isCurrentBlackOrientation == true ? "black" : "red"
+    }
+
+    var boardIsHorizontalFlipped: Bool {
+        viewModel?.isCurrentHorizontalFlipped ?? false
+    }
+
+    // MARK: - 复制
+
+    /// 整条回答复制到剪贴板。SwiftUI 的文本选择不能跨段，按块排版的回答只能一段段选，
+    /// 所以给一个整条复制的出口；和存注释一样剥成纯文本，粘到哪里都不带 `**`
+    func copyAnswer(_ message: DisplayMessage) {
+        let text = AnswerMarkdown.plainText(message.text)
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #else
+        UIPasteboard.general.string = text
+        #endif
     }
 
     // MARK: - 存为局面注释

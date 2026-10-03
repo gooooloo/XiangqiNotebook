@@ -548,6 +548,35 @@ struct ChatViewModelTests {
         #expect(!chat.isConfigured)
     }
 
+    // MARK: - 示意棋盘
+
+    @Test func testAnswerVariations_resolvedFromDiscussedPositionAndSteppable() async throws {
+        let viewModel = makeViewModel()
+        // 着法从当前局面现取，不依赖测试库里具体摆着什么局面
+        let first = try #require(AnalysisToolbox.legalMoves(fen: viewModel.currentFen).first)
+        let reply = try #require(AnalysisToolbox.legalMoves(fen: first.fen).first)
+        let client = ScriptedClient([text("主变：\n1. \(first.chinese)　\(reply.chinese)")])
+        let chat = ChatViewModel(viewModel: viewModel, config: configured, clientFactory: { _ in client })
+        await ask(chat, "问")
+
+        let answer = try #require(chat.messages.last)
+        #expect(answer.variations.lines.first?.plies.map(\.uci) == [first.uci, reply.uci])
+
+        chat.selectPly(messageID: answer.id, line: 0, ply: 0)
+        #expect(chat.boardDisplay.fen == first.fen)
+        #expect(chat.boardDisplay.canStepForward)
+        chat.stepBoard(by: 1)
+        #expect(chat.boardDisplay.fen == reply.fen)
+        #expect(chat.boardDisplay.lastMove?.from == String(reply.uci.prefix(2)))
+        #expect(chat.boardDisplay.lastMove?.to == String(reply.uci.suffix(2)))
+        chat.stepBoard(by: 1)
+        #expect(chat.boardDisplay.fen == reply.fen, "末步之后停住")
+        chat.stepBoard(by: -2)
+        #expect(chat.boardDisplay.fen == viewModel.currentFen, "退到起点")
+        chat.showDiscussedPosition()
+        #expect(chat.boardSelection == nil)
+    }
+
     // MARK: - 存为局面注释
 
     @Test func testSaveAnswerAsComment_appendsAndMarksSaved() async {
