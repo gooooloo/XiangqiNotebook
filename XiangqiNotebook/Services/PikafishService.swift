@@ -45,10 +45,8 @@ class PikafishService: @unchecked Sendable {
     /// 引擎版本
     static let engineVersion = "Pikafish_dev-20260213-391d491a"
 
-    /// 搜索深度
-    static let searchDepth = 34
-
-    /// 引擎 key，用于引擎分数独立存储的文件名（深度评分）
+    /// 引擎 key：Mac 端引擎分数文件名，现用于问棋分析缓存与 activeEngineKey。
+    /// 名字里的 d34 来自已移除的深度评分功能，改名会让既有缓存文件失联，故保留
     static let engineKey = "Pikafish_dev-20260213-391d491a_d34"
 
     /// 快速估分 key，用于 3 秒限时评分的独立存储
@@ -100,7 +98,7 @@ class PikafishService: @unchecked Sendable {
     }
 
     /// 置换表大小：物理内存的 1/8，钳在 256MB～4GB。
-    /// 固定 4GB 在 8GB 内存的 Mac 上深评一局就会把系统压进 swap
+    /// 固定 4GB 在 8GB 内存的 Mac 上批量评估会把系统压进 swap
     static func hashSizeMB(physicalMemoryBytes: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Int {
         let eighth = Int(physicalMemoryBytes / (1024 * 1024)) / 8
         return min(4096, max(256, eighth))
@@ -310,11 +308,11 @@ class PikafishService: @unchecked Sendable {
         sendCommand("stop")
     }
 
-    func evaluatePosition(fen: String, movetime: Int? = nil) async throws -> EvaluationResult? {
+    func evaluatePosition(fen: String, movetime: Int) async throws -> EvaluationResult? {
         try await serialized { try await self.evaluatePositionUnserialized(fen: fen, movetime: movetime) }
     }
 
-    private func evaluatePositionUnserialized(fen: String, movetime: Int?) async throws -> EvaluationResult? {
+    private func evaluatePositionUnserialized(fen: String, movetime: Int) async throws -> EvaluationResult? {
         // Start engine if needed
         if process == nil || !(process?.isRunning ?? false) {
             try await start()
@@ -332,11 +330,7 @@ class PikafishService: @unchecked Sendable {
         outputBuffer = ""
 
         sendCommand("position fen \(uciFen)")
-        if let movetime = movetime {
-            sendCommand("go movetime \(movetime)")
-        } else {
-            sendCommand("go depth \(Self.searchDepth)")
-        }
+        sendCommand("go movetime \(movetime)")
 
         var response: String
         var timedOut = false

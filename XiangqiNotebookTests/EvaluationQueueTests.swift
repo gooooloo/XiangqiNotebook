@@ -32,7 +32,7 @@ class MockPikafishService: PikafishService {
         set { lock.lock(); defer { lock.unlock() }; _holdEvaluation = newValue }
     }
 
-    override func evaluatePosition(fen: String, movetime: Int? = nil) async throws -> EvaluationResult? {
+    override func evaluatePosition(fen: String, movetime: Int) async throws -> EvaluationResult? {
         lock.lock()
         _evaluateCallCount += 1
         lock.unlock()
@@ -92,7 +92,7 @@ final class EvaluationQueueTests: XCTestCase {
             completedRequests.append(request)
         }
 
-        let request = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "testKey", movetime: nil)
+        let request = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "testKey", movetime: 3000)
         queue.enqueue(request)
 
         XCTAssertEqual(queue.state.totalEnqueued, 1)
@@ -109,8 +109,8 @@ final class EvaluationQueueTests: XCTestCase {
     func testDeduplication() async throws {
         let (queue, mock) = makeQueue()
 
-        let req1 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "key", movetime: nil)
-        let req2 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "key", movetime: nil)
+        let req1 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "key", movetime: 3000)
+        let req2 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "key", movetime: 3000)
         queue.enqueue(req1)
         queue.enqueue(req2)
 
@@ -124,7 +124,7 @@ final class EvaluationQueueTests: XCTestCase {
     func testDifferentEngineKeysNotDeduplicated() async throws {
         let (queue, mock) = makeQueue()
 
-        let req1 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "deep", movetime: nil)
+        let req1 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "other", movetime: 3000)
         let req2 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "quick", movetime: 3000)
         queue.enqueue(req1)
         queue.enqueue(req2)
@@ -139,7 +139,7 @@ final class EvaluationQueueTests: XCTestCase {
     func testSkipExistingScores() async throws {
         let (queue, mock) = makeQueue(existingScores: ["1:testKey"])
 
-        let request = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "testKey", movetime: nil)
+        let request = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "testKey", movetime: 3000)
         queue.enqueue(request)
 
         try await waitUntil("队列跑完") { queue.state.isIdle }
@@ -154,7 +154,7 @@ final class EvaluationQueueTests: XCTestCase {
         let (queue, _) = makeQueue(mockService: mock)
 
         for i in 0..<5 {
-            queue.enqueue(EvaluationRequest(fenId: i, fen: "fen\(i) r", engineKey: "key", movetime: nil))
+            queue.enqueue(EvaluationRequest(fenId: i, fen: "fen\(i) r", engineKey: "key", movetime: 3000))
         }
 
         try await waitUntil("第一条进入评估中") { mock.evaluateCallCount == 1 }
@@ -179,12 +179,12 @@ final class EvaluationQueueTests: XCTestCase {
         mock.holdEvaluation = true
         let (queue, _) = makeQueue(mockService: mock)
 
-        queue.enqueue(EvaluationRequest(fenId: 1, fen: "fen1 r", engineKey: "key", movetime: nil))
+        queue.enqueue(EvaluationRequest(fenId: 1, fen: "fen1 r", engineKey: "key", movetime: 3000))
         try await waitUntil("请求进入评估中") { mock.evaluateCallCount == 1 }
 
         queue.cancelAll()
         // 旧任务还在退出途中时立即重新入队同一局面
-        queue.enqueue(EvaluationRequest(fenId: 1, fen: "fen1 r", engineKey: "key", movetime: nil))
+        queue.enqueue(EvaluationRequest(fenId: 1, fen: "fen1 r", engineKey: "key", movetime: 3000))
         mock.holdEvaluation = false
 
         try await waitUntil("新请求跑完") { queue.state.isIdle && queue.state.completedCount == 1 }
@@ -202,8 +202,8 @@ final class EvaluationQueueTests: XCTestCase {
 
         XCTAssertEqual(queue.statusForFen(fenId: 1, engineKey: "key"), .idle)
 
-        queue.enqueue(EvaluationRequest(fenId: 1, fen: "fen1 r", engineKey: "key", movetime: nil))
-        queue.enqueue(EvaluationRequest(fenId: 2, fen: "fen2 r", engineKey: "key", movetime: nil))
+        queue.enqueue(EvaluationRequest(fenId: 1, fen: "fen1 r", engineKey: "key", movetime: 3000))
+        queue.enqueue(EvaluationRequest(fenId: 2, fen: "fen2 r", engineKey: "key", movetime: 3000))
 
         // currentRequest 在调用引擎之前就已写好，所以计数一到 1，1 号必然是「评估中」
         try await waitUntil("1 号进入评估中") { mock.evaluateCallCount == 1 }
@@ -220,7 +220,7 @@ final class EvaluationQueueTests: XCTestCase {
         let (queue, mock) = makeQueue()
 
         let requests = (0..<3).map { i in
-            EvaluationRequest(fenId: i, fen: "fen\(i) r", engineKey: "key", movetime: nil)
+            EvaluationRequest(fenId: i, fen: "fen\(i) r", engineKey: "key", movetime: 3000)
         }
         queue.enqueueAll(requests)
 
@@ -235,7 +235,7 @@ final class EvaluationQueueTests: XCTestCase {
     func testCompletionState() async throws {
         let (queue, _) = makeQueue()
 
-        let request = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "key", movetime: nil)
+        let request = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "key", movetime: 3000)
         queue.enqueue(request)
 
         try await waitUntil("队列跑完") { queue.state.isCompleted }

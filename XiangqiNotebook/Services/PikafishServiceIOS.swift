@@ -6,9 +6,8 @@ import Foundation
 /// 通过 PikafishEngineBridge(Objective-C++)进程内调用 Stockfish::Engine，
 /// 不走子进程/管道——iOS App Sandbox 本就不允许 Mac 那种子进程方案。
 ///
-/// 出于耗电考虑，参数经过特别选择，明显弱于 Mac 版的深度评分：
+/// 出于耗电考虑，参数经过特别选择，明显弱于 Mac 版：
 /// - Threads/Hash 远低于 Mac 版
-/// - 固定 3 秒 movetime，不做深度 34 的完整搜索
 /// 因此评分单独存一个 engineKey，不与 Mac 的 `_d34` 共享，避免不同质量的数据互相覆盖。
 ///
 /// 并发：底层只有一个 `Stockfish::Engine`，搜索中再次 `go` 会先阻塞主线程等上一轮结束，

@@ -3,13 +3,13 @@ import SwiftUI
 
 /// 「引擎与云库」Sheet。iPhone/iPad 端皮卡鱼引擎内嵌运行（进程内调用，非 Mac 版子进程方案），
 /// 出于耗电考虑固定 3 秒限时评估、仅手动触发，不做批量/自动评估；分数单独存一个 engineKey，
-/// 与 Mac 深评互不干扰。另外仍保留云库（ChessDB）评估。
+/// 与 Mac 端评分互不干扰。另外仍保留云库（ChessDB）评估。
 struct iPhoneEngineSheet: View {
     @ObservedObject var viewModel: ViewModel
     @Environment(\.dismiss) private var dismiss
 
     private var lightScoreText: String {
-        let text = viewModel.displayDeepEngineScore
+        let text = viewModel.displayLightEngineScore
         return text.isEmpty ? "暂无评分" : text
     }
 

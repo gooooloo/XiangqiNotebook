@@ -404,21 +404,14 @@ class Session: ObservableObject {
 
     func getEngineScoreByFenId(_ fenId: Int) -> Int? {
         #if os(macOS)
-        if let score = databaseView.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) {
-            return score
-        }
         return databaseView.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey)
         #else
         return databaseView.getEngineScoreByFenId(fenId)
         #endif
     }
 
-    // 优先显示深度评分，无深度评分时显示快速估分
     var currentEngineScore: Int? {
         #if os(macOS)
-        if let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.engineKey) {
-            return score
-        }
         return databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.quickEngineKey)
         #else
         return databaseView.getEngineScoreByFenId(currentFenId)
@@ -588,17 +581,13 @@ class Session: ObservableObject {
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
     }
 
-    /// 深度评分显示文本，空字符串表示无深度评分
-    /// iOS/iPadOS 上固定显示内嵌引擎（PikafishServiceIOS）的评分，不与 Mac 深评混用、不做优先级判断
-    var displayDeepEngineScore: String {
-        #if os(macOS)
-        let engineKey = PikafishService.engineKey
-        #else
-        let engineKey = PikafishServiceIOS.engineKey
-        #endif
-        guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: engineKey) else { return "" }
+    #if os(iOS)
+    /// 轻评（iOS 内嵌引擎 PikafishServiceIOS）显示文本，空字符串表示无轻评分
+    var displayLightEngineScore: String {
+        guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishServiceIOS.engineKey) else { return "" }
         return "\(adjustScore(score, nextIsRed: Session.fenNextIsRed(currentFen)))"
     }
+    #endif
 
     /// 快速估分显示文本，空字符串表示无快速估分
     var displayQuickEngineScore: String {

@@ -11,7 +11,7 @@ struct EvaluationRequest: Identifiable, Equatable {
     let fenId: Int
     let fen: String
     let engineKey: String
-    let movetime: Int?
+    let movetime: Int
 
     static func == (lhs: EvaluationRequest, rhs: EvaluationRequest) -> Bool {
         lhs.id == rhs.id

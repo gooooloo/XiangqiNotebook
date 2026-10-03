@@ -50,17 +50,11 @@ struct StatusBarView: View {
         #endif
     }
 
-    private var deepEngineValue: Text {
-        #if os(macOS)
-        switch viewModel.currentFenDeepEvalStatus {
-        case .evaluating: return value("评估中…", color: .orange)
-        case .queued: return value("等待中…", color: Theme.textSecondary)
-        case .idle: return engineValue(idle: viewModel.displayDeepEngineScore)
-        }
-        #else
-        return engineValue(idle: viewModel.displayDeepEngineScore)
-        #endif
+    #if os(iOS)
+    private var lightEngineValue: Text {
+        engineValue(idle: viewModel.isEvaluatingIOS ? "评估中…" : viewModel.displayLightEngineScore)
     }
+    #endif
 
     /// 战绩：执红 / 执黑 一行，胜数用绿色，其余主色。
     private func gameStat(_ label: String, total: Int, wins: Int, draws: Int, losses: Int) -> some View {
@@ -105,7 +99,7 @@ struct StatusBarView: View {
         .padding(.vertical, 5)
     }
 
-    /// 行 2：下步走子 / 云库 / 快估 / 深评 / 步数 / 本变 / 路径，space-between
+    /// 行 2：下步走子 / 云库 / 快估 /（iPad）轻评 / 步数 / 本变 / 路径，space-between
     private var evalRow: some View {
         HStack(spacing: 8) {
             stat("下步走子", value(viewModel.isRedTurn ? "红方" : "黑方"))
@@ -114,8 +108,10 @@ struct StatusBarView: View {
             Spacer(minLength: 6)
             stat("快估", quickEngineValue)
             Spacer(minLength: 6)
-            stat("深评", deepEngineValue)
+            #if os(iOS)
+            stat("轻评", lightEngineValue)
             Spacer(minLength: 6)
+            #endif
             stat("步数", value("\(viewModel.currentGameStepDisplay)/\(viewModel.maxGameStepDisplay)\(viewModel.gameStepLimitation.map { "/\($0)" } ?? "")"))
             Spacer(minLength: 6)
             stat("本变", value("\(viewModel.currentVariationIndex + 1)/\(viewModel.totalVariationsCount)"))

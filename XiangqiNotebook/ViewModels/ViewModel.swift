@@ -569,8 +569,6 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.queryScore, text: "云库查分", shortcuts: [.single("s")], supportedModes: [.normal]) { Task { await self.queryFenScore() } }
         #if os(macOS) && arch(arm64)
         actionDefinitions.registerAction(.quickEngineScore, text: "快速估分", shortcuts: [.sequence(",qs")], supportedModes: [.normal]) { self.quickEngineScore() }
-        actionDefinitions.registerAction(.queryEngineScore, text: "深度评分", shortcuts: [.sequence(",Qs")], supportedModes: [.normal]) { self.queryEngineScore() }
-        actionDefinitions.registerAction(.queryAllEngineScores, text: "深评本局", shortcuts: [.sequence(",Qa")], supportedModes: [.normal]) { self.queryAllEngineScores() }
         actionDefinitions.registerAction(.quickAllEngineScores, text: "快估本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { self.quickAllEngineScores() }
         actionDefinitions.registerAction(.pikafishQuickMove, text: "快速应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
         #endif
@@ -1888,13 +1886,6 @@ class ViewModel: ObservableObject {
         return queue
     }
 
-    func queryEngineScore() {
-        let fenId = session.currentFenId
-        guard let fen = session.getFenForId(fenId) else { return }
-        guard let queue = ensureEvaluationQueue() else { return }
-        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.engineKey, movetime: nil))
-    }
-
     func quickEngineScore() {
         let fenId = session.currentFenId
         guard let fen = session.getFenForId(fenId) else { return }
@@ -2026,25 +2017,11 @@ class ViewModel: ObservableObject {
     }
 
     #if os(macOS)
-    func queryAllEngineScores() {
-        guard let queue = ensureEvaluationQueue() else { return }
-        let game = session.sessionData.currentGame2
-        var requests: [EvaluationRequest] = []
-        for fenId in game {
-            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.engineKey) != nil { continue }
-            guard let fen = session.getFenForId(fenId) else { continue }
-            requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.engineKey, movetime: nil))
-        }
-        queue.enqueueAll(requests)
-    }
-
     func quickAllEngineScores() {
         guard let queue = ensureEvaluationQueue() else { return }
         let game = session.sessionData.currentGame2
         var requests: [EvaluationRequest] = []
         for fenId in game {
-            // 只看快估分：与深评本局对称，各管各的 engineKey。
-            // 即使已有深评分，也仍补算快估分（按用户需求，不再因深评存在而跳过）
             if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey) != nil { continue }
             guard let fen = session.getFenForId(fenId) else { continue }
             requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: PikafishService.quickMovetimeMs))
@@ -2135,14 +2112,6 @@ class ViewModel: ObservableObject {
     var currentFenQuickEvalStatus: FenEvalStatus {
         #if os(macOS)
         return evaluationQueue?.statusForFen(fenId: session.currentFenId, engineKey: PikafishService.quickEngineKey) ?? .idle
-        #else
-        return .idle
-        #endif
-    }
-
-    var currentFenDeepEvalStatus: FenEvalStatus {
-        #if os(macOS)
-        return evaluationQueue?.statusForFen(fenId: session.currentFenId, engineKey: PikafishService.engineKey) ?? .idle
         #else
         return .idle
         #endif
@@ -2394,7 +2363,9 @@ class ViewModel: ObservableObject {
     var currentFenId: Int { session.currentFenId }
     var displayScore: String { session.displayScore }
     var displayEngineScore: String { session.displayEngineScore }
-    var displayDeepEngineScore: String { session.displayDeepEngineScore }
+    #if os(iOS)
+    var displayLightEngineScore: String { session.displayLightEngineScore }
+    #endif
     var displayQuickEngineScore: String { session.displayQuickEngineScore }
     var currentGameStepDisplay: Int { session.currentGameStepDisplay }
     var maxGameStepDisplay: Int { session.maxGameStepDisplay }

@@ -83,7 +83,6 @@ struct PikafishEngineKeyTests {
 
     @Test func testEngineKeyConstants() {
         #expect(PikafishService.engineVersion == "Pikafish_dev-20260213-391d491a")
-        #expect(PikafishService.searchDepth == 34)
         #expect(PikafishService.engineKey == "Pikafish_dev-20260213-391d491a_d34")
     }
 }
