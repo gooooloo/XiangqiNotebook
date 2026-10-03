@@ -568,9 +568,9 @@ class ViewModel: ObservableObject {
 
         actionDefinitions.registerAction(.queryScore, text: "云库查分", shortcuts: [.single("s")], supportedModes: [.normal]) { Task { await self.queryFenScore() } }
         #if os(macOS) && arch(arm64)
-        actionDefinitions.registerAction(.quickEngineScore, text: "快速估分", shortcuts: [.sequence(",qs")], supportedModes: [.normal]) { self.quickEngineScore() }
-        actionDefinitions.registerAction(.quickAllEngineScores, text: "快估本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { self.quickAllEngineScores() }
-        actionDefinitions.registerAction(.pikafishQuickMove, text: "快速应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishQuickMove() } }
+        actionDefinitions.registerAction(.pikafishScore, text: "皮卡鱼评分", shortcuts: [.sequence(",qs")], supportedModes: [.normal]) { self.pikafishScore() }
+        actionDefinitions.registerAction(.pikafishScoreGame, text: "皮卡鱼评分本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { self.pikafishScoreGame() }
+        actionDefinitions.registerAction(.pikafishRespond, text: "皮卡鱼应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishRespond() } }
         #endif
         // 三端都注册：Mac 开独立窗口，iOS/iPad 弹全屏 sheet，分支在 showAIChat 里
         actionDefinitions.registerAction(.openAIChat, text: "AI 问棋", shortcuts: [.sequence(",ai")], supportedModes: [.normal]) { self.showAIChat() }
@@ -1811,20 +1811,20 @@ class ViewModel: ObservableObject {
 
     /// 引擎应招的共用流程。
     ///
-    /// `quickEval` 必须是与快估同档的单线路搜索（MultiPV 1）：它的分数要写进库里，
-    /// 多线路搜索同样时间搜得更浅，分数不能与快估混存。
+    /// `scoreEval` 必须是与皮卡鱼评分同档的单线路搜索（MultiPV 1）：它的分数要写进库里，
+    /// 多线路搜索同样时间搜得更浅，分数不能与皮卡鱼评分混存。
     /// 首选会走回本局已出现的局面时才跑 `fallback`（MultiPV 2），它只用来挑着法，
     /// 不写任何分数、也不进问棋缓存。
-    /// 新局面不写分数：取负号只是近似、不是同档分数；单独补一次快估又多半白算——
+    /// 新局面不写分数：取负号只是近似、不是同档分数；单独补一次评分又多半白算——
     /// 接着对新局面应招时本来就要算它
     @MainActor
     private func respondWithEngine(
         fen: String, fenId: Int, engineKey: String,
-        quickEval: (String) async throws -> (score: Int, move: String?)?,
+        scoreEval: (String) async throws -> (score: Int, move: String?)?,
         fallback: () async throws -> [EnginePVLine],
         isCancelled: () -> Bool = { false }
     ) async throws {
-        guard let result = try await quickEval(fen), !isCancelled() else { return }
+        guard let result = try await scoreEval(fen), !isCancelled() else { return }
         session.updateEngineScore(fenId, score: result.score, engineKey: engineKey)
 
         // 评估这 3 秒期间用户可能已经切到别的局面：分数按 fenId 存，切到哪都不受影响，
@@ -1886,18 +1886,18 @@ class ViewModel: ObservableObject {
         return queue
     }
 
-    func quickEngineScore() {
+    func pikafishScore() {
         let fenId = session.currentFenId
         guard let fen = session.getFenForId(fenId) else { return }
         guard let queue = ensureEvaluationQueue() else { return }
-        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: PikafishService.quickMovetimeMs))
+        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.scoreEngineKey, movetime: PikafishService.scoreMovetimeMs))
     }
 
     /// @MainActor：从快捷键闭包经无结构 Task 调用时会落在全局执行器上，
     /// 惰性创建 service/queue 的 ivar 写入、queue.isIdle 读取（MainActor 状态）
     /// 与 session 读写都必须归位主线程；引擎评估的 await 仍在后台挂起
     @MainActor
-    func pikafishQuickMove() async {
+    func pikafishRespond() async {
         guard session.allowAddingNewMoves else {
             platformService.showWarningAlert(
                 title: "不允许增加新走法",
@@ -1918,13 +1918,13 @@ class ViewModel: ObservableObject {
         guard let fen = session.getFenForId(fenId) else { return }
         guard let service = ensurePikafishService() else { return }
 
-        let movetime = PikafishService.quickMovetimeMs
+        let movetime = PikafishService.scoreMovetimeMs
         do {
             // 函数为 @MainActor，await 恢复后数据修改自动回到主线程
             try await respondWithEngine(
-                fen: fen, fenId: fenId, engineKey: PikafishService.quickEngineKey,
-                quickEval: { fen in
-                    // 与快估是同一个调用、同一组参数
+                fen: fen, fenId: fenId, engineKey: PikafishService.scoreEngineKey,
+                scoreEval: { fen in
+                    // 与皮卡鱼评分是同一个调用、同一组参数
                     try await service.evaluatePosition(fen: fen, movetime: movetime)
                         .map { ($0.score, $0.bestMove) }
                 },
@@ -2017,14 +2017,14 @@ class ViewModel: ObservableObject {
     }
 
     #if os(macOS)
-    func quickAllEngineScores() {
+    func pikafishScoreGame() {
         guard let queue = ensureEvaluationQueue() else { return }
         let game = session.sessionData.currentGame2
         var requests: [EvaluationRequest] = []
         for fenId in game {
-            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey) != nil { continue }
+            if Database.shared.getEngineScore(fenId: fenId, engineKey: PikafishService.scoreEngineKey) != nil { continue }
             guard let fen = session.getFenForId(fenId) else { continue }
-            requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.quickEngineKey, movetime: PikafishService.quickMovetimeMs))
+            requests.append(EvaluationRequest(fenId: fenId, fen: fen, engineKey: PikafishService.scoreEngineKey, movetime: PikafishService.scoreMovetimeMs))
         }
         queue.enqueueAll(requests)
     }
@@ -2081,7 +2081,7 @@ class ViewModel: ObservableObject {
         do {
             try await respondWithEngine(
                 fen: fen, fenId: fenId, engineKey: PikafishServiceIOS.engineKey,
-                quickEval: { fen in
+                scoreEval: { fen in
                     try await service.evaluatePosition(fen: fen).map { ($0.score, $0.bestMove) }
                 },
                 fallback: {
@@ -2109,9 +2109,9 @@ class ViewModel: ObservableObject {
     }
     #endif
 
-    var currentFenQuickEvalStatus: FenEvalStatus {
+    var currentFenPikafishScoreStatus: FenEvalStatus {
         #if os(macOS)
-        return evaluationQueue?.statusForFen(fenId: session.currentFenId, engineKey: PikafishService.quickEngineKey) ?? .idle
+        return evaluationQueue?.statusForFen(fenId: session.currentFenId, engineKey: PikafishService.scoreEngineKey) ?? .idle
         #else
         return .idle
         #endif
@@ -2366,7 +2366,7 @@ class ViewModel: ObservableObject {
     #if os(iOS)
     var displayLightEngineScore: String { session.displayLightEngineScore }
     #endif
-    var displayQuickEngineScore: String { session.displayQuickEngineScore }
+    var displayPikafishScore: String { session.displayPikafishScore }
     var currentGameStepDisplay: Int { session.currentGameStepDisplay }
     var maxGameStepDisplay: Int { session.maxGameStepDisplay }
     var currentFenComment: String? { session.currentFenComment }

@@ -15,7 +15,7 @@ class PikafishService: @unchecked Sendable {
 
     // MARK: - Serialization
 
-    /// 引擎只有一条 UCI 管道，同一时刻只能跑一个搜索。评估队列、快速应招、远程 /eval
+    /// 引擎只有一条 UCI 管道，同一时刻只能跑一个搜索。评估队列、皮卡鱼应招、远程 /eval
     /// 三个入口并发调用时在这里排队：后到者等前一个结束再发命令。否则两个
     /// waitForResponse 会在两条线程上抢读同一管道、无锁拼 outputBuffer，
     /// 后到者开头的 stop 还会偷走前者的 bestmove。
@@ -49,10 +49,10 @@ class PikafishService: @unchecked Sendable {
     /// 名字里的 d34 来自已移除的深度评分功能，改名会让既有缓存文件失联，故保留
     static let engineKey = "Pikafish_dev-20260213-391d491a_d34"
 
-    /// 快速估分 key，用于 3 秒限时评分的独立存储
-    static let quickEngineKey = "Pikafish_dev-20260213-391d491a_t3s"
-    /// 快估用时（毫秒），须与 quickEngineKey 里的 t3s 一致
-    static let quickMovetimeMs = 3000
+    /// 皮卡鱼评分 key，用于 3 秒限时评分的独立存储
+    static let scoreEngineKey = "Pikafish_dev-20260213-391d491a_t3s"
+    /// 皮卡鱼评分用时（毫秒），须与 scoreEngineKey 里的 t3s 一致
+    static let scoreMovetimeMs = 3000
 
     // MARK: - FEN Conversion
 

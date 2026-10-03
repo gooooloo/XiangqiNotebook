@@ -24,7 +24,7 @@ struct MacActionButtonsView: View {
                     .addToReview, .copyBoardImage,
                 ],
                 [
-                    .queryScore, .openYunku, .pikafishQuickMove, .quickEngineScore, .quickAllEngineScores,
+                    .queryScore, .openYunku, .pikafishRespond, .pikafishScore, .pikafishScoreGame,
                     .markPath, .referenceBoard, .browseGames, .importPGN,
                     .save,
                 ],

@@ -110,7 +110,7 @@ struct iPhoneBoardView: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 scoreCell(label: "云库", value: viewModel.displayScore)
-                scoreCell(label: "快估", value: viewModel.displayQuickEngineScore)
+                scoreCell(label: "皮卡鱼", value: viewModel.displayPikafishScore)
                 scoreCell(label: "轻评", value: viewModel.isEvaluatingIOS ? "评估中…" : viewModel.displayLightEngineScore)
             }
             .padding(.vertical, 9)

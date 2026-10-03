@@ -404,7 +404,7 @@ class Session: ObservableObject {
 
     func getEngineScoreByFenId(_ fenId: Int) -> Int? {
         #if os(macOS)
-        return databaseView.getEngineScore(fenId: fenId, engineKey: PikafishService.quickEngineKey)
+        return databaseView.getEngineScore(fenId: fenId, engineKey: PikafishService.scoreEngineKey)
         #else
         return databaseView.getEngineScoreByFenId(fenId)
         #endif
@@ -412,7 +412,7 @@ class Session: ObservableObject {
 
     var currentEngineScore: Int? {
         #if os(macOS)
-        return databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.quickEngineKey)
+        return databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.scoreEngineKey)
         #else
         return databaseView.getEngineScoreByFenId(currentFenId)
         #endif
@@ -589,10 +589,10 @@ class Session: ObservableObject {
     }
     #endif
 
-    /// 快速估分显示文本，空字符串表示无快速估分
-    var displayQuickEngineScore: String {
+    /// 皮卡鱼评分显示文本，空字符串表示无评分
+    var displayPikafishScore: String {
         #if os(macOS)
-        guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.quickEngineKey) else { return "" }
+        guard let score = databaseView.getEngineScore(fenId: currentFenId, engineKey: PikafishService.scoreEngineKey) else { return "" }
         let nextIsRed = Session.fenNextIsRed(currentFen)
         return "\(adjustScore(score, nextIsRed: nextIsRed))"
         #else

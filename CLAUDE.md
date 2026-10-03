@@ -214,7 +214,7 @@ curl -H "X-RemoteControl-Token: $TOKEN" http://localhost:9214/actions
 # 皮卡鱼 MultiPV 分析（仅 macOS + Apple Silicon；耗时约 movetime 毫秒，默认 3 秒）
 # 省略 fen 则分析 app 当前局面；multipv 默认 3（1-10），movetime 默认 3000ms（500-60000，与 app 内问棋同一配置）
 # 结果与 app 内问棋共用问棋的分析缓存（笔记本里有的局面才缓存），命中时秒回，响应带 cached 字段；
-# 问棋缓存与快估/应招的局面分互不读写
+# 问棋缓存与皮卡鱼评分/应招的局面分互不读写
 curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval -d '{"multipv":3,"movetime":3000}'
 curl -H "X-RemoteControl-Token: $TOKEN" -X POST http://localhost:9214/eval -d '{"fen":"rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR r","multipv":5}'
 # 返回：每条候选线路的 rank、scoreCp（走子方视角厘兵值，杀棋折算 ±30000 附近）、depth、

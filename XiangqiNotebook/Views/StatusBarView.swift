@@ -38,15 +38,15 @@ struct StatusBarView: View {
         value(idle, color: currentScoreColor)
     }
 
-    private var quickEngineValue: Text {
+    private var pikafishValue: Text {
         #if os(macOS)
-        switch viewModel.currentFenQuickEvalStatus {
+        switch viewModel.currentFenPikafishScoreStatus {
         case .evaluating: return value("评估中…", color: .orange)
         case .queued: return value("等待中…", color: Theme.textSecondary)
-        case .idle: return engineValue(idle: viewModel.displayQuickEngineScore)
+        case .idle: return engineValue(idle: viewModel.displayPikafishScore)
         }
         #else
-        return engineValue(idle: viewModel.displayQuickEngineScore)
+        return engineValue(idle: viewModel.displayPikafishScore)
         #endif
     }
 
@@ -99,14 +99,14 @@ struct StatusBarView: View {
         .padding(.vertical, 5)
     }
 
-    /// 行 2：下步走子 / 云库 / 快估 /（iPad）轻评 / 步数 / 本变 / 路径，space-between
+    /// 行 2：下步走子 / 云库 / 皮卡鱼 /（iPad）轻评 / 步数 / 本变 / 路径，space-between
     private var evalRow: some View {
         HStack(spacing: 8) {
             stat("下步走子", value(viewModel.isRedTurn ? "红方" : "黑方"))
             Spacer(minLength: 6)
             stat("云库", value(viewModel.displayScore, color: currentScoreColor))
             Spacer(minLength: 6)
-            stat("快估", quickEngineValue)
+            stat("皮卡鱼", pikafishValue)
             Spacer(minLength: 6)
             #if os(iOS)
             stat("轻评", lightEngineValue)

@@ -394,9 +394,9 @@ struct MacMenuCommands: Commands {
         CommandMenu("分析") {
             menuButton(.queryScore)
             menuButton(.openYunku)
-            menuButton(.pikafishQuickMove)
-            menuButton(.quickEngineScore)
-            menuButton(.quickAllEngineScores)
+            menuButton(.pikafishRespond)
+            menuButton(.pikafishScore)
+            menuButton(.pikafishScoreGame)
             Divider()
             menuButton(.openAIChat)
             Divider()

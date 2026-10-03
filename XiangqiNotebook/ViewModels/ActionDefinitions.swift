@@ -57,9 +57,9 @@ class ActionDefinitions {
         case copyFEN  // 拷贝当前FEN到剪贴板
         case copyBoardText  // 拷贝局面文本表示
         case copyBoardImage  // 拷贝当前棋盘图片到剪贴板
-        case quickEngineScore  // 快速估分（3秒限时）
-        case quickAllEngineScores  // 快速估分本局所有局面
-        case pikafishQuickMove     // 皮卡鱼快速应招
+        case pikafishScore  // 皮卡鱼评分（3秒限时）
+        case pikafishScoreGame  // 皮卡鱼评分本局所有局面
+        case pikafishRespond  // 皮卡鱼应招
         case openAIChat            // AI 问棋窗口
 
         // toggles

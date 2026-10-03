@@ -125,7 +125,7 @@ final class EvaluationQueueTests: XCTestCase {
         let (queue, mock) = makeQueue()
 
         let req1 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "other", movetime: 3000)
-        let req2 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "quick", movetime: 3000)
+        let req2 = EvaluationRequest(fenId: 1, fen: "test r", engineKey: "score", movetime: 3000)
         queue.enqueue(req1)
         queue.enqueue(req2)
 
