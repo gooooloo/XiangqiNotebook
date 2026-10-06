@@ -1,3 +1,33 @@
+# ChatGPT / Codex 订阅线路（macOS）
+
+macOS app 内置 Node、Codex SDK 与固定版本的 Codex CLI，并通过私有 XPC 服务按需启动。
+最终用户不需要安装 npm、Node、Codex 或 launchd 服务，也无需运行脚本。
+
+在 AI 设置选择「ChatGPT / Codex（订阅）」：
+
+- 模型输入框明确显示 `gpt-6.1-sol`，可修改完整模型名。
+- Reasoning effort 下拉框明确显示 `low`，可选择 `medium / high / xhigh / max`。
+- 每次请求都会显式发送所填模型名与所选 effort，不依赖 CLI 的隐式值。
+- 首次点击「登录 ChatGPT」并完成浏览器授权，已登录的本机可复用登录状态。
+- 「测试连接」会自动启动后台组件并检查登录；实际提问验证模型权限与剩余额度。
+
+主 app 保留 App Sandbox。辅助进程由系统 XPC 按需启动，双方校验 bundle ID 与开发者签名，主 app 只传递本机 HTTP
+连接 token 与象棋接口 token；辅助进程不读取主 app 容器或棋谱文件。
+Node/SDK/CLI 位于 `Contents/XPCServices/XiangqiCodexHelper.xpc`；后台监听 `127.0.0.1:9217`，
+随机 token 文件由主 app 保存在自己的 Application Support 目录。
+辅助进程沿用 macOS 系统代理（含 PAC），主 app 退出后自动结束。
+
+SDK 每次重放 app 保存的对话历史，只开放四个象棋 MCP 工具；关闭 shell、web search、
+用户项目配置与 AGENTS.md。取消请求会清理 SDK worker 及其子进程。
+凭据由 Codex 自己保存和刷新，ChatGPT 订阅用量仍受账户额度限制。
+
+开发构建需要正常配置 Xcode 开发者签名以及 Node 20+；`tools/build-codex-helper.py` 在 macOS 构建阶段安装固定 SDK 依赖并
+打包运行组件，可用 `CODEX_NODE_BINARY` 指定与目标架构一致的 Node。
+macOS 发行包按 `ARCHS=arm64` 或 `ARCHS=x86_64` 分别构建；Intel 构建还需要对应的
+`@openai/codex-darwin-x64` runtime。iOS 构建跳过 helper 打包。
+独立脚本与 launchd 模板保留供开发调试使用，app 内的日常使用不依赖它们。
+桥接事件测试：在 `mcp` 目录执行 `npm test`。
+
 # mcp/ — Claude 相关的桥接脚本
 
 两个零依赖 Node（≥18）脚本，服务于两条「问棋」链路：

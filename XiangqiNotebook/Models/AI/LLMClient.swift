@@ -241,7 +241,7 @@ enum LLMClientFactory {
         switch config.wireFormat {
         case .openAICompatible:
             return LLMClient(config: config, session: session)
-        case .claudeCode:
+        case .claudeCode, .codex:
             return ClaudeCodeClient(config: config, session: session)
         }
     }

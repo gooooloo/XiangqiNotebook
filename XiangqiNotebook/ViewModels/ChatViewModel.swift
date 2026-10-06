@@ -382,7 +382,8 @@ final class ChatViewModel: ObservableObject {
                                                   cachedTokens: $0.cachedTokens,
                                                   completionTokens: $0.completionTokens)
             } ?? [],
-            costFootnote: config.wireFormat == .claudeCode ? "订阅计费，无额外费用" : nil,
+            costFootnote: config.wireFormat == .codex ? "使用 ChatGPT 订阅额度，受用量限制"
+                : (config.wireFormat == .claudeCode ? "订阅计费，无额外费用" : nil),
             variations: AnswerVariations.resolve(
                 markdown: body, candidateFens: roundCandidateFens,
                 flipped: viewModel?.isCurrentHorizontalFlipped ?? false)))

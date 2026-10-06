@@ -415,6 +415,7 @@
 				179BE3F02D46691E000FA5AC /* Frameworks */,
 				179BE3F12D46691E000FA5AC /* Resources */,
 				17SCRIPT0000000000000002 /* Prepare Pikafish Resource */,
+				17SCRIPT0000000000000003 /* Embed Codex Helper */,
 				17SCRIPT0000000000000001 /* Set Build Number from Git */,
 			);
 			buildRules = (
@@ -578,6 +579,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "PIKAFISH=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pikafish\"\nNNUE=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/pikafish.nnue\"\nENTITLEMENTS=\"${PROJECT_DIR}/XiangqiNotebook/Resources/pikafish.entitlements\"\ncase \"${PLATFORM_NAME}\" in\n    iphone*)\n        /bin/rm -f \"${PIKAFISH}\"\n        exit 0\n        ;;\nesac\nif [ -z \"${EXPANDED_CODE_SIGN_IDENTITY}\" ]; then\n    echo \"warning: EXPANDED_CODE_SIGN_IDENTITY 为空，跳过 pikafish 子进程签名\"\n    exit 0\nfi\nif [ -f \"${PIKAFISH}\" ]; then\n    /usr/bin/codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" --entitlements \"${ENTITLEMENTS}\" --timestamp=none --generate-entitlement-der \"${PIKAFISH}\"\nfi\n";
+		};
+		17SCRIPT0000000000000003 /* Embed Codex Helper */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Embed Codex Helper";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/usr/bin/python3 \"${PROJECT_DIR}/tools/build-codex-helper.py\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

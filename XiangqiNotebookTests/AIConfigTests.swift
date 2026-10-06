@@ -430,6 +430,42 @@ struct AIConfigTests {
         #expect(loaded.claudeModel == "sonnet")
     }
 
+    @Test func testCodexSubscriptionConfiguration() throws {
+        let defaults = try scratchDefaults(#function)
+        let keyStore = InMemoryKeyStore()
+        var config = AIConfig.empty
+        config.wireFormat = .codex
+        config.codexModel = " gpt-example "
+        config.codexReasoningEffort = .xhigh
+        config.claudeModel = "opus"
+        config.pricing = AIPricing(currency: "$", inputPerMillion: 10, outputPerMillion: 20)
+        #expect(config.isConfigured)
+        #expect(config.effectivePricing == .empty)
+        try config.save(userDefaults: defaults, keyStore: keyStore)
+        let loaded = AIConfig.load(userDefaults: defaults, keyStore: keyStore)
+        #expect(loaded.codexModel == "gpt-example")
+        #expect(loaded.codexReasoningEffort == .xhigh)
+        #expect(loaded.claudeModel == "opus")
+        #if os(macOS)
+        #expect(loaded.wireFormat == .codex)
+        #else
+        #expect(loaded.wireFormat == .openAICompatible)
+        #endif
+    }
+
+    @Test func testCodexShowsExplicitModelAndEffortForOldConfiguration() throws {
+        let defaults = try scratchDefaults(#function)
+        defaults.set("", forKey: "aiChatCodexModel")
+        defaults.set("unknown", forKey: "aiChatCodexReasoningEffort")
+        let config = AIConfig.load(userDefaults: defaults, keyStore: InMemoryKeyStore())
+        #expect(config.codexModel == "gpt-6.1-sol")
+        #expect(config.codexReasoningEffort == .low)
+        var empty = config
+        empty.wireFormat = .codex
+        empty.codexModel = " "
+        #expect(!empty.isConfigured)
+    }
+
     // MARK: - 凭据安全
 
     @Test func testSave_neverTouchesTheRealKeychainFromTests() throws {

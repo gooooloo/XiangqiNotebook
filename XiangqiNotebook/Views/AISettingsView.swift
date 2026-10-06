@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// AI 服务配置页，三端共用。
-/// 线路分两种：OpenAI 兼容（预设按钮只是帮着少打字，可填任何兼容服务）；
-/// Claude Code 订阅（仅 macOS，走本机 claude CLI，见 mcp/claude-bridge.mjs）。
+/// OpenAI 兼容线路跨平台；macOS 另支持 Claude Code 与内置 ChatGPT / Codex 订阅线路。
 struct AISettingsView: View {
 
     @Binding var isPresented: Bool
@@ -11,6 +10,11 @@ struct AISettingsView: View {
     @State private var baseURL = ""
     @State private var model = ""
     @State private var claudeModel = ""
+    @State private var codexModel = "gpt-6.1-sol"
+    @State private var codexReasoningEffort: CodexReasoningEffort = .low
+    @State private var codexLoginMessage = ""
+    @State private var codexLoggingIn = false
+    @State private var codexLoggedIn = false
     @State private var apiKey = ""
     @State private var currency = AIPricing.empty.currency
     @State private var inputPrice = ""
@@ -48,6 +52,8 @@ struct AISettingsView: View {
                         pricingSection
                     case .claudeCode:
                         claudeCodeSection
+                    case .codex:
+                        codexSection
                     }
                     Divider()
                     testSection
@@ -58,6 +64,25 @@ struct AISettingsView: View {
         .aiChatLightAppearance()
         .frame(minWidth: 420, minHeight: 460)
         .onAppear(perform: load)
+        .task(id: wireFormat) {
+            #if os(macOS)
+            if wireFormat == .codex {
+                do {
+                    _ = try await ClaudeCodeClient.health(codex: true)
+                    guard !Task.isCancelled else { return }
+                    codexLoggedIn = true
+                    codexLoginMessage = "已检测到有效的 ChatGPT 登录，可直接问棋，无需重复登录。"
+                } catch {
+                    if !Task.isCancelled {
+                        codexLoggedIn = false
+                        codexLoginMessage = (error as? LLMError)?.errorDescription ?? error.localizedDescription
+                    }
+                }
+            }
+            #endif
+        }
+        .onChange(of: codexModel) { _ in testState = .idle }
+        .onChange(of: codexReasoningEffort) { _ in testState = .idle }
     }
 
     // MARK: - 顶栏
@@ -103,6 +128,57 @@ struct AISettingsView: View {
                  + "工具调用经由本 app 的分析接口完成，app 开着即可。")
         }
     }
+
+    private var codexSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            section("模型") {
+                field(text: $codexModel, placeholder: "gpt-6.1-sol", monospaced: true)
+                hint("填写完整模型名，例如 gpt-6.1-sol。此名称会原样发送给 Codex。")
+            }
+            Divider()
+            section("Reasoning effort · 思考力度") {
+                Picker("思考力度", selection: $codexReasoningEffort) {
+                    ForEach(CodexReasoningEffort.allCases) { effort in
+                        Text(effort.displayName).tag(effort)
+                    }
+                }
+                .labelsHidden()
+                hint("low 通常更快、用量更少；更高档位允许模型投入更多思考。")
+                hint("本次配置：模型 \(codexModel.trimmingCharacters(in: .whitespacesAndNewlines))；reasoning effort = \(codexReasoningEffort.rawValue)。每次请求都会明确传入这两个值。")
+            }
+            Divider()
+            section("ChatGPT 登录") {
+                hint("无需安装或打开 Codex、ChatGPT 应用，也不用运行终端命令。调用组件已内置，会随问棋自动启动。")
+                hint("登录用于授权使用你自己 ChatGPT 订阅中的 Codex 额度。已有有效的本机 Codex 登录会自动复用；没有登录或登录失效时，才需要点击下方按钮，在浏览器里完成授权。")
+                hint("模型在 OpenAI 云端运行，需要联网。此线路无需 API key，消耗订阅中的 Codex 额度，并与其他 Codex 使用共享用量限制。")
+                #if os(macOS)
+                Button(codexLoggedIn ? "已登录 ChatGPT" : (codexLoggingIn ? "等待浏览器完成登录…" : "登录 ChatGPT")) { loginCodex() }
+                    .disabled(codexLoggingIn || codexLoggedIn)
+                if !codexLoginMessage.isEmpty { hint(codexLoginMessage) }
+                #endif
+            }
+        }
+    }
+
+    #if os(macOS)
+    private func loginCodex() {
+        guard !codexLoggedIn, !codexLoggingIn else { return }
+        codexLoggingIn = true
+        codexLoginMessage = "正在打开浏览器，请在浏览器中登录 ChatGPT。"
+        Task { @MainActor in
+            defer { codexLoggingIn = false }
+            do {
+                try await CodexBridgeService.login()
+                codexLoggedIn = true
+                codexLoginMessage = "已使用 ChatGPT 登录，可以开始问棋。"
+                runBridgeTest(codex: true)
+            } catch {
+                codexLoggedIn = false
+                codexLoginMessage = (error as? LLMError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+    #endif
 
     private var baseURLSection: some View {
         section("服务地址") {
@@ -300,7 +376,8 @@ struct AISettingsView: View {
 
     private var draftConfig: AIConfig {
         AIConfig(wireFormat: wireFormat, baseURL: baseURL, model: model, apiKey: apiKey,
-                 claudeModel: claudeModel,
+                 claudeModel: claudeModel, codexModel: codexModel,
+                 codexReasoningEffort: codexReasoningEffort,
                  pricing: AIPricing(
                     currency: currency,
                     inputPerMillion: Self.price(inputPrice),
@@ -332,6 +409,8 @@ struct AISettingsView: View {
         baseURL = config.baseURL
         model = config.model
         claudeModel = config.claudeModel
+        codexModel = config.codexModel
+        codexReasoningEffort = config.codexReasoningEffort
         apiKey = config.apiKey
         currency = config.pricing.currency
         inputPrice = Self.priceText(config.pricing.inputPerMillion)
@@ -360,6 +439,7 @@ struct AISettingsView: View {
         switch wireFormat {
         case .openAICompatible: runOpenAICompatibleTest()
         case .claudeCode: runBridgeTest()
+        case .codex: runBridgeTest(codex: true)
         }
     }
 
@@ -381,13 +461,21 @@ struct AISettingsView: View {
         }
     }
 
-    private func runBridgeTest() {
+    private func runBridgeTest(codex: Bool = false) {
         Task { @MainActor in
             do {
-                let health = try await ClaudeCodeClient.health()
+                let health = try await ClaudeCodeClient.health(codex: codex)
+                if codex {
+                    codexLoggedIn = true
+                    codexLoginMessage = "已检测到有效的 ChatGPT 登录，可直接问棋，无需重复登录。"
+                }
                 let subscription = health.subscriptionType.map { "（\($0) 订阅）" } ?? ""
-                testState = .success("桥接正常，claude 已登录\(subscription)")
+                testState = .success(codex ? "ChatGPT 已登录；模型 \(codexModel)，effort = \(codexReasoningEffort.rawValue)（配置已保存）" : "桥接正常，claude 已登录\(subscription)")
             } catch {
+                if codex {
+                    codexLoggedIn = false
+                    codexLoginMessage = (error as? LLMError)?.errorDescription ?? error.localizedDescription
+                }
                 testState = .failure((error as? LLMError)?.errorDescription
                                      ?? error.localizedDescription)
             }

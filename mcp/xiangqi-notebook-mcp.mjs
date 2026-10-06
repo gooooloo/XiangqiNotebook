@@ -42,6 +42,7 @@ const SERVER_INFO = { name: "xiangqi-notebook", version: "1.0.0" };
 // ---------------------------------------------------------------------------
 
 async function readToken() {
+  if (process.env.XIANGQI_REMOTE_TOKEN) return process.env.XIANGQI_REMOTE_TOKEN;
   try {
     return (await readFile(TOKEN_PATH, "utf8")).trim();
   } catch {

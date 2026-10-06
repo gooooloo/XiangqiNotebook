@@ -796,12 +796,13 @@ struct ChatViewModelTests {
         #expect(chat.messages.last?.costText == "$1.5000")
     }
 
-    @Test func testCostText_claudeCodeIgnoresStoredPricingButKeepsTokenLines() async {
+    @Test(arguments: [AIWireFormat.claudeCode, .codex])
+    func testCostText_subscriptionIgnoresStoredPricingButKeepsTokenLines(format: AIWireFormat) async {
         // 单价 key 全局共享，存的是给 openAICompatible 填的那套；
         // claudeCode 走订阅计费，拿它算金额是张错账——金额不出，token 明细照出
         let viewModel = makeViewModel()
         var config = configured
-        config.wireFormat = .claudeCode
+        config.wireFormat = format
         config.pricing = AIPricing(currency: "$", inputPerMillion: 0.3,
                                    outputPerMillion: 1.2, cachedPerMillion: 0.06)
         let client = ScriptedClient([
@@ -814,7 +815,8 @@ struct ChatViewModelTests {
 
         let message = try! #require(chat.messages.last)
         #expect(message.costText == nil)
-        #expect(message.costFootnote == "订阅计费，无额外费用")
+        #expect(message.costFootnote == (format == .codex
+            ? "使用 ChatGPT 订阅额度，受用量限制" : "订阅计费，无额外费用"))
         #expect(!message.costLines.isEmpty, "token 用量明细不受计价影响，照常显示")
         #expect(message.costLines.allSatisfy { $0.unitPrice == nil },
                 "别的线路的单价不能漏进 claudeCode 的账单")

@@ -118,3 +118,5 @@ UserInterfaceState.xcuserstate
 
 # Local signing configuration (not committed)
 Config/Signing.local.xcconfig
+# Node bridge dependencies
+mcp/node_modules/

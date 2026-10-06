@@ -7,6 +7,14 @@ import Foundation
 /// 桥接协议（NDJSON 事件、请求体形状、错误映射）在这里锁死，真流量留给端到端验证。
 struct ClaudeCodeClientTests {
 
+    @Test func testCodexRequestExplicitlySendsModelAndReasoningEffort() throws {
+        let data = try ClaudeCodeClient.requestBody(messages: [.user("分析局面")],
+            model: "gpt-6.1-sol", reasoningEffort: "low")
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["model"] as? String == "gpt-6.1-sol")
+        #expect(json["reasoningEffort"] as? String == "low")
+    }
+
     // MARK: - NDJSON 事件解析
 
     @Test func testParseEvent_textAndThinkingAndPing() {

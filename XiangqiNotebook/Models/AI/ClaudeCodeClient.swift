@@ -1,22 +1,15 @@
 import Foundation
 
-/// 「Claude Code（订阅）」线路客户端。
-///
-/// 不直连任何 LLM 服务：请求发给本机桥接进程（mcp/claude-bridge.mjs，127.0.0.1:9216），
-/// 由它在沙盒外 spawn `claude -p` 用本机 Claude Code 的订阅登录跑——沙盒内的 app
-/// 自己 spawn 不了 claude（子进程继承沙盒，读不了 ~/.claude 与钥匙串凭据）。
-///
-/// 工具循环在 claude 进程内部（经 MCP → localhost:9214），app 的循环看不见——
-/// 本客户端把过程透传成 `LLMToolEvent` 供界面留痕；`send` 一次返回终稿、
-/// `toolCalls` 恒空，`ChatViewModel` 的循环第一轮即收敛。
-///
-/// 多轮对话走无状态重放：把历史渲染成 transcript 随每次请求发出，由桥接拼进 prompt。
-/// 刻意不用 claude 的 --resume：app 侧 wireMessages 是唯一真相源，取消/失败后
-/// 剪本地数组即可回滚；有状态 session 会与它漂移。
+/// Claude Code 与 ChatGPT / Codex 订阅线路共享的本机 NDJSON 桥接客户端。
+/// Claude 走 9216，Codex SDK 走 9217，各自使用独立 token 文件与模型设置。
+/// 工具循环在沙盒外执行，事件透传给问棋界面；历史由 app 重放，失败或取消可回滚。
 struct ClaudeCodeClient: LLMSending {
 
     let config: AIConfig
     let session: URLSession
+
+    private var isCodex: Bool { config.wireFormat == .codex }
+    private var endpoint: URL { isCodex ? URL(string: "http://127.0.0.1:9217/chat")! : Self.chatURL }
 
     static let chatURL = URL(string: "http://127.0.0.1:9216/chat")!
     static let healthURL = URL(string: "http://127.0.0.1:9216/health")!
@@ -44,24 +37,28 @@ struct ClaudeCodeClient: LLMSending {
               tools: [[String: Any]],
               onReasoning: @escaping (String) -> Void,
               onToolEvent: @escaping (LLMToolEvent) -> Void) async throws -> LLMResponse {
-        guard let token = Self.readBridgeToken() else {
+        #if os(macOS)
+        if isCodex { try await CodexBridgeService.ensureReady() }
+        #endif
+        guard let token = Self.readBridgeToken(codex: isCodex) else {
             // token 文件是桥接启动时写的，读不到 = 桥接没跑过
-            throw LLMError.bridgeUnreachable
+            throw isCodex ? LLMError.network("ChatGPT 后台服务未就绪，请在 AI 设置中重试连接") : LLMError.bridgeUnreachable
         }
 
-        var request = URLRequest(url: Self.chatURL)
+        var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = Self.requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(token, forHTTPHeaderField: Self.tokenHeaderName)
-        request.httpBody = try Self.requestBody(messages: messages, model: config.claudeModel)
+        request.setValue(token, forHTTPHeaderField: isCodex ? "X-CodexBridge-Token" : Self.tokenHeaderName)
+        request.httpBody = try Self.requestBody(messages: messages, model: isCodex ? config.codexModel : config.claudeModel,
+                                                reasoningEffort: isCodex ? config.codexReasoningEffort.rawValue : nil)
 
         let bytes: URLSession.AsyncBytes
         let response: URLResponse
         do {
             (bytes, response) = try await session.bytes(for: request)
         } catch {
-            throw Self.transportError(from: error)
+            throw transportError(from: error)
         }
 
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -101,13 +98,21 @@ struct ClaudeCodeClient: LLMSending {
         } catch let error as LLMError {
             throw error
         } catch {
-            throw Self.transportError(from: error)
+            throw transportError(from: error)
         }
 
         guard let final else {
             throw LLMError.malformedResponse("桥接流在给出结果前就结束了")
         }
         return final
+    }
+
+    private func transportError(from error: Error) -> LLMError {
+        let mapped = Self.transportError(from: error)
+        if isCodex, case .bridgeUnreachable = mapped {
+            return .network("ChatGPT 后台服务未就绪，请在 AI 设置中重试连接")
+        }
+        return mapped
     }
 
     // MARK: - 健康检查（设置页「测试连接」用）
@@ -117,18 +122,23 @@ struct ClaudeCodeClient: LLMSending {
         let subscriptionType: String?
     }
 
-    static func health(session: URLSession = .shared) async throws -> BridgeHealth {
-        guard let token = readBridgeToken() else { throw LLMError.bridgeUnreachable }
-        var request = URLRequest(url: healthURL)
+    static func health(session: URLSession = .shared, codex: Bool = false) async throws -> BridgeHealth {
+        #if os(macOS)
+        if codex { try await CodexBridgeService.ensureReady() }
+        #endif
+        guard let token = readBridgeToken(codex: codex) else {
+            throw codex ? LLMError.network("ChatGPT 后台服务未就绪，请在 AI 设置中重试连接") : LLMError.bridgeUnreachable
+        }
+        var request = URLRequest(url: codex ? URL(string: "http://127.0.0.1:9217/health")! : healthURL)
         request.timeoutInterval = 15
-        request.setValue(token, forHTTPHeaderField: tokenHeaderName)
+        request.setValue(token, forHTTPHeaderField: codex ? "X-CodexBridge-Token" : tokenHeaderName)
 
         let data: Data
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw transportError(from: error)
+            throw codex ? LLMError.network("ChatGPT 桥接连接失败：\(error.localizedDescription)。请在 AI 设置中重试连接。") : transportError(from: error)
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status == 200 else { throw error(forStatus: status, body: data) }
@@ -146,14 +156,14 @@ struct ClaudeCodeClient: LLMSending {
 
     /// 桥接进程启动时把随机 token 写进 app 沙盒容器（方向与 RemoteControlServer 相反：
     /// 那边 app 写、外部工具读）。token 每次桥接启动都会变，所以每次请求都重新读
-    static func bridgeTokenFileURL() -> URL? {
+    static func bridgeTokenFileURL(codex: Bool = false) -> URL? {
         (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                       appropriateFor: nil, create: false))?
-            .appendingPathComponent("XiangqiNotebook/claude-bridge-token.txt")
+            .appendingPathComponent(codex ? "XiangqiNotebook/codex-bridge-token.txt" : "XiangqiNotebook/claude-bridge-token.txt")
     }
 
-    static func readBridgeToken() -> String? {
-        guard let url = bridgeTokenFileURL(),
+    static func readBridgeToken(codex: Bool = false) -> String? {
+        guard let url = bridgeTokenFileURL(codex: codex),
               let raw = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         return token.isEmpty ? nil : token
@@ -164,7 +174,7 @@ struct ClaudeCodeClient: LLMSending {
     /// 把 wireMessages 变成桥接请求体：`.system` 抽出作 systemPrompt，最后一条 `.user`
     /// 是本次提问，其余 user/assistant 依序进 transcript。本线路一轮收敛，历史里不该有
     /// tool 角色消息与 toolCalls——真出现也只丢弃工具部分，正文照带。
-    static func requestBody(messages: [LLMMessage], model: String) throws -> Data {
+    static func requestBody(messages: [LLMMessage], model: String, reasoningEffort: String? = nil) throws -> Data {
         var systemPrompt: String?
         var turns: [[String: String]] = []
         for message in messages {
@@ -196,6 +206,7 @@ struct ClaudeCodeClient: LLMSending {
         if !trimmedModel.isEmpty {
             body["model"] = trimmedModel
         }
+        if let reasoningEffort { body["reasoningEffort"] = reasoningEffort }
         do {
             return try JSONSerialization.data(withJSONObject: body)
         } catch {
@@ -274,6 +285,8 @@ struct ClaudeCodeClient: LLMSending {
         switch code {
         case "CLAUDE_NOT_LOGGED_IN": return .claudeNotLoggedIn
         case "CLAUDE_NOT_FOUND": return .claudeNotFound
+        case "CODEX_NOT_LOGGED_IN": return .badRequest("尚未登录 ChatGPT，请在 AI 设置中点击“登录 ChatGPT”。")
+        case "CODEX_NOT_FOUND": return .badRequest("app 内的 ChatGPT 组件不完整，请重新安装完整版本。")
         default: return .badRequest(message.isEmpty ? code : message)
         }
     }

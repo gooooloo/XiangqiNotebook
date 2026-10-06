@@ -1,0 +1,14 @@
+{
+  "name": "xiangqi-notebook-bridges",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test codex-bridge.test.mjs"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "0.160.0"
+  }
+}

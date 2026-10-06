@@ -10,15 +10,16 @@ enum AIWireFormat: String, CaseIterable, Identifiable {
     case openAICompatible
     /// 本机 Claude Code CLI（订阅计费），经 mcp/claude-bridge.mjs 桥接
     case claudeCode
+    case codex
 
     var id: String { rawValue }
 
-    /// iOS 上不列出 claudeCode：它依赖本机的 claude CLI 与沙盒外的桥接进程，iPhone 上没有。
+    /// iOS 上不列出两条订阅线路：它们需要 macOS 的 CLI 或 XPC 运行组件。
     /// 配置存本地 UserDefaults、不跨设备同步，不存在别的设备把该值带过来的问题；
     /// `AIConfig.load` 仍会把不在此列表内的存量值兜底回退成 openAICompatible。
     static var allCases: [AIWireFormat] {
         #if os(macOS)
-        [.openAICompatible, .claudeCode]
+        [.openAICompatible, .claudeCode, .codex]
         #else
         [.openAICompatible]
         #endif
@@ -28,6 +29,22 @@ enum AIWireFormat: String, CaseIterable, Identifiable {
         switch self {
         case .openAICompatible: return "OpenAI 兼容"
         case .claudeCode: return "Claude Code（订阅）"
+        case .codex: return "ChatGPT / Codex（订阅）"
+        }
+    }
+}
+
+/// 使用明确的 API 值，每次请求都发送，不依赖 CLI 或模型目录的隐式选择。
+enum CodexReasoningEffort: String, CaseIterable, Identifiable {
+    case low, medium, high, xhigh, max
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .low: return "low · 较少思考"
+        case .medium: return "medium · 中等思考"
+        case .high: return "high · 更多思考"
+        case .xhigh: return "xhigh · 深入思考"
+        case .max: return "max · 最大思考力度"
         }
     }
 }
@@ -195,6 +212,8 @@ struct AIConfig: Equatable {
     /// 与 `model` 分开存：两条线路的模型名互不通用，共用一个字段的话，
     /// 切换线路会把 deepseek-chat 之类误传给 claude
     var claudeModel: String = ""
+    var codexModel: String = "gpt-6.1-sol"
+    var codexReasoningEffort: CodexReasoningEffort = .low
     var pricing: AIPricing = .empty
 
     static let empty = AIConfig(baseURL: "", model: "", apiKey: "")
@@ -205,7 +224,7 @@ struct AIConfig: Equatable {
     /// claudeCode 走订阅计费、没有按量单价，拿那套单价乘 Claude 的 token 数
     /// 只会算出一个看着像真的的错数，这里直接给空——金额不显示，token 明细照出
     var effectivePricing: AIPricing {
-        wireFormat == .claudeCode ? .empty : pricing
+        wireFormat == .openAICompatible ? pricing : .empty
     }
 
     /// 发出请求所需的配置是否齐全，按线路格式各有要求
@@ -215,6 +234,8 @@ struct AIConfig: Equatable {
             // 三项齐全才算配好——缺任何一项都发不出请求
             return !baseURL.trimmed.isEmpty && !model.trimmed.isEmpty && !apiKey.trimmed.isEmpty
                 && Self.chatCompletionsURL(from: baseURL) != nil
+        case .codex:
+            return !codexModel.trimmed.isEmpty
         case .claudeCode:
             // 地址固定 localhost、鉴权走本地 token 文件、模型可空（用 CLI 默认），
             // 没有非填不可的字段；桥接进程在不在跑留到真发请求时再报
@@ -272,6 +293,8 @@ struct AIConfig: Equatable {
         static let baseURL = "aiChatBaseURL"
         static let model = "aiChatModel"
         static let claudeModel = "aiChatClaudeModel"
+        static let codexModel = "aiChatCodexModel"
+        static let codexEffort = "aiChatCodexReasoningEffort"
         static let currency = "aiChatCurrency"
         static let inputPrice = "aiChatInputPricePerMillion"
         static let outputPrice = "aiChatOutputPricePerMillion"
@@ -301,6 +324,8 @@ struct AIConfig: Equatable {
             model: userDefaults.string(forKey: Keys.model) ?? "",
             apiKey: keyStore.read() ?? "",
             claudeModel: userDefaults.string(forKey: Keys.claudeModel) ?? "",
+            codexModel: userDefaults.string(forKey: Keys.codexModel).flatMap { $0.trimmed.isEmpty ? nil : $0.trimmed } ?? "gpt-6.1-sol",
+            codexReasoningEffort: userDefaults.string(forKey: Keys.codexEffort).flatMap(CodexReasoningEffort.init(rawValue:)) ?? .low,
             // 没填过价就用预设里核对过的建议价兜底。放在这里而不是只放设置页，
             // 是为了让花费显示开箱即用——不必先去开一次设置、点一下预设
             pricing: stored.isConfigured
@@ -320,6 +345,8 @@ struct AIConfig: Equatable {
         userDefaults.set(baseURL.trimmed, forKey: Keys.baseURL)
         userDefaults.set(model.trimmed, forKey: Keys.model)
         userDefaults.set(claudeModel.trimmed, forKey: Keys.claudeModel)
+        userDefaults.set(codexModel.trimmed, forKey: Keys.codexModel)
+        userDefaults.set(codexReasoningEffort.rawValue, forKey: Keys.codexEffort)
         userDefaults.set(pricing.currency, forKey: Keys.currency)
         Self.setOptionalDouble(pricing.inputPerMillion, forKey: Keys.inputPrice, in: userDefaults)
         Self.setOptionalDouble(pricing.outputPerMillion, forKey: Keys.outputPrice, in: userDefaults)
