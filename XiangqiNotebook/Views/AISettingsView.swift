@@ -6,6 +6,10 @@ struct AISettingsView: View {
 
     @Binding var isPresented: Bool
 
+    #if os(iOS)
+    @State private var showingSubscriptionProbe = false
+    #endif
+
     @State private var wireFormat: AIWireFormat = .openAICompatible
     @State private var baseURL = ""
     @State private var model = ""
@@ -36,6 +40,13 @@ struct AISettingsView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    #if os(iOS)
+                    section("ChatGPT 订阅") {
+                        Button("手机登录与云端回答验证") { showingSubscriptionProbe = true }
+                        hint("gpt-6.1-sol · reasoning effort = low。先验证手机授权，跑通后再接入问棋。")
+                    }
+                    Divider()
+                    #endif
                     // iOS 只有一种线路，单选段的 Picker 显示出来反而突兀
                     if AIWireFormat.allCases.count > 1 {
                         wireFormatSection
@@ -63,6 +74,9 @@ struct AISettingsView: View {
         .background(AIChatPalette.background)
         .aiChatLightAppearance()
         .frame(minWidth: 420, minHeight: 460)
+        #if os(iOS)
+        .sheet(isPresented: $showingSubscriptionProbe) { ChatGPTSubscriptionProbeView() }
+        #endif
         .onAppear(perform: load)
         .task(id: wireFormat) {
             #if os(macOS)
