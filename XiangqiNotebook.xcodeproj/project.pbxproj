@@ -559,7 +559,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "BUILD_NUMBER=$(git -C \"${PROJECT_DIR}\" rev-list --count HEAD)\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion ${BUILD_NUMBER}\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n";
+			shellScript = "BUILD_NUMBER=${CI_BUILD_NUMBER:-$(git -C \"${PROJECT_DIR}\" rev-list --count HEAD)}\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion ${BUILD_NUMBER}\" \"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n";
 		};
 		17SCRIPT0000000000000002 /* Prepare Pikafish Resource */ = {
 			isa = PBXShellScriptBuildPhase;
