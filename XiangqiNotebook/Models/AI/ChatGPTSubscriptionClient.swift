@@ -32,11 +32,13 @@ struct ChatGPTSubscriptionClient: LLMSending {
                 if status >= 500 { throw LLMError.serverError(status) }
                 throw LLMError.badRequest("ChatGPT 订阅请求失败（HTTP \(status)），请检查账号授权和模型权限。")
             }
+            var stream = StreamOutput()
             for try await line in bytes.lines {
                 try Task.checkCancellation()
                 guard line.hasPrefix("data: "),
                       let data = String(line.dropFirst(6)).data(using: .utf8),
                       let event = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+                stream.consume(event)
                 switch event["type"] as? String {
                 case "response.reasoning_summary_text.delta":
                     if let delta = event["delta"] as? String { onReasoning(delta) }
@@ -44,7 +46,7 @@ struct ChatGPTSubscriptionClient: LLMSending {
                     guard let response = event["response"] as? [String: Any] else {
                         throw LLMError.malformedResponse("ChatGPT 完成事件缺少响应")
                     }
-                    return try Self.completedResponse(response)
+                    return try Self.completedResponse(stream.merging(into: response))
                 case "response.failed", "response.incomplete", "error":
                     let response = event["response"] as? [String: Any]
                     let error = response?["error"] as? [String: Any] ?? event["error"] as? [String: Any]
@@ -102,6 +104,29 @@ struct ChatGPTSubscriptionClient: LLMSending {
         ])
     }
 
+    /// 完成事件可能不再携带已流出的 output；保留每个已完成的 item。
+    struct StreamOutput {
+        private var items: [Int: [String: Any]] = [:]
+
+        mutating func consume(_ event: [String: Any]) {
+            guard event["type"] as? String == "response.output_item.done",
+                  let index = event["output_index"] as? Int,
+                  let item = event["item"] as? [String: Any] else { return }
+            items[index] = item
+        }
+
+        func merging(into response: [String: Any]) -> [String: Any] {
+            var result = response
+            var merged = items
+            for (index, item) in (response["output"] as? [[String: Any]] ?? []).enumerated() {
+                // 优先使用已完成 item，避免最终快照覆盖完整正文或 encrypted_content。
+                if merged[index] == nil { merged[index] = item }
+            }
+            result["output"] = merged.keys.sorted().compactMap { merged[$0] }
+            return result
+        }
+    }
+
     static func completedResponse(_ response: [String: Any]) throws -> LLMResponse {
         guard response["status"] as? String == "completed",
               let output = response["output"] as? [[String: Any]] else {
@@ -127,7 +152,9 @@ struct ChatGPTSubscriptionClient: LLMSending {
             }
         }
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !calls.isEmpty else {
-            throw LLMError.malformedResponse("ChatGPT 没有给出回答或工具调用")
+            let types = output.compactMap { $0["type"] as? String }.joined(separator: ", ")
+            let responseID = response["id"] as? String ?? "未知"
+            throw LLMError.malformedResponse("ChatGPT 完成了请求，但没有可显示的回答（output: \(types.isEmpty ? "空" : types)；请求 ID: \(responseID)）")
         }
         var usage: TokenUsage?
         if let values = response["usage"] as? [String: Any],

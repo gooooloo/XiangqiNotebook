@@ -58,6 +58,25 @@ final class ChatGPTSubscriptionProbeTests: XCTestCase {
         ]))
     }
 
+    func testStreamCompletedItemsSurviveEmptyFinalOutput() throws {
+        var stream = ChatGPTSubscriptionClient.StreamOutput()
+        stream.consume(["type": "response.output_item.done", "output_index": 1,
+                        "item": ["type": "message", "content": [["type": "output_text", "text": "连接成功"]]]])
+        stream.consume(["type": "response.output_item.done", "output_index": 0,
+                        "item": ["type": "reasoning", "encrypted_content": "encrypted-test", "summary": []]])
+        let final: [String: Any] = ["status": "completed", "output": [],
+                                  "usage": ["input_tokens": 2, "output_tokens": 3]]
+        let result = try ChatGPTSubscriptionClient.completedResponse(stream.merging(into: final))
+        XCTAssertEqual(result.content, "连接成功")
+        XCTAssertEqual(result.usage?.completionTokens, 3)
+        let output = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(result.responsesOutput)) as? [[String: Any]])
+        XCTAssertEqual(output.count, 2)
+        XCTAssertEqual(output[0]["encrypted_content"] as? String, "encrypted-test")
+        let snapshot: [String: Any] = ["status": "completed", "output": output]
+        XCTAssertEqual(try ChatGPTSubscriptionClient.completedResponse(stream.merging(into: snapshot)).content, "连接成功")
+        XCTAssertThrowsError(try ChatGPTSubscriptionClient.completedResponse(stream.merging(into: ["status": "incomplete"])))
+    }
+
     func testRealLoopbackRejectsWrongStateAndAcceptsDenial() async throws {
         let suite = "SubscriptionProbeTest." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
