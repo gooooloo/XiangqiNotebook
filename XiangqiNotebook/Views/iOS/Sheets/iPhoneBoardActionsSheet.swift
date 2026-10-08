@@ -14,21 +14,22 @@ struct iPhoneBoardActionsSheet: View {
             VStack(alignment: .leading, spacing: 0) {
                 sectionLabel("应用模式")
                 modeSegment
+                    .padding(.top, 8)
                     .padding(.bottom, 16)
 
                 sectionLabel("棋局筛选")
                     .padding(.top, 4)
-                chipsRow(filterChips)
+                optionGrid(filterChips)
                     .padding(.top, 8)
                     .padding(.bottom, 16)
 
                 sectionLabel("开局库 / 书签")
-                chipsRow(openingChips)
+                optionGrid(openingChips)
                     .padding(.top, 8)
                     .padding(.bottom, 16)
 
                 sectionLabel("棋盘操作")
-                chipsRow(boardToggleChips)
+                optionGrid(boardToggleChips)
                     .padding(.top, 8)
                     .padding(.bottom, 16)
 
@@ -41,15 +42,14 @@ struct iPhoneBoardActionsSheet: View {
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(XiangqiTheme.XFont.sans(11.5, weight: .bold))
-            .tracking(1.5)
-            .foregroundColor(XiangqiTheme.faint)
+            .font(XiangqiTheme.XFont.sans(13, weight: .semibold))
+            .foregroundColor(XiangqiTheme.sub)
     }
 
     // MARK: - 应用模式（单选）
 
     private var modeSegment: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 8) {
             modeButton("常规", on: viewModel.currentAppMode == .normal) { viewModel.setMode(.normal); dismiss() }
             modeButton("练习", on: viewModel.currentAppMode == .practice) { viewModel.setMode(.practice); selectedTab = .practice; dismiss() }
             modeButton("复习", on: viewModel.currentAppMode == .review) { viewModel.setMode(.review); selectedTab = .review; dismiss() }
@@ -59,17 +59,13 @@ struct iPhoneBoardActionsSheet: View {
     private func modeButton(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(XiangqiTheme.XFont.sans(14, weight: on ? .bold : .regular))
-                .foregroundColor(on ? .white : XiangqiTheme.ink)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(on ? XiangqiTheme.blue : XiangqiTheme.card)
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(on ? Color.clear : XiangqiTheme.line, lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 9))
         }
+        .buttonStyle(BoardPanelButtonStyle(selected: on))
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    // MARK: - 棋局筛选 / 开局库 / 棋盘操作（多选 chips，均为已有 ToggleAction）
+    // MARK: - 棋局筛选 / 开局库 / 棋盘操作
 
     private struct Chip: Identifiable {
         let id: ActionDefinitions.ActionKey
@@ -110,21 +106,29 @@ struct iPhoneBoardActionsSheet: View {
         ]
     }
 
-    private func chipsRow(_ chips: [Chip]) -> some View {
-        FlowLayout(items: chips) { chip in
-            let info = viewModel.actionDefinitions.getToggleActionInfo(chip.id)
-            let on = info?.isOn() ?? false
-            Button(action: { info?.action(!on) }) {
-                Text(chip.label)
-                    .font(.system(size: 12.5, weight: on ? .semibold : .medium))
-                    .foregroundColor(on ? .white : XiangqiTheme.ink)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 7)
-                    .background(on ? XiangqiTheme.blue : XiangqiTheme.card)
-                    .overlay(Capsule().stroke(on ? Color.clear : XiangqiTheme.line, lineWidth: 1))
-                    .clipShape(Capsule())
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: 2)
+    }
+
+    private func optionGrid(_ chips: [Chip]) -> some View {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(chips) { chip in
+                let info = viewModel.actionDefinitions.getToggleActionInfo(chip.id)
+                let on = info?.isOn() ?? false
+                Button(action: { info?.action(!on) }) {
+                    HStack(spacing: 6) {
+                        Text(chip.label)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .opacity(on ? 1 : 0)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .buttonStyle(BoardPanelButtonStyle(selected: on))
+                .accessibilityAddTraits(on ? .isSelected : [])
+                .disabled(info == nil || !(info?.isEnabled() ?? true))
             }
-            .disabled(info == nil || !(info?.isEnabled() ?? true))
         }
     }
 
@@ -170,24 +174,41 @@ struct iPhoneBoardActionsSheet: View {
     }
 
     private var actionGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 8) {
+        LazyVGrid(columns: columns, spacing: 8) {
             ForEach(actionItems) { item in
                 Button(action: item.action) {
                     Text(item.label)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(item.danger ? XiangqiTheme.bad : XiangqiTheme.ink)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 10)
-                        .background(XiangqiTheme.card)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(XiangqiTheme.line, lineWidth: 1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .buttonStyle(BoardPanelButtonStyle(danger: item.danger))
             }
         }
+    }
+}
+
+/// 面板中的模式、选项和操作共用尺寸与外观；选中态只改变颜色。
+private struct BoardPanelButtonStyle: ButtonStyle {
+    var selected = false
+    var danger = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(XiangqiTheme.XFont.sans(14, weight: .medium))
+            .foregroundStyle(danger ? XiangqiTheme.bad : (selected ? XiangqiTheme.blue : XiangqiTheme.ink))
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(selected ? XiangqiTheme.blue.opacity(0.09) : XiangqiTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: XiangqiTheme.Radius.button))
+            .overlay {
+                RoundedRectangle(cornerRadius: XiangqiTheme.Radius.button)
+                    .stroke(selected ? XiangqiTheme.blue.opacity(0.35) : XiangqiTheme.line, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: XiangqiTheme.Radius.button))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.65 : 1) : 0.4)
     }
 }
 
