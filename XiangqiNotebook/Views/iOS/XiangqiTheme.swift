@@ -7,8 +7,8 @@ import SwiftUI
 /// 与 macOS 端 `Theme`（见 `Views/DesignTokens.swift`）配色体系完全独立，仅供 `Views/iOS` 使用；
 /// 复用其中定义的全局 `Color(hex:alpha:)` 初始化器。
 enum XiangqiTheme {
-    // MARK: - 底色（宣纸暖底）
-    static let bg = Color(hex: 0xEEE4CD)
+    // MARK: - 底色（白色页面背景，保留暖色卡片层次）
+    static let bg = Color.white
     static let panel = Color(hex: 0xF6EFDC)
     static let card = Color(hex: 0xFBF6E9)
     static let inset = Color(hex: 0xF1E8D2)
