@@ -56,7 +56,7 @@ struct iPhoneContentView: View {
                 // 用实际布局分配菜单栏高度，避免 TabView 内的页面忽略外部 safeAreaInset。
                 VStack(spacing: 0) {
                     navigationHeader
-                    mainContent(bottomSafeAreaInset: geometry.safeAreaInsets.bottom)
+                    mainContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
                 }
@@ -98,7 +98,6 @@ struct iPhoneContentView: View {
                     .frame(width: 0, height: 0)
             }
             .clipped()
-            .ignoresSafeArea(.container, edges: selectedTab == .board ? .bottom : [])
         }
         .onChange(of: selectedTab) { _, _ in
             setSidebar(false)
@@ -148,7 +147,7 @@ struct iPhoneContentView: View {
         }
     }
 
-    private func mainContent(bottomSafeAreaInset: CGFloat) -> some View {
+    private var mainContent: some View {
         TabView(selection: $selectedTab) {
             iPhoneHomeView(
                 viewModel: viewModel,
@@ -165,7 +164,7 @@ struct iPhoneContentView: View {
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem { Label("棋谱", systemImage: "list.bullet") }
 
-            iPhoneBoardView(viewModel: viewModel, selectedTab: $selectedTab, practiceRoute: $practiceRoute, bottomSafeAreaInset: bottomSafeAreaInset)
+            iPhoneBoardView(viewModel: viewModel, selectedTab: $selectedTab, practiceRoute: $practiceRoute)
                 .tag(IPhoneTab.board)
                 .tabItem { Label("棋盘", systemImage: "square.grid.3x3.fill") }
                 .toolbar(.hidden, for: .tabBar)

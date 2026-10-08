@@ -9,7 +9,6 @@ struct iPhoneBoardView: View {
     @ObservedObject var viewModel: ViewModel
     @Binding var selectedTab: IPhoneTab
     @Binding var practiceRoute: PracticeRoute
-    var bottomSafeAreaInset: CGFloat = 0
     @State private var didApplyDefaultToggles = false
 
     var body: some View {
@@ -20,48 +19,16 @@ struct iPhoneBoardView: View {
             // 剩余高度再全部留给 ScrollView。
             boardBlock
                 .layoutPriority(1)
-            ZStack(alignment: .bottom) {
-                ScrollView {
-                    VStack(spacing: 10) {
-                        analysisCard
-                        metaCard
-                        actionGrid
-                    }
-                    .padding(.top, 10)
-                    // 让末尾内容可以滚到固定按钮及遮罩上方。
-                    .padding(.bottom, 80 + bottomSafeAreaInset)
+            ScrollView {
+                VStack(spacing: 10) {
+                    analysisCard
+                    metaCard
+                    actionGrid
                 }
-                navBar
-                    .background(alignment: .bottom) {
-                        ZStack {
-                            Rectangle()
-                                .fill(.regularMaterial)
-                                .mask {
-                                    LinearGradient(
-                                        stops: [
-                                            .init(color: .clear, location: 0),
-                                            .init(color: .black, location: 0.25)
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                }
-                            // 材质本身仍会透出内容；按钮区域叠加实色，彻底遮住下层文字。
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .clear, location: 0),
-                                    .init(color: XiangqiTheme.bg.opacity(0.85), location: 0.18),
-                                    .init(color: XiangqiTheme.bg, location: 0.28)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        }
-                        .padding(.top, -24)
-                        .ignoresSafeArea(.container, edges: .bottom)
-                        .allowsHitTesting(false)
-                    }
+                .padding(.top, 10)
             }
+            .clipped()
+            navBar
         }
         .background(XiangqiTheme.bg.ignoresSafeArea())
         .onAppear {
@@ -333,7 +300,7 @@ struct iPhoneBoardView: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.bottom, 8)
     }
 }
 #endif
