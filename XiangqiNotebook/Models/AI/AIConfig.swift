@@ -14,14 +14,12 @@ enum AIWireFormat: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// iOS 上不列出两条订阅线路：它们需要 macOS 的 CLI 或 XPC 运行组件。
-    /// 配置存本地 UserDefaults、不跨设备同步，不存在别的设备把该值带过来的问题；
-    /// `AIConfig.load` 仍会把不在此列表内的存量值兜底回退成 openAICompatible。
+    /// 手机直接使用 ChatGPT 授权；macOS 使用内置 Codex 组件。
     static var allCases: [AIWireFormat] {
         #if os(macOS)
         [.openAICompatible, .claudeCode, .codex]
         #else
-        [.openAICompatible]
+        [.openAICompatible, .codex]
         #endif
     }
 
@@ -29,7 +27,12 @@ enum AIWireFormat: String, CaseIterable, Identifiable {
         switch self {
         case .openAICompatible: return "OpenAI 兼容"
         case .claudeCode: return "Claude Code（订阅）"
-        case .codex: return "ChatGPT / Codex（订阅）"
+        case .codex:
+            #if os(iOS)
+            return "ChatGPT（订阅）"
+            #else
+            return "ChatGPT / Codex（订阅）"
+            #endif
         }
     }
 }

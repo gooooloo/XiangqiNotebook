@@ -4,7 +4,7 @@ import CryptoKit
 import Network
 import Security
 
-/// 最小验证阶段：不复用 Mac 凭据、不触碰 CLI、不启用问棋线路。
+/// 手机订阅授权与钥匙串凭据管理，供验证页和正式问棋共用。
 @MainActor
 final class ChatGPTSubscriptionProbe: ObservableObject {
     @Published private(set) var busy = false
@@ -33,8 +33,8 @@ final class ChatGPTSubscriptionProbe: ObservableObject {
     init(loadSavedCredential: Bool = true, defaults: UserDefaults = .standard) {
         self.defaults = defaults
         credential = loadSavedCredential ? Self.readCredential() : nil
-        loggedIn = credential.map { $0.expiresAt > Date() && $0.scopes.split(separator: " ").contains("chatgpt.tokens.use.direct") } ?? false
-        if loggedIn { message = "手机已有有效登录，可测试云端回答。" }
+        loggedIn = credential.map { $0.scopes.split(separator: " ").contains("chatgpt.tokens.use.direct") } ?? false
+        if loggedIn { message = "手机已有登录，可使用订阅问棋。" }
     }
     func login() {
         guard !busy, !loggedIn else { return }
@@ -158,43 +158,34 @@ final class ChatGPTSubscriptionProbe: ObservableObject {
         }
         requestTask = Task {
             do {
-                let token = try await accessToken()
-                var modelsRequest = URLRequest(url: URL(string: "https://api.openai.com/v1/models")!)
-                modelsRequest.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
-                let models = try await Self.json(modelsRequest)
-                guard let catalog = models["models"] as? [[String: Any]], catalog.contains(where: { $0["slug"] as? String == "gpt-6.1-sol" && $0["visibility"] as? String == "list" }) else {
-                    throw fail("当前账号的模型目录未提供 gpt-6.1-sol，未替换为其他模型。")
-                }
-                var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
-                request.httpMethod = "POST"; request.timeoutInterval = 90
-                request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.httpBody = try JSONSerialization.data(withJSONObject: ["model": "gpt-6.1-sol", "reasoning": ["effort": effort.rawValue], "input": [["role": "user", "content": "请用一句中文确认：手机已直接连接云端模型。"]], "store": false, "stream": true])
-                let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw fail("订阅推理请求失败（HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)）。") }
-                var completed = false
-                for try await line in bytes.lines {
-                    try Task.checkCancellation()
-                    guard line.hasPrefix("data: "), let data = String(line.dropFirst(6)).data(using: .utf8),
-                          let event = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-                    switch event["type"] as? String {
-                    case "response.output_text.delta": answer += event["delta"] as? String ?? ""
-                    case "response.completed": completed = true
-                    case "response.failed", "response.incomplete", "error":
-                        let response = event["response"] as? [String: Any]
-                        let error = response?["error"] as? [String: Any] ?? event["error"] as? [String: Any]
-                        throw fail("云端请求未完成：\(error?["code"] as? String ?? event["type"] as? String ?? "unknown")")
-                    default: break
-                    }
-                }
-                guard completed, !answer.isEmpty else { throw fail("流已结束，但未收到带回答的 response.completed；不能算验证通过。") }
-                message = "验证通过：手机直接获得完整云端回答；gpt-6.1-sol / \(effort.rawValue)。"
+                var config = AIConfig.empty
+                config.wireFormat = .codex
+                config.codexReasoningEffort = effort
+                let client = ChatGPTSubscriptionClient(config: config, tokenProvider: { try await Self.subscriptionAccessToken() })
+                let response = try await client.send(messages: [.user("请用一句中文确认：手机已直接连接云端模型。")], tools: [])
+                try Task.checkCancellation()
+                answer = response.content ?? ""
+                message = "连接成功，可以返回问棋提问；gpt-6.1-sol / \(effort.rawValue)。"
             } catch {
                 guard !Task.isCancelled else { return }
-                message = (error as? URLError)?.code == .timedOut ? "云端回答等待超过 90 秒，请重试。" : error.localizedDescription
+                message = error.localizedDescription
             }
             timeout?.cancel(); timeout = nil; busy = false
         }
+    }
+    func reauthorize() {
+        guard !busy else { return }
+        loggedIn = false
+        login()
+    }
+    /// 每次问棋读取最新钥匙串记录，避免验证页与问棋各持旧 refresh token。
+    private static var tokenRefreshTask: Task<String, Error>?
+    static func subscriptionAccessToken() async throws -> String {
+        if let task = tokenRefreshTask { return try await task.value }
+        let task = Task { try await ChatGPTSubscriptionProbe().accessToken() }
+        tokenRefreshTask = task
+        defer { tokenRefreshTask = nil }
+        return try await task.value
     }
     private func accessToken() async throws -> String {
         guard let record = credential else { throw fail("请先登录 ChatGPT。") }

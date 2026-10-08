@@ -40,14 +40,6 @@ struct AISettingsView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    #if os(iOS)
-                    section("ChatGPT 订阅") {
-                        Button("手机登录与云端回答验证") { showingSubscriptionProbe = true }
-                        hint("gpt-6.1-sol · reasoning effort = low。先验证手机授权，跑通后再接入问棋。")
-                    }
-                    Divider()
-                    #endif
-                    // iOS 只有一种线路，单选段的 Picker 显示出来反而突兀
                     if AIWireFormat.allCases.count > 1 {
                         wireFormatSection
                         Divider()
@@ -73,9 +65,11 @@ struct AISettingsView: View {
         }
         .background(AIChatPalette.background)
         .aiChatLightAppearance()
+        #if os(macOS)
         .frame(minWidth: 420, minHeight: 460)
+        #endif
         #if os(iOS)
-        .sheet(isPresented: $showingSubscriptionProbe) { ChatGPTSubscriptionProbeView() }
+        .sheet(isPresented: $showingSubscriptionProbe) { ChatGPTSubscriptionProbeView(effort: $codexReasoningEffort) }
         #endif
         .onAppear(perform: load)
         .task(id: wireFormat) {
@@ -144,6 +138,24 @@ struct AISettingsView: View {
     }
 
     private var codexSection: some View {
+        #if os(iOS)
+        return AnyView(VStack(alignment: .leading, spacing: 0) {
+            section("ChatGPT 订阅") {
+                Text("模型：gpt-6.1-sol")
+                Picker("思考力度", selection: $codexReasoningEffort) {
+                    ForEach(CodexReasoningEffort.allCases) { Text($0.displayName).tag($0) }
+                }
+                Button("ChatGPT 登录与连接测试") { showingSubscriptionProbe = true }
+                hint("复用手机已有登录，直接用于问棋和引擎分析。点击完成保存后，回到问棋输入问题即可。")
+                hint("使用 ChatGPT 订阅额度，受账号用量限制。")
+            }
+        })
+        #else
+        return AnyView(macCodexSection)
+        #endif
+    }
+
+    private var macCodexSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             section("模型") {
                 field(text: $codexModel, placeholder: "gpt-6.1-sol", monospaced: true)
@@ -423,7 +435,11 @@ struct AISettingsView: View {
         baseURL = config.baseURL
         model = config.model
         claudeModel = config.claudeModel
+        #if os(iOS)
+        codexModel = "gpt-6.1-sol"
+        #else
         codexModel = config.codexModel
+        #endif
         codexReasoningEffort = config.codexReasoningEffort
         apiKey = config.apiKey
         currency = config.pricing.currency
@@ -453,7 +469,18 @@ struct AISettingsView: View {
         switch wireFormat {
         case .openAICompatible: runOpenAICompatibleTest()
         case .claudeCode: runBridgeTest()
-        case .codex: runBridgeTest(codex: true)
+        case .codex:
+            #if os(iOS)
+            let client = ChatGPTSubscriptionClient(config: draftConfig)
+            Task { @MainActor in
+                do {
+                    _ = try await client.send(messages: [.user("回复 OK 即可。")], tools: AnalysisToolbox.toolSpecs)
+                    testState = .success("ChatGPT 订阅连接正常，可以问棋")
+                } catch { testState = .failure(error.localizedDescription) }
+            }
+            #else
+            runBridgeTest(codex: true)
+            #endif
         }
     }
 

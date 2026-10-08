@@ -22,6 +22,8 @@ struct LLMMessage: Equatable {
     let content: String?
     let toolCalls: [LLMToolCall]
     let toolCallId: String?
+    /// Responses 原始输出，包含工具调用所需的加密推理上下文。仅保存在本次对话内存中。
+    var responsesOutput: Data? = nil
 
     init(role: Role, content: String?, toolCalls: [LLMToolCall] = [], toolCallId: String? = nil) {
         self.role = role
@@ -116,6 +118,7 @@ struct LLMResponse: Equatable {
     let toolCalls: [LLMToolCall]
     /// 服务端回报的用量；没开或不支持 `stream_options` 时为 nil
     let usage: TokenUsage?
+    var responsesOutput: Data? = nil
 
     init(content: String?, toolCalls: [LLMToolCall], usage: TokenUsage? = nil) {
         self.content = content
@@ -241,7 +244,13 @@ enum LLMClientFactory {
         switch config.wireFormat {
         case .openAICompatible:
             return LLMClient(config: config, session: session)
-        case .claudeCode, .codex:
+        case .codex:
+            #if os(iOS)
+            return ChatGPTSubscriptionClient(config: config, session: session)
+            #else
+            return ClaudeCodeClient(config: config, session: session)
+            #endif
+        case .claudeCode:
             return ClaudeCodeClient(config: config, session: session)
         }
     }

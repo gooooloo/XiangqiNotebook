@@ -296,13 +296,15 @@ final class ChatViewModel: ObservableObject {
             if let step = response.usage { usage = usage + step }
 
             guard !response.toolCalls.isEmpty else {
-                finish(text: response.content, startedAt: startedAt, usage: usage)
+                finish(text: response.content, startedAt: startedAt, usage: usage, responsesOutput: response.responsesOutput)
                 return
             }
 
             // 先把 assistant 的工具请求入档，再逐个执行：两者必须成对出现，
             // 否则下一轮请求会因 tool_call 无对应结果被服务端拒绝
-            wireMessages.append(.assistant(response.content, toolCalls: response.toolCalls))
+            var assistant = LLMMessage.assistant(response.content, toolCalls: response.toolCalls)
+            assistant.responsesOutput = response.responsesOutput
+            wireMessages.append(assistant)
 
             for call in response.toolCalls {
                 if Task.isCancelled { return }
@@ -352,7 +354,7 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func finish(text: String?, startedAt: Date,
-                        usage: TokenUsage, recordInWire: Bool = true) {
+                        usage: TokenUsage, recordInWire: Bool = true, responsesOutput: Data? = nil) {
         let body = (text?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap {
             $0.isEmpty ? nil : $0
         }
@@ -361,7 +363,9 @@ final class ChatViewModel: ObservableObject {
             return
         }
         if recordInWire {
-            wireMessages.append(LLMMessage(role: .assistant, content: body))
+            var assistant = LLMMessage(role: .assistant, content: body)
+            assistant.responsesOutput = responsesOutput
+            wireMessages.append(assistant)
         }
         // 一次用量都没回报（服务端不认 stream_options）就别显示 0 tokens——
         // 那看起来像「没花钱」，其实是「不知道」

@@ -5,6 +5,59 @@ import Security
 
 @MainActor
 final class ChatGPTSubscriptionProbeTests: XCTestCase {
+    func testSubscriptionRequestAndToolResultRoundTrip() throws {
+        let response: [String: Any] = ["status": "completed", "output": [
+            ["type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "encrypted-test"],
+            ["type": "function_call", "id": "fc_1", "call_id": "call_1", "name": "get_position", "arguments": "{}"],
+        ], "usage": ["input_tokens": 100, "output_tokens": 20, "input_tokens_details": ["cached_tokens": 40]]]
+        let parsed = try ChatGPTSubscriptionClient.completedResponse(response)
+        XCTAssertEqual(parsed.toolCalls, [LLMToolCall(id: "call_1", name: "get_position", argumentsJSON: "{}")])
+        XCTAssertEqual(parsed.usage, TokenUsage(promptTokens: 100, cachedTokens: 40, completionTokens: 20))
+        var assistant = LLMMessage.assistant(parsed.content, toolCalls: parsed.toolCalls)
+        assistant.responsesOutput = parsed.responsesOutput
+        let data = try ChatGPTSubscriptionClient.requestBody(messages: [
+            .system("象棋老师"), .user("这步怎么样"), assistant,
+            .toolResult(callId: "call_1", content: "局面分析结果"),
+        ], tools: AnalysisToolbox.toolSpecs, effort: .low)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(body["model"] as? String, "gpt-6.1-sol")
+        XCTAssertEqual(body["store"] as? Bool, false)
+        XCTAssertEqual(body["stream"] as? Bool, true)
+        XCTAssertEqual((body["reasoning"] as? [String: Any])?["effort"] as? String, "low")
+        let input = try XCTUnwrap(body["input"] as? [[String: Any]])
+        XCTAssertEqual(input.count, 5)
+        XCTAssertEqual(input[0]["role"] as? String, "developer")
+        XCTAssertEqual(input[2]["encrypted_content"] as? String, "encrypted-test")
+        XCTAssertEqual(input[3]["call_id"] as? String, "call_1")
+        XCTAssertEqual(input[4]["type"] as? String, "function_call_output")
+        XCTAssertEqual(input[4]["call_id"] as? String, "call_1")
+        let tools = try XCTUnwrap(body["tools"] as? [[String: Any]])
+        XCTAssertEqual(tools.first?["type"] as? String, "namespace")
+        XCTAssertEqual(tools.first?["name"] as? String, "xiangqi")
+        let functions = try XCTUnwrap(tools.first?["tools"] as? [[String: Any]])
+        XCTAssertEqual(functions.first?["name"] as? String, "get_position")
+        XCTAssertEqual(functions.first?["strict"] as? Bool, false)
+        XCTAssertNil(functions.first?["function"])
+        XCTAssertTrue(AIWireFormat.allCases.contains(.codex))
+        var config = AIConfig.empty
+        config.wireFormat = .codex
+        XCTAssertTrue(LLMClientFactory.make(config: config) is ChatGPTSubscriptionClient)
+        XCTAssertFalse(config.effectivePricing.isConfigured)
+    }
+
+    func testSubscriptionCompletedAnswerAndInvalidOutput() throws {
+        let result = try ChatGPTSubscriptionClient.completedResponse([
+            "status": "completed", "output": [["type": "message", "content": [["type": "output_text", "text": "红方占优"]]]],
+        ])
+        XCTAssertEqual(result.content, "红方占优")
+        XCTAssertTrue(result.toolCalls.isEmpty)
+        XCTAssertThrowsError(try ChatGPTSubscriptionClient.completedResponse(["status": "incomplete", "output": []]))
+        XCTAssertThrowsError(try ChatGPTSubscriptionClient.completedResponse(["status": "completed", "output": []]))
+        XCTAssertThrowsError(try ChatGPTSubscriptionClient.completedResponse([
+            "status": "completed", "output": [["type": "function_call", "name": "evaluate"]],
+        ]))
+    }
+
     func testRealLoopbackRejectsWrongStateAndAcceptsDenial() async throws {
         let suite = "SubscriptionProbeTest." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
