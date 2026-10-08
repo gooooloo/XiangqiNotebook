@@ -2,19 +2,17 @@
 import SwiftUI
 
 /// 「棋盘」标签：沉浸式分析页（detail 页）。进入时隐藏底部标签栏；
-/// 固定头（返回/走子方/⋯）+ 固定棋盘（近满宽，四周靠发丝线卡片界定边界，不靠底色对比、不加阴影/描边）
+/// 顶栏由父视图统一显示走子方/手数/⋯；固定棋盘（近满宽，四周靠发丝线卡片界定边界，不靠底色对比、不加阴影/描边）
 /// + 可滚动分析区 + 固定底部走子条。页面底色与其余标签页统一为暖米 `XiangqiTheme.bg`。
 /// 卡片文字一律常规字重，靠深墨/浅灰颜色分主次；全屏唯一强调色是「更多」蓝按钮。
 struct iPhoneBoardView: View {
     @ObservedObject var viewModel: ViewModel
     @Binding var selectedTab: IPhoneTab
     @Binding var practiceRoute: PracticeRoute
-    let prevTab: IPhoneTab
     @State private var didApplyDefaultToggles = false
 
     var body: some View {
         VStack(spacing: 0) {
-            topBar
             // VStack 里棋盘和下面的 ScrollView 都是弹性子视图，不设优先级的话
             // 高度会被两者对半分掉，棋盘因此被"高度"卡住而不是撑满宽度。
             // 用 layoutPriority 让棋盘先按自身宽度确定理想的正方形尺寸，
@@ -50,42 +48,6 @@ struct iPhoneBoardView: View {
         .sheet(isPresented: $viewModel.showingAIChat) {
             iPhoneAIChatSheet(viewModel: viewModel)
         }
-    }
-
-    // MARK: - 固定顶栏
-
-    private var topBar: some View {
-        HStack(spacing: 6) {
-            Button(action: { selectedTab = prevTab }) {
-                Text("‹ 返回")
-                    .font(.system(size: 15.5, weight: .semibold))
-                    .foregroundColor(XiangqiTheme.blue)
-            }
-            Spacer()
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(viewModel.isRedTurn ? Color(hex: 0xA15750) : Color(hex: 0x3A3A3D))
-                    .frame(width: 9, height: 9)
-                Text((viewModel.isRedTurn ? "红方" : "黑方") + "走子")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(XiangqiTheme.ink)
-                Text("· 第 \(viewModel.currentGameStepDisplay)/\(viewModel.maxGameStepDisplay) 手")
-                    .font(.system(size: 12))
-                    .foregroundColor(XiangqiTheme.sub)
-                    .lineLimit(1)
-            }
-            Spacer()
-            Button(action: { viewModel.showIOSMoreActionsView = true }) {
-                Text("⋯")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(XiangqiTheme.ink)
-                    .frame(width: 44)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(XiangqiTheme.bg)
-        .overlay(Divider().overlay(XiangqiTheme.hair), alignment: .bottom)
     }
 
     // MARK: - 固定棋盘（不滚动，满宽，靠下方卡片的发丝线边界，不加阴影/描边）

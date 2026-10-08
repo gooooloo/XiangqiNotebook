@@ -16,9 +16,12 @@ enum PracticeRoute: Equatable {
 struct iPhoneContentView: View {
     @StateObject private var viewModel: ViewModel
     @State private var selectedTab: IPhoneTab = .home
-    /// 「棋盘」是沉浸式分析页，进入前所在的标签，供其「‹ 返回」按钮回退
-    @State private var prevTab: IPhoneTab = .home
     @State private var practiceRoute: PracticeRoute = .home
+    @State private var showFilterSheet = false
+    @State private var showReviewLibrary = false
+    @State private var practiceScreen: IPhonePracticeScreen = .home
+    @State private var practiceMistakeCount = 0
+    @State private var practiceStepsPlayed = 0
     @State private var showMore = false
     @State private var showSidebar = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -94,10 +97,7 @@ struct iPhoneContentView: View {
             }
             .clipped()
         }
-        .onChange(of: selectedTab) { oldValue, newValue in
-            if newValue == .board && oldValue != .board {
-                prevTab = oldValue
-            }
+        .onChange(of: selectedTab) { _, _ in
             setSidebar(false)
         }
         .fullScreenCover(isPresented: $showMore) {
@@ -145,22 +145,22 @@ struct iPhoneContentView: View {
             .toolbar(.hidden, for: .tabBar)
             .tabItem { Label("今日", systemImage: "sun.max.fill") }
 
-            iPhoneLibraryView(viewModel: viewModel, selectedTab: $selectedTab)
+            iPhoneLibraryView(viewModel: viewModel, selectedTab: $selectedTab, showFilterSheet: $showFilterSheet)
                 .tag(IPhoneTab.library)
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem { Label("棋谱", systemImage: "list.bullet") }
 
-            iPhoneBoardView(viewModel: viewModel, selectedTab: $selectedTab, practiceRoute: $practiceRoute, prevTab: prevTab)
+            iPhoneBoardView(viewModel: viewModel, selectedTab: $selectedTab, practiceRoute: $practiceRoute)
                 .tag(IPhoneTab.board)
                 .tabItem { Label("棋盘", systemImage: "square.grid.3x3.fill") }
                 .toolbar(.hidden, for: .tabBar)
 
-            iPhoneReviewModeView(viewModel: viewModel)
+            iPhoneReviewModeView(viewModel: viewModel, showLibrary: $showReviewLibrary)
                 .tag(IPhoneTab.review)
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem { Label("复习", systemImage: "arrow.triangle.2.circlepath") }
 
-            iPhonePracticeView(viewModel: viewModel, route: $practiceRoute)
+            iPhonePracticeView(viewModel: viewModel, route: $practiceRoute, view: $practiceScreen, mistakeCount: $practiceMistakeCount, stepsPlayed: $practiceStepsPlayed)
                 .tag(IPhoneTab.practice)
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem { Label("练习", systemImage: "target") }
@@ -174,8 +174,8 @@ struct iPhoneContentView: View {
         case .home: return "今日"
         case .library: return "棋谱"
         case .board: return "棋盘"
-        case .review: return "复习"
-        case .practice: return "练习"
+        case .review: return viewModel.isInVerificationMode ? "检验模式" : "复习"
+        case .practice: return practiceScreen == .mistakes ? "错误统计" : "练习"
         }
     }
 
@@ -188,10 +188,30 @@ struct iPhoneContentView: View {
                     .contentShape(Rectangle())
             }
             .accessibilityLabel("打开侧边栏")
-            Text(navigationTitle)
-                .font(.system(size: 17, weight: .semibold))
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 0)
+            if selectedTab == .board {
+                boardStatus
+                Spacer(minLength: 0)
+                Button { viewModel.showIOSMoreActionsView = true } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 20, weight: .bold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("更多棋盘操作")
+            } else {
+                if selectedTab == .practice && practiceScreen != .home {
+                    Button { practiceScreen = .home } label: {
+                        Image(systemName: "chevron.left")
+                            .frame(width: 32, height: 44)
+                    }
+                    .accessibilityLabel("返回练习首页")
+                }
+                Text(navigationTitle)
+                    .font(.system(size: 17, weight: .semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
+                navigationActions
+            }
         }
         .foregroundStyle(XiangqiTheme.ink)
         .padding(.horizontal, 12)
@@ -201,6 +221,78 @@ struct iPhoneContentView: View {
             Divider().overlay(XiangqiTheme.hair)
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var navigationActions: some View {
+        switch selectedTab {
+        case .home:
+            Text(Date(), format: .dateTime.month().day())
+                .font(.system(size: 12))
+                .foregroundStyle(XiangqiTheme.sub)
+            Button { showMore = true } label: {
+                Image(systemName: "ellipsis").frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("更多与设置")
+        case .library:
+            headerButton("筛选", icon: "line.3.horizontal.decrease") { showFilterSheet = true }
+        case .review:
+            if viewModel.isReviewingInProgress || viewModel.isInVerificationMode {
+                Text(viewModel.reviewProgress)
+                    .font(.system(size: 12))
+                    .foregroundStyle(XiangqiTheme.sub)
+                if !viewModel.isInVerificationMode {
+                    headerButton("检验") {
+                        guard let item = viewModel.currentReviewItem,
+                              let path = item.srsData.gamePath else { return }
+                        viewModel.enterVerificationMode(fenId: item.fenId, srsData: item.srsData, gamePath: path)
+                    }
+                }
+            } else {
+                headerButton("复习库") { showReviewLibrary = true }
+            }
+        case .practice:
+            if practiceScreen == .session {
+                Text("第 \(practiceStepsPlayed + 1) 手")
+                    .font(.system(size: 12))
+                    .foregroundStyle(XiangqiTheme.sub)
+                Text("错 \(practiceMistakeCount)")
+                    .font(.system(size: 12))
+                    .foregroundStyle(XiangqiTheme.bad)
+            }
+        case .board:
+            EmptyView()
+        }
+    }
+
+    private func headerButton(_ title: String, icon: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon { Image(systemName: icon) }
+                Text(title)
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(XiangqiTheme.card, in: Capsule())
+            .overlay(Capsule().stroke(XiangqiTheme.line, lineWidth: 1))
+            .frame(minHeight: 44)
+        }
+    }
+
+    private var boardStatus: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(viewModel.isRedTurn ? Color(hex: 0xA15750) : Color(hex: 0x3A3A3D))
+                .frame(width: 9, height: 9)
+            Text((viewModel.isRedTurn ? "红方" : "黑方") + "走子")
+                .font(.system(size: 13, weight: .semibold))
+            Text("· 第 \(viewModel.currentGameStepDisplay)/\(viewModel.maxGameStepDisplay) 手")
+                .font(.system(size: 12))
+                .foregroundStyle(XiangqiTheme.sub)
+        }
+        .lineLimit(1)
+        .accessibilityElement(children: .combine)
     }
 
     private var sidebar: some View {

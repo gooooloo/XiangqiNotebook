@@ -4,7 +4,6 @@ import SwiftUI
 /// 「错误统计」页：练习模式里走错次数最多的局面。
 struct iPhoneMistakeListView: View {
     @ObservedObject var viewModel: ViewModel
-    let onBack: () -> Void
 
     private struct Row: Identifiable {
         let fenId: Int
@@ -26,18 +25,6 @@ struct iPhoneMistakeListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Button(action: onBack) {
-                    Text("‹").font(.system(size: 22)).foregroundColor(XiangqiTheme.accent)
-                }
-                Text("错误统计")
-                    .font(XiangqiTheme.XFont.sans(18, weight: .bold))
-                    .foregroundColor(XiangqiTheme.ink)
-                Spacer()
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-
             if rows.isEmpty {
                 Text("暂无练习错误记录")
                     .font(.system(size: 14))

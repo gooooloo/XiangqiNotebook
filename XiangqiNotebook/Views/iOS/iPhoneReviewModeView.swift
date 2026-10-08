@@ -5,7 +5,7 @@ import SwiftUI
 struct iPhoneReviewModeView: View {
     @ObservedObject var viewModel: ViewModel
     @State private var revealed = false
-    @State private var showLibrary = false
+    @Binding var showLibrary: Bool
 
     var body: some View {
         ScrollView {
@@ -39,7 +39,6 @@ struct iPhoneReviewModeView: View {
 
     private var inProgressBody: some View {
         VStack(spacing: 0) {
-            header(title: "复习", subtitle: "间隔重复 · 巩固你记下的每一手")
             board(size: revealed ? 250 : 358)
                 .padding(.top, 2)
 
@@ -62,42 +61,6 @@ struct iPhoneReviewModeView: View {
             }
         }
         .padding(.bottom, 20)
-    }
-
-    private func header(title: String, subtitle: String) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(XiangqiTheme.XFont.serif(22, weight: .black))
-                    .foregroundColor(XiangqiTheme.ink)
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundColor(XiangqiTheme.sub)
-            }
-            Spacer()
-            HStack(spacing: 6) {
-                Circle().fill(XiangqiTheme.accent).frame(width: 6, height: 6)
-                Text(viewModel.reviewProgress)
-                    .font(XiangqiTheme.XFont.sans(12.5, weight: .bold))
-            }
-            .foregroundColor(XiangqiTheme.sub)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 5)
-            .background(XiangqiTheme.inset, in: Capsule())
-
-            Button(action: enterVerification) {
-                Text("检验")
-                    .font(XiangqiTheme.XFont.sans(12, weight: .semibold))
-                    .foregroundColor(XiangqiTheme.sub)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(XiangqiTheme.card, in: Capsule())
-                    .overlay(Capsule().stroke(XiangqiTheme.line, lineWidth: 1))
-            }
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
     }
 
     private func board(size: CGFloat) -> some View {
@@ -189,16 +152,10 @@ struct iPhoneReviewModeView: View {
         .padding(.horizontal, 18)
     }
 
-    private func enterVerification() {
-        guard let item = currentItem, let gamePath = item.srsData.gamePath else { return }
-        viewModel.enterVerificationMode(fenId: item.fenId, srsData: item.srsData, gamePath: gamePath)
-    }
-
     // MARK: - 检验模式
 
     private var verificationBody: some View {
         VStack(spacing: 0) {
-            header(title: "检验模式", subtitle: "在棋盘上走出你认为的正确一手")
             board(size: 300)
             if let item = viewModel.verificationItem {
                 Text(viewModel.reviewItemDescription(fenId: item.fenId))

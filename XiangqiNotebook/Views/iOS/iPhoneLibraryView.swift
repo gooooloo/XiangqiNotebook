@@ -7,7 +7,7 @@ struct iPhoneLibraryView: View {
     @Binding var selectedTab: IPhoneTab
 
     @State private var searchText = ""
-    @State private var showFilterSheet = false
+    @Binding var showFilterSheet: Bool
     @State private var openBookIds: Set<UUID> = []
 
     private enum Row: Identifiable {
@@ -68,7 +68,6 @@ struct iPhoneLibraryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                header
                 searchBox
                 if searchText.isEmpty {
                     treeList
@@ -89,27 +88,6 @@ struct iPhoneLibraryView: View {
             guard selectedTab == .library else { return }
             rebuildTreeRows()
         }
-    }
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            Text("棋谱")
-                .font(XiangqiTheme.XFont.serif(26, weight: .black))
-                .foregroundColor(XiangqiTheme.ink)
-            Spacer()
-            Button(action: { showFilterSheet = true }) {
-                Text("⚑ 筛选")
-                    .font(XiangqiTheme.XFont.sans(12.5, weight: .semibold))
-                    .foregroundColor(XiangqiTheme.sub)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 7)
-                    .overlay(Capsule().stroke(XiangqiTheme.line, lineWidth: 1))
-                    .background(XiangqiTheme.card, in: Capsule())
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
     }
 
     private var searchBox: some View {

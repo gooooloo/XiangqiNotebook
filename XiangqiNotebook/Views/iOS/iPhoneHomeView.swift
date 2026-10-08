@@ -8,27 +8,6 @@ struct iPhoneHomeView: View {
     @Binding var practiceRoute: PracticeRoute
     @Binding var showMore: Bool
 
-    /// DateFormatter 创建成本高（要加载 locale），静态复用；本视图每次数据变化都会重算 body
-    private static let greetingDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_Hans_CN")
-        formatter.dateFormat = "M月d日 · EEEE"
-        return formatter
-    }()
-
-    private var greetingDate: String {
-        Self.greetingDateFormatter.string(from: Date())
-    }
-
-    private var greetingTitle: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 5..<12: return "早上好，继续精进"
-        case 12..<18: return "午后好，继续精进"
-        default: return "晚上好，继续精进"
-        }
-    }
-
     private var hasFocusedPractice: Bool {
         viewModel.isInFocusedPractice
     }
@@ -36,7 +15,6 @@ struct iPhoneHomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                greetingRow
                 reviewHeroCard
                 if hasFocusedPractice {
                     continuePracticeCard
@@ -49,43 +27,6 @@ struct iPhoneHomeView: View {
             .padding(.bottom, 20)
         }
         .background(XiangqiTheme.bg.ignoresSafeArea())
-    }
-
-    private var greetingRow: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(greetingDate)
-                    .font(XiangqiTheme.XFont.sans(11.5, weight: .bold))
-                    .tracking(1.5)
-                    .foregroundColor(XiangqiTheme.faint)
-                Text(greetingTitle)
-                    .font(XiangqiTheme.XFont.serif(26, weight: .black))
-                    .foregroundColor(XiangqiTheme.ink)
-            }
-            Spacer()
-            Button(action: { showMore = true }) {
-                ZStack(alignment: .bottomTrailing) {
-                    RoundedRectangle(cornerRadius: 13)
-                        .fill(XiangqiTheme.accent)
-                        .frame(width: 46, height: 46)
-                        .overlay(
-                            Text("帥")
-                                .font(XiangqiTheme.XFont.serif(23, weight: .heavy))
-                                .foregroundColor(.white)
-                        )
-                    Circle()
-                        .fill(XiangqiTheme.frame)
-                        .frame(width: 20, height: 20)
-                        .overlay(
-                            Text("⋯")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white)
-                        )
-                        .overlay(Circle().stroke(XiangqiTheme.bg, lineWidth: 2))
-                        .offset(x: 4, y: 4)
-                }
-            }
-        }
     }
 
     private var reviewHeroCard: some View {

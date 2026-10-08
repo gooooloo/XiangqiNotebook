@@ -1,20 +1,20 @@
 #if os(iOS)
 import SwiftUI
 
+enum IPhonePracticeScreen { case home, session, mistakes }
+
 /// 「练习」标签首页/答题/完成三态。
 struct iPhonePracticeView: View {
     @ObservedObject var viewModel: ViewModel
     @Binding var route: PracticeRoute
 
-    private enum ViewState { case home, session, mistakes }
-
-    @State private var view: ViewState = .home
+    @Binding var view: IPhonePracticeScreen
     @State private var frozenCandidates: [(moveString: String, move: Move)] = []
     @State private var answered = false
     @State private var correctMove: Move?
     @State private var wrongMove: Move?
-    @State private var mistakeCount = 0
-    @State private var stepsPlayed = 0
+    @Binding var mistakeCount: Int
+    @Binding var stepsPlayed: Int
 
     var body: some View {
         ScrollView {
@@ -22,7 +22,7 @@ struct iPhonePracticeView: View {
             case .home: homeBody
             case .session: sessionBody
             case .mistakes:
-                iPhoneMistakeListView(viewModel: viewModel, onBack: { view = .home })
+                iPhoneMistakeListView(viewModel: viewModel)
             }
         }
         .background(XiangqiTheme.bg.ignoresSafeArea())
@@ -40,15 +40,6 @@ struct iPhonePracticeView: View {
 
     private var homeBody: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("练习")
-                    .font(XiangqiTheme.XFont.serif(26, weight: .black))
-                    .foregroundColor(XiangqiTheme.ink)
-                Text("走对每一手，把记忆变成本能")
-                    .font(.system(size: 13))
-                    .foregroundColor(XiangqiTheme.sub)
-            }
-
             if viewModel.isInFocusedPractice {
                 continueCard
             }
@@ -152,31 +143,6 @@ struct iPhonePracticeView: View {
 
     private var sessionBody: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Button(action: { view = .home }) {
-                    Text("‹").font(.system(size: 22)).foregroundColor(XiangqiTheme.accent)
-                }
-                Text("练习")
-                    .font(XiangqiTheme.XFont.sans(18, weight: .bold))
-                    .foregroundColor(XiangqiTheme.ink)
-                Spacer()
-                Text("第 \(stepsPlayed + 1) 手")
-                    .font(XiangqiTheme.XFont.sans(12.5, weight: .semibold))
-                    .foregroundColor(XiangqiTheme.sub)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(XiangqiTheme.inset, in: Capsule())
-                Text("错 \(mistakeCount)")
-                    .font(XiangqiTheme.XFont.sans(12.5, weight: .semibold))
-                    .foregroundColor(XiangqiTheme.bad)
-                    .opacity(mistakeCount > 0 ? 1 : 0.5)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(XiangqiTheme.bad.opacity(0.09), in: Capsule())
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 8)
-
             if frozenCandidates.isEmpty {
                 sessionCompleteBody
             } else {
