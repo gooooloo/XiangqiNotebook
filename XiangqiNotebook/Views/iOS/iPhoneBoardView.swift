@@ -9,6 +9,7 @@ struct iPhoneBoardView: View {
     @ObservedObject var viewModel: ViewModel
     @Binding var selectedTab: IPhoneTab
     @Binding var practiceRoute: PracticeRoute
+    var bottomSafeAreaInset: CGFloat = 0
     @State private var didApplyDefaultToggles = false
 
     var body: some View {
@@ -19,15 +20,48 @@ struct iPhoneBoardView: View {
             // 剩余高度再全部留给 ScrollView。
             boardBlock
                 .layoutPriority(1)
-            ScrollView {
-                VStack(spacing: 10) {
-                    analysisCard
-                    metaCard
-                    actionGrid
+            ZStack(alignment: .bottom) {
+                ScrollView {
+                    VStack(spacing: 10) {
+                        analysisCard
+                        metaCard
+                        actionGrid
+                    }
+                    .padding(.top, 10)
+                    // 让末尾内容可以滚到固定按钮及遮罩上方。
+                    .padding(.bottom, 80 + bottomSafeAreaInset)
                 }
-                .padding(.top, 10)
+                navBar
+                    .background(alignment: .bottom) {
+                        ZStack {
+                            Rectangle()
+                                .fill(.regularMaterial)
+                                .mask {
+                                    LinearGradient(
+                                        stops: [
+                                            .init(color: .clear, location: 0),
+                                            .init(color: .black, location: 0.25)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                }
+                            // 材质本身仍会透出内容；按钮区域叠加实色，彻底遮住下层文字。
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0),
+                                    .init(color: XiangqiTheme.bg.opacity(0.85), location: 0.18),
+                                    .init(color: XiangqiTheme.bg, location: 0.28)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        }
+                        .padding(.top, -24)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                        .allowsHitTesting(false)
+                    }
             }
-            navBar
         }
         .background(XiangqiTheme.bg.ignoresSafeArea())
         .onAppear {
@@ -286,40 +320,20 @@ struct iPhoneBoardView: View {
     private var navBar: some View {
         let step = viewModel.currentGameStepDisplay
         let total = viewModel.maxGameStepDisplay
-        return HStack(spacing: 8) {
-            navCell("开局", disabled: step == 0) { viewModel.actionDefinitions.getActionInfo(.toStart)?.action() }
-            navCell("上一步", disabled: step == 0, primary: true) { viewModel.actionDefinitions.getActionInfo(.stepBack)?.action() }
-            navCell("下一步", disabled: step == total, primary: true) { viewModel.actionDefinitions.getActionInfo(.stepForward)?.action() }
-            navCell("下一变", disabled: viewModel.totalVariationsCount <= 1) { viewModel.actionDefinitions.getActionInfo(.nextVariant)?.action() }
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 9)
-        .padding(.bottom, 22)
-        .background(
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                Rectangle().fill(XiangqiTheme.boardNavBarMaterial)
-            }
-        )
-        .overlay(Divider().overlay(XiangqiTheme.line), alignment: .top)
-    }
+        return VStack(spacing: 8) {
+            Rectangle()
+                .fill(XiangqiTheme.hair)
+                .frame(height: 0.5)
 
-    private func navCell(_ label: String, disabled: Bool, primary: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 14.5, weight: .medium))
-                .foregroundColor(disabled ? XiangqiTheme.faint : XiangqiTheme.ink)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(disabled ? Color.clear : (primary ? XiangqiTheme.card : XiangqiTheme.inset))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(disabled ? Color.clear : (primary ? XiangqiTheme.line : Color.clear), lineWidth: 1)
-                )
-                .shadow(color: (primary && !disabled) ? .black.opacity(0.06) : .clear, radius: 2, x: 0, y: 1)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+            HStack(spacing: 8) {
+                actionButton("开局", disabled: step == 0) { viewModel.actionDefinitions.getActionInfo(.toStart)?.action() }
+                actionButton("上一步", disabled: step == 0) { viewModel.actionDefinitions.getActionInfo(.stepBack)?.action() }
+                actionButton("下一步", disabled: step == total) { viewModel.actionDefinitions.getActionInfo(.stepForward)?.action() }
+                actionButton("下一变", disabled: viewModel.totalVariationsCount <= 1) { viewModel.actionDefinitions.getActionInfo(.nextVariant)?.action() }
+            }
         }
-        .disabled(disabled)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
     }
 }
 #endif
