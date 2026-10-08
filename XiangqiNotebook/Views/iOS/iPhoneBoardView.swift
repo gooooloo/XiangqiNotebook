@@ -45,9 +45,6 @@ struct iPhoneBoardView: View {
         .sheet(isPresented: $viewModel.showEditCommentIOS) {
             iPhoneEditCommentView(viewModel: viewModel)
         }
-        .sheet(isPresented: $viewModel.showingAIChat) {
-            iPhoneAIChatSheet(viewModel: viewModel)
-        }
     }
 
     // MARK: - 固定棋盘（不滚动，满宽，靠下方卡片的发丝线边界，不加阴影/描边）

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// AI 问棋的对话界面，三端共用。
-/// Mac 装在独立窗口里（可与主窗口并排，边走边问），iPhone / iPad 装在全屏 sheet 里。
+/// Mac 装在独立窗口里（可与主窗口并排，边走边问），iPhone 装在独立 tab 里，iPad 装在全屏 sheet 里。
 struct AIChatView: View {
 
     @ObservedObject var chat: ChatViewModel

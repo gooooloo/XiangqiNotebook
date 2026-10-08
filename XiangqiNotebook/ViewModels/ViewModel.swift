@@ -572,7 +572,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.pikafishScoreGame, text: "皮卡鱼评分本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { self.pikafishScoreGame() }
         actionDefinitions.registerAction(.pikafishRespond, text: "皮卡鱼应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishRespond() } }
         #endif
-        // 三端都注册：Mac 开独立窗口，iOS/iPad 弹全屏 sheet，分支在 showAIChat 里
+        // 三端都注册：Mac 开独立窗口，iPhone 切换 tab，iPad 弹全屏 sheet
         actionDefinitions.registerAction(.openAIChat, text: "AI 问棋", shortcuts: [.sequence(",ai")], supportedModes: [.normal]) { self.showAIChat() }
         actionDefinitions.registerAction(.askWhyMoveIsBad, text: "此招为何不好", shortcuts: [.sequence(",wb")], supportedModes: [.normal], isEnabled: { self.hasCurrentMove }) { self.askAI(self.whyLastMoveIsBadQuestion) }
         actionDefinitions.registerAction(.deleteScore, text: "删分", shortcuts: [.sequence(",D")], supportedModes: [.normal]) { self.updateFenScore(self.currentFenId, score: nil) }
@@ -2292,8 +2292,8 @@ class ViewModel: ObservableObject {
         #if os(macOS)
         aiChatWindowController?.chat.ask(question)
         #else
-        // iOS 的 ChatViewModel 建在 sheet 里，这里够不着，
-        // 挂起来等 sheet 起来自己取
+        // iOS 的 ChatViewModel 由界面持有，
+        // 挂起来等 iPhone tab / iPad sheet 取走
         pendingAIQuestion = question
         #endif
     }

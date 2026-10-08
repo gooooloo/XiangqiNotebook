@@ -3,9 +3,9 @@ import SwiftUI
 import Foundation
 import UIKit
 
-/// 五个主导航入口，由侧边栏切换
+/// 主导航入口，由侧边栏切换
 enum IPhoneTab: Hashable {
-    case home, library, board, review, practice
+    case home, library, board, aiChat, review, practice
 }
 
 /// 「练习」标签的跳转目的地，供「今日」首页/「更多」页等外部入口发起跨标签导航
@@ -15,6 +15,7 @@ enum PracticeRoute: Equatable {
 
 struct iPhoneContentView: View {
     @StateObject private var viewModel: ViewModel
+    @StateObject private var chat: ChatViewModel
     @State private var selectedTab: IPhoneTab = .home
     @State private var practiceRoute: PracticeRoute = .home
     @State private var showFilterSheet = false
@@ -40,6 +41,7 @@ struct iPhoneContentView: View {
         let viewModel = ViewModel(platformService: platformService)
         platformService.setViewModel(viewModel)
         _viewModel = StateObject(wrappedValue: viewModel)
+        _chat = StateObject(wrappedValue: ChatViewModel(viewModel: viewModel))
     }
 
     var body: some View {
@@ -100,6 +102,18 @@ struct iPhoneContentView: View {
         .onChange(of: selectedTab) { _, _ in
             setSidebar(false)
         }
+        .onChange(of: viewModel.showingAIChat) { _, showing in
+            guard showing else { return }
+            viewModel.showingAIChat = false
+            viewModel.showIOSMoreActionsView = false
+            showMore = false
+            selectedTab = .aiChat
+            chat.reloadConfig()
+            if let question = viewModel.pendingAIQuestion {
+                viewModel.pendingAIQuestion = nil
+                chat.ask(question)
+            }
+        }
         .fullScreenCover(isPresented: $showMore) {
             iPhoneMoreOptionsView(
                 viewModel: viewModel,
@@ -155,6 +169,12 @@ struct iPhoneContentView: View {
                 .tabItem { Label("棋盘", systemImage: "square.grid.3x3.fill") }
                 .toolbar(.hidden, for: .tabBar)
 
+            AIChatView(chat: chat)
+                .onAppear { chat.reloadConfig() }
+                .tag(IPhoneTab.aiChat)
+                .toolbar(.hidden, for: .tabBar)
+                .tabItem { Label("问棋", systemImage: "bubble.left.and.bubble.right") }
+
             iPhoneReviewModeView(viewModel: viewModel, showLibrary: $showReviewLibrary)
                 .tag(IPhoneTab.review)
                 .toolbar(.hidden, for: .tabBar)
@@ -171,6 +191,7 @@ struct iPhoneContentView: View {
 
     private var navigationTitle: String {
         switch selectedTab {
+        case .aiChat: return "问棋"
         case .home: return "今日"
         case .library: return "棋谱"
         case .board: return "棋盘"
@@ -260,7 +281,7 @@ struct iPhoneContentView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(XiangqiTheme.bad)
             }
-        case .board:
+        case .board, .aiChat:
             EmptyView()
         }
     }
@@ -314,6 +335,7 @@ struct iPhoneContentView: View {
                     sidebarItem(.home, title: "今日", icon: "sun.max")
                     sidebarItem(.library, title: "棋谱", icon: "list.bullet")
                     sidebarItem(.board, title: "棋盘", icon: "square.grid.3x3")
+                    sidebarItem(.aiChat, title: "问棋", icon: "bubble.left.and.bubble.right")
                     sidebarItem(.review, title: "复习", icon: "arrow.triangle.2.circlepath")
                     sidebarItem(.practice, title: "练习", icon: "target")
                 }
