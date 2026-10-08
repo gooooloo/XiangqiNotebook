@@ -41,7 +41,7 @@ struct iPhoneContentView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let sidebarWidth = min(320.0, geometry.size.width * 0.82)
+            let sidebarWidth = min(190.0, geometry.size.width)
             ZStack(alignment: .leading) {
                 XiangqiTheme.bg.ignoresSafeArea()
                 sidebar
