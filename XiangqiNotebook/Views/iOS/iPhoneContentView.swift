@@ -48,10 +48,13 @@ struct iPhoneContentView: View {
                     .frame(width: sidebarWidth)
                     .accessibilityHidden(!showSidebar)
 
-                mainContent
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        navigationHeader
-                    }
+                // 用实际布局分配菜单栏高度，避免 TabView 内的页面忽略外部 safeAreaInset。
+                VStack(spacing: 0) {
+                    navigationHeader
+                    mainContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                }
                     .background(XiangqiTheme.bg)
                     .clipShape(RoundedRectangle(cornerRadius: showSidebar ? 28 : 0))
                     .shadow(color: .black.opacity(showSidebar ? 0.15 : 0), radius: 24, x: -8)
@@ -61,13 +64,17 @@ struct iPhoneContentView: View {
                                 .contentShape(Rectangle())
                                 .onTapGesture { setSidebar(false) }
                                 .gesture(DragGesture().onEnded { value in
-                                    if value.translation.width < -45 { setSidebar(false) }
+                                    if value.translation.width < -45,
+                                       abs(value.translation.width) > abs(value.translation.height) {
+                                        setSidebar(false)
+                                    }
                                 })
                                 .accessibilityLabel("收起侧边栏")
                                 .accessibilityAddTraits(.isButton)
                         }
                     }
                     .accessibilityHidden(showSidebar)
+                    .accessibilityAction(named: "打开侧边栏") { setSidebar(true) }
                     .offset(x: showSidebar ? sidebarWidth : 0)
 
                 if !showSidebar {
@@ -162,19 +169,38 @@ struct iPhoneContentView: View {
         .toolbar(.hidden, for: .tabBar)
     }
 
+    private var navigationTitle: String {
+        switch selectedTab {
+        case .home: return "今日"
+        case .library: return "棋谱"
+        case .board: return "棋盘"
+        case .review: return "复习"
+        case .practice: return "练习"
+        }
+    }
+
     private var navigationHeader: some View {
-        HStack {
+        HStack(spacing: 8) {
             Button { setSidebar(true) } label: {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 21, weight: .medium))
                     .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel("打开侧边栏")
-            Spacer()
+            Text(navigationTitle)
+                .font(.system(size: 17, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
         }
         .foregroundStyle(XiangqiTheme.ink)
         .padding(.horizontal, 12)
+        .padding(.vertical, 2)
         .background(XiangqiTheme.bg)
+        .overlay(alignment: .bottom) {
+            Divider().overlay(XiangqiTheme.hair)
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var sidebar: some View {
