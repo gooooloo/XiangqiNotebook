@@ -249,7 +249,9 @@ struct iPhoneBoardView: View {
                     Task { await viewModel.aiRespondIOS() }
                 }
             }
-            actionButton("打开云库") { viewModel.actionDefinitions.getActionInfo(.openYunku)?.action() }
+            actionButton("为何不好", disabled: !viewModel.hasCurrentMove) {
+                viewModel.actionDefinitions.getActionInfo(.askWhyMoveIsBad)?.action()
+            }
             actionButton("加入复习") { viewModel.actionDefinitions.getActionInfo(.addToReview)?.action() }
             actionButton("书签") {
                 if viewModel.isBookmarked { _ = viewModel.removeBookmark() } else { viewModel.showingBookmarkAlert = true }
