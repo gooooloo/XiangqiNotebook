@@ -58,6 +58,7 @@ class ActionDefinitions {
         case copyBoardText  // 拷贝局面文本表示
         case copyBoardImage  // 拷贝当前棋盘图片到剪贴板
         case pikafishScore  // 皮卡鱼评分（3秒限时）
+        case pikafishRescore  // 重新计算当前局面的皮卡鱼评分
         case pikafishScoreGame  // 皮卡鱼评分本局所有局面
         case pikafishRespond  // 皮卡鱼应招
         case openAIChat            // AI 问棋窗口

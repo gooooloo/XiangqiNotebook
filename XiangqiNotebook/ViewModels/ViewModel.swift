@@ -569,6 +569,7 @@ class ViewModel: ObservableObject {
         actionDefinitions.registerAction(.queryScore, text: "云库查分", shortcuts: [.single("s")], supportedModes: [.normal]) { Task { await self.queryFenScore() } }
         #if os(macOS) && arch(arm64)
         actionDefinitions.registerAction(.pikafishScore, text: "皮卡鱼评分", shortcuts: [.sequence(",qs")], supportedModes: [.normal]) { self.pikafishScore() }
+        actionDefinitions.registerAction(.pikafishRescore, text: "皮卡鱼重新评分", shortcuts: [.sequence(",qr")], supportedModes: [.normal]) { self.pikafishScore(overwriteExistingScore: true) }
         actionDefinitions.registerAction(.pikafishScoreGame, text: "皮卡鱼评分本局", shortcuts: [.sequence(",qa")], supportedModes: [.normal]) { self.pikafishScoreGame() }
         actionDefinitions.registerAction(.pikafishRespond, text: "皮卡鱼应招", shortcuts: [.single("m")], supportedModes: [.normal]) { Task { await self.pikafishRespond() } }
         #endif
@@ -1887,11 +1888,11 @@ class ViewModel: ObservableObject {
         return queue
     }
 
-    func pikafishScore() {
+    func pikafishScore(overwriteExistingScore: Bool = false) {
         let fenId = session.currentFenId
         guard let fen = session.getFenForId(fenId) else { return }
         guard let queue = ensureEvaluationQueue() else { return }
-        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: EngineScoreData.pikafishScoreKey, movetime: PikafishService.scoreMovetimeMs))
+        queue.enqueue(EvaluationRequest(fenId: fenId, fen: fen, engineKey: EngineScoreData.pikafishScoreKey, movetime: PikafishService.scoreMovetimeMs, overwriteExistingScore: overwriteExistingScore))
     }
 
     /// @MainActor：从快捷键闭包经无结构 Task 调用时会落在全局执行器上，

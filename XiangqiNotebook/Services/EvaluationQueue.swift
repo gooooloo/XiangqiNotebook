@@ -12,6 +12,8 @@ struct EvaluationRequest: Identifiable, Equatable {
     let fen: String
     let engineKey: String
     let movetime: Int
+    /// 用户主动重算时覆盖已有评分；计算失败则保留旧值。
+    var overwriteExistingScore: Bool = false
 
     static func == (lhs: EvaluationRequest, rhs: EvaluationRequest) -> Bool {
         lhs.id == rhs.id
@@ -163,7 +165,7 @@ class EvaluationQueue: ObservableObject {
         guard !pendingRequests.isEmpty else { return }
         let request = pendingRequests.removeFirst()
 
-        if scoreExists(request.fenId, request.engineKey) {
+        if !request.overwriteExistingScore && scoreExists(request.fenId, request.engineKey) {
             dedupSet.remove(dedupKey(request))
             completedCount += 1
             updatePublishedState()

@@ -148,6 +148,32 @@ final class EvaluationQueueTests: XCTestCase {
         XCTAssertEqual(queue.state.completedCount, 1)
     }
 
+    func testRescoreExistingScore() async throws {
+        let (queue, mock) = makeQueue(existingScores: ["1:testKey"])
+        var storedScore = -522
+        queue.onEvaluationCompleted = { _, result in storedScore = result.score }
+        queue.enqueue(EvaluationRequest(fenId: 1, fen: "test b", engineKey: "testKey",
+                                        movetime: 3000, overwriteExistingScore: true))
+
+        try await waitUntil("重算完成") { queue.state.isIdle }
+        XCTAssertEqual(mock.evaluateCallCount, 1)
+        XCTAssertEqual(storedScore, 50)
+    }
+
+    func testFailedRescorePreservesExistingScore() async throws {
+        let mock = MockPikafishService()
+        mock.resultToReturn = nil
+        let (queue, _) = makeQueue(mockService: mock, existingScores: ["1:testKey"])
+        var storedScore = -522
+        queue.onEvaluationCompleted = { _, result in storedScore = result.score }
+        queue.enqueue(EvaluationRequest(fenId: 1, fen: "test b", engineKey: "testKey",
+                                        movetime: 3000, overwriteExistingScore: true))
+
+        try await waitUntil("重算结束") { queue.state.isIdle }
+        XCTAssertEqual(mock.evaluateCallCount, 1)
+        XCTAssertEqual(storedScore, -522)
+    }
+
     func testCancelAll() async throws {
         let mock = MockPikafishService()
         mock.holdEvaluation = true

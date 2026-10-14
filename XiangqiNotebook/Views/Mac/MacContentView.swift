@@ -396,6 +396,7 @@ struct MacMenuCommands: Commands {
             menuButton(.openYunku)
             menuButton(.pikafishRespond)
             menuButton(.pikafishScore)
+            menuButton(.pikafishRescore)
             menuButton(.pikafishScoreGame)
             Divider()
             menuButton(.openAIChat)
