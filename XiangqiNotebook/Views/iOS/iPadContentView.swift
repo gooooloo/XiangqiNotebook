@@ -99,6 +99,7 @@ struct iPadContentView: View {
                 .frame(width: 0, height: 0)
         }
         // sheet 弹窗
+        .modifier(CoachWorkspaceModifier(notebook: viewModel))
         .sheet(isPresented: $viewModel.showingBookmarkAlert) {
             BookmarkDialog(
                 isPresented: $viewModel.showingBookmarkAlert,

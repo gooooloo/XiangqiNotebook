@@ -150,6 +150,7 @@ struct MacContentView: View {
             }
             .focused($isViewFocused)
         }
+        .modifier(CoachWorkspaceModifier(notebook: viewModel))
         .sheet(isPresented: $viewModel.showingBookmarkAlert) {
             BookmarkDialog(
                 isPresented: $viewModel.showingBookmarkAlert,
@@ -221,6 +222,7 @@ struct MacContentView: View {
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if viewModel.coachWorkspaceVisible { return event }
             // 如果有任何 sheet 显示，不处理快捷键
             if viewModel.isAnySheetPresented { return event }
 

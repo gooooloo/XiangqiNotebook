@@ -5,19 +5,28 @@ import UIKit
 
 @main
 struct XiangqiNotebookApp: App {
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(CoachAppDelegate.self) private var coachDelegate
+    #else
+    @NSApplicationDelegateAdaptor(CoachAppDelegate.self) private var coachDelegate
+    #endif
     var body: some Scene {
         WindowGroup {
-            #if os(macOS)
-            MacContentView()
-                .frame(minWidth: 1000, idealWidth: 1280, maxWidth: .infinity, minHeight: 700, idealHeight: 900, maxHeight: .infinity)
-            #else
-            // 根据设备类型选择适当的视图
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                iPadContentView()
+            if AIKeychain.isRunningInTests {
+                Text("单元测试")
             } else {
-                iPhoneContentView()
+                #if os(macOS)
+                MacContentView()
+                    .frame(minWidth: 1000, idealWidth: 1280, maxWidth: .infinity, minHeight: 700, idealHeight: 900, maxHeight: .infinity)
+                #else
+                // 根据设备类型选择适当的视图
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    iPadContentView()
+                } else {
+                    iPhoneContentView()
+                }
+                #endif
             }
-            #endif
         }
         #if os(macOS)
         .commands {

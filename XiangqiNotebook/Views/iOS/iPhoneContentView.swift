@@ -122,6 +122,7 @@ struct iPhoneContentView: View {
                 practiceRoute: $practiceRoute
             )
         }
+        .modifier(CoachWorkspaceModifier(notebook: viewModel))
         .sheet(isPresented: $viewModel.showingBookmarkAlert) {
             BookmarkDialog(isPresented: $viewModel.showingBookmarkAlert, viewModel: viewModel)
         }

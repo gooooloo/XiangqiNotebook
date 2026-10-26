@@ -32,6 +32,7 @@ extension PlatformService {
 /// 它作为 View 和 Model(Session) 之间的中介
 @MainActor
 class ViewModel: ObservableObject {
+    var coachWorkspaceVisible = false
     @Published private(set) var sessionManager: SessionManager
 
     // 当前活跃的 Session。private 以维持分层：Views 只能经 ViewModel 的转发接口
